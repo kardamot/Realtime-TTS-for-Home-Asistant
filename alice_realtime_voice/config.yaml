@@ -1,0 +1,52 @@
+name: "Alice Realtime Voice"
+version: "0.1.0"
+slug: "alice_realtime_voice"
+description: "Yerel faster-whisper tabanli realtime voice pipeline iskeleti"
+startup: "application"
+boot: "manual"
+init: false
+homeassistant_api: true
+arch:
+  - amd64
+ports:
+  8766/tcp: 8766
+ports_description:
+  8766/tcp: "Alice realtime voice WebSocket"
+options:
+  port: 8766
+  debug_logs: true
+  stt:
+    provider: "faster_whisper"
+    model: "small"
+    language: "tr"
+    compute_type: "int8"
+    beam_size: 1
+    vad_filter: true
+  llm:
+    provider: "openai"
+    model: "gpt-5-mini"
+    api_key: ""
+    base_url: ""
+    system_prompt: ""
+  tts:
+    enabled: false
+    relay_url: "ws://127.0.0.1:8765/ws"
+schema:
+  port: port
+  debug_logs: bool
+  stt:
+    provider: list(faster_whisper)
+    model: str
+    language: str
+    compute_type: str
+    beam_size: int
+    vad_filter: bool
+  llm:
+    provider: list(openai|openrouter|none)
+    model: str
+    api_key: password
+    base_url: str
+    system_prompt: str
+  tts:
+    enabled: bool
+    relay_url: str

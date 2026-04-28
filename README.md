@@ -1,58 +1,30 @@
-# Realtime TTS for Home Asistant Add-On
+# Alice Home Assistant Add-ons
 
-Bu add-on, Home Assistant'in intent sonunda uretilen yanit metnini alip secilen TTS
-saglayicisindan dusuk gecikmeli PCM akisi ceker ve Alice cihazi buna WebSocket
-ile baglanip sesi blok blok oynatir.
+Bu klasor, HAOS tarafina tasinabilecek yerel add-on dosyalarini icerir.
 
-# Desteklenen saglayicilar:
+## Kullanim
 
-openai
-cartesia
-elevenlabs
-google_ai
-google_cloud
-Temel mantik
-ESP32 yanit metnini bu relay'e yollar.
-Relay secilen TTS saglayicisini cagirir.
-Relay saglayicidan gelen sesi pcm_s16le olarak Alice'e aktarir.
-Firmware tarafinda tek bir ic protokol kullanildigi icin saglayici degistiginde
-firmware degistirmen gerekmez.
-Gerekli ayarlar
-Her saglayici icin anahtarlar Home Assistant add-on ayarinda tutulur. Bunlar
-/data/options.json icinde saklanir; repo icine yazman gerekmez.
+1. `home_assistant_addons` klasorunu Home Assistant'in gorebilecegi bir yere kopyala.
+2. Home Assistant'ta yerel add-on repository olarak bu klasoru ekle.
+3. `Alice Realtime TTS` veya `Alice Realtime Voice` add-on'unu kur.
+4. Secili add-on'un ilgili ayarlarini doldur.
+5. Mevcut firmware tarafinda TTS relay adresi `ws://192.168.1.168:8765/ws` olarak beklenir.
 
-# Ortak alanlar
-provider: openai, cartesia, elevenlabs, google_ai veya google_cloud
-port: Varsayilan 8765
-OpenAI
-openai_api_key
-openai_model: Varsayilan gpt-4o-mini-tts
-openai_voice: Varsayilan coral
-openai_instructions: Stil yonlendirmesi
-Cartesia
-cartesia_api_key
-cartesia_model_id: Varsayilan sonic-3
-cartesia_voice_id: Gerekli
-cartesia_language: Varsayilan tr
-cartesia_version: Varsayilan 2026-03-01
-ElevenLabs
-elevenlabs_api_key
-elevenlabs_model_id: Varsayilan eleven_flash_v2_5
-elevenlabs_voice_id: Gerekli
-elevenlabs_output_format: Varsayilan pcm_24000
-elevenlabs_latency_mode: 0 - 4
-Google AI
-google_ai_api_key
-google_ai_model: Varsayilan gemini-3.1-flash-tts-preview
-google_ai_voice_name: Varsayilan Kore
-google_ai_prompt_prefix: Istege bagli stil yonlendirmesi
-Google Cloud
-google_cloud_credentials_json: Service account JSON icerigi
-google_cloud_voice_name: Gerekli
-google_cloud_language_code: Varsayilan tr-TR
-google_cloud_ssml_gender: Varsayilan FEMALE
+## Not
 
-# Notlar
-Firmware tarafinda relay adresi ws://HA_IP:8765/ws olarak derlenmistir.
-Relay, her zaman pcm_s16le gonderir.
-Varsayilan ornekleme hizi 24 kHz, kanal sayisi monodur.
+Bu surum tek ic protokolle birden fazla TTS saglayicisini destekler:
+
+- OpenAI
+- Cartesia
+- ElevenLabs
+- Google AI
+- Google Cloud
+
+Saglayici degistiginde firmware degistirmen gerekmez; yalnizca add-on ayarini guncelleyip
+add-on'u yeniden baslatman yeterlidir.
+
+`Alice Realtime Voice` ise yeni nesil dis voice pipeline icin hazirlanan ayri add-on'dur.
+Ilk fazda yerel `faster-whisper` STT iskeleti icerir.
+
+Not: Home Assistant add-on ayarlari provider'a gore kosullu alan gizleme yapmaz; bunun yerine
+ayarlar saglayici bazli gruplar halinde toplanmistir.
