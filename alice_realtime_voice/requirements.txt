@@ -1,4 +1,0 @@
-aiohttp
-faster-whisper
-numpy
-openai
