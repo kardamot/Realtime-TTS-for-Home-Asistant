@@ -1,0 +1,5 @@
+aiohttp
+faster-whisper
+numpy
+openai
+silero-vad-lite==0.2.1
