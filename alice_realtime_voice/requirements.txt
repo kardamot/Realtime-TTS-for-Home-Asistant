@@ -1,5 +1,0 @@
-aiohttp
-faster-whisper
-numpy
-onnxruntime
-openai
