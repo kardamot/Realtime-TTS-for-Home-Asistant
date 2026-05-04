@@ -1,0 +1,93 @@
+configuration:
+  provider:
+    name: Saglayici
+    description: Kullanilacak TTS saglayicisini sec.
+  openai:
+    name: OpenAI
+    description: OpenAI TTS ayarlari
+    fields:
+      api_key:
+        name: API anahtari
+        description: OpenAI API key
+      model:
+        name: Model
+        description: Ornek gpt-4o-mini-tts
+      voice:
+        name: Ses
+        description: Ornek coral
+      instructions:
+        name: Stil talimati
+        description: Okuma tavri ve ton yonlendirmesi
+  cartesia:
+    name: Cartesia
+    description: Cartesia TTS ayarlari
+    fields:
+      api_key:
+        name: API anahtari
+        description: Cartesia API key
+      model_id:
+        name: Model ID
+        description: Ornek sonic-3
+      voice_id:
+        name: Voice ID
+        description: Kullanilacak Cartesia ses kimligi
+      language:
+        name: Dil
+        description: Ornek tr
+      version:
+        name: API versiyonu
+        description: Ornek 2026-03-01
+  elevenlabs:
+    name: ElevenLabs
+    description: ElevenLabs TTS ayarlari
+    fields:
+      api_key:
+        name: API anahtari
+        description: ElevenLabs API key
+      model_id:
+        name: Model ID
+        description: Ornek eleven_flash_v2_5
+      voice_id:
+        name: Voice ID
+        description: Kullanilacak ElevenLabs ses kimligi
+      output_format:
+        name: Cikis bicimi
+        description: Ornek pcm_24000
+      latency_mode:
+        name: Gecikme modu
+        description: 0 ile 4 arasi optimize streaming latency
+  google_ai:
+    name: Google AI
+    description: Gemini TTS ayarlari
+    fields:
+      api_key:
+        name: API anahtari
+        description: Google AI Studio API key
+      model:
+        name: Model
+        description: Ornek gemini-3.1-flash-tts-preview
+      voice_name:
+        name: Ses adi
+        description: Ornek Kore
+      prompt_prefix:
+        name: Stil on eki
+        description: Metnin basina eklenecek stil talimati
+  google_cloud:
+    name: Google Cloud
+    description: Google Cloud Text-to-Speech ayarlari
+    fields:
+      credentials_json:
+        name: Credentials JSON
+        description: Service account JSON icerigi
+      voice_name:
+        name: Ses adi
+        description: Ornek tr-TR-Chirp3-HD-Achernar
+      language_code:
+        name: Dil kodu
+        description: Ornek tr-TR
+      ssml_gender:
+        name: SSML cinsiyet
+        description: FEMALE, MALE veya NEUTRAL
+  port:
+    name: Port
+    description: ESP cihazinin baglanacagi lokal relay portu
