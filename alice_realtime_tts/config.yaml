@@ -1,0 +1,75 @@
+name: "Alice Realtime TTS"
+version: "0.5.7"
+slug: "alice_realtime_tts"
+description: "Cok saglayicili realtime TTS relay; Cartesia continuation, digerleri buffered fallback"
+startup: "application"
+boot: "auto"
+init: false
+arch:
+  - amd64
+ports:
+  8765/tcp: 8765
+ports_description:
+  8765/tcp: "Alice realtime TTS WebSocket"
+options:
+  provider: "openai"
+  openai:
+    api_key: ""
+    model: "gpt-4o-mini-tts"
+    voice: "coral"
+    instructions: "Turkce konus. Kadinsi, alimli, muzip, hafif seytansi ve tatli tatli igneleyici bir tonda oku. Sanki zeki, hazircevap ve oyunbaz bir kadin asistan konusuyormus gibi hissettir. Flortoz ama zarif ol. Robot gibi duz okuma, monoton konusma. Turkce telaffuza dikkat et, Ingilizce aksan kullanma."
+  cartesia:
+    api_key: ""
+    model_id: "sonic-3"
+    voice_id: ""
+    language: "tr"
+    version: "2026-03-01"
+  elevenlabs:
+    api_key: ""
+    model_id: "eleven_flash_v2_5"
+    voice_id: ""
+    output_format: "pcm_16000"
+    latency_mode: 3
+  google_ai:
+    api_key: ""
+    model: "gemini-3.1-flash-tts-preview"
+    voice_name: "Kore"
+    prompt_prefix: ""
+  google_cloud:
+    credentials_json: ""
+    voice_name: ""
+    language_code: "tr-TR"
+    ssml_gender: "FEMALE"
+  pcm_sample_rate: 24000
+  port: 8765
+schema:
+  provider: list(openai|cartesia|elevenlabs|google_ai|google_cloud)
+  openai:
+    api_key: password
+    model: str
+    voice: str
+    instructions: str
+  cartesia:
+    api_key: password
+    model_id: str
+    voice_id: str
+    language: str
+    version: str
+  elevenlabs:
+    api_key: password
+    model_id: str
+    voice_id: str
+    output_format: str
+    latency_mode: int
+  google_ai:
+    api_key: password
+    model: str
+    voice_name: str
+    prompt_prefix: str
+  google_cloud:
+    credentials_json: password
+    voice_name: str
+    language_code: str
+    ssml_gender: list(SSML_VOICE_GENDER_UNSPECIFIED|MALE|FEMALE|NEUTRAL)
+  pcm_sample_rate: int
+  port: port
