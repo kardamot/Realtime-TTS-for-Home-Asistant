@@ -1,12 +1,6 @@
 aiohttp
 fastapi
-faster-whisper
-google-auth
-numpy
-onnxruntime
-openai
 psutil
 PyYAML
-requests
-uvicorn[standard]
-
+uvicorn
+websockets

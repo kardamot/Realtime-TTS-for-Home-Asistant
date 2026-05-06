@@ -13,13 +13,14 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 ## First Version Scope
 
 - FastAPI backend with modular config, prompt, log, ESP, and pipeline services.
-- React/Vite frontend with dark dashboard UI.
+- Installer-safe static dashboard UI. The React/Vite source is kept under `frontend/` for the next richer panel pass.
 - `/data/alice_config.json` central persistent config.
 - `/data/prompts/*.yaml` prompt profiles.
 - Unified in-memory log ring buffer with WebSocket streaming.
 - ESP offline/mock mode when `esp_base_url` is empty or unavailable.
 - ESP command stubs for the future lightweight ESP HTTP/WebSocket API.
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
+- No Node build or heavy ML dependency is required during add-on installation.
 
 The old add-ons remain untouched:
 
@@ -39,4 +40,3 @@ WS   /ws
 ```
 
 Until firmware support exists, commands are logged and the UI shows mock/offline state.
-

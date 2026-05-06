@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.0"
+version: "0.1.1"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -82,4 +82,3 @@ schema:
       voice_id: str
       language: str
       version: str
-

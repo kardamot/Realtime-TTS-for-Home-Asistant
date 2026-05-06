@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alice Control Panel</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="mark">A</div>
+          <div>
+            <strong>Alice</strong>
+            <span>Control Panel</span>
+          </div>
+        </div>
+        <nav>
+          <a href="#status">Status</a>
+          <a href="#pipeline">Pipeline</a>
+          <a href="#commands">Commands</a>
+          <a href="#config">Config</a>
+          <a href="#prompts">Prompts</a>
+          <a href="#logs">Logs</a>
+        </nav>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <h1>Alice Control Panel</h1>
+            <p id="summary">Backend status bekleniyor</p>
+          </div>
+          <div class="top-actions">
+            <span id="state-pill" class="pill info">IDLE</span>
+            <button id="refresh-btn" title="Refresh">Refresh</button>
+          </div>
+        </header>
+
+        <section id="login" class="login hidden">
+          <h2>Panel token/password gerekli</h2>
+          <div class="row">
+            <input id="token-input" type="password" placeholder="Token veya password" />
+            <button id="unlock-btn">Unlock</button>
+          </div>
+          <p id="login-error"></p>
+        </section>
+
+        <div id="notice" class="notice hidden"></div>
+
+        <section id="status" class="metrics">
+          <div class="metric"><span>Robot</span><strong id="robot-status">-</strong><small id="robot-ip">-</small></div>
+          <div class="metric"><span>Wi-Fi</span><strong id="wifi-status">-</strong><small id="wifi-rssi">-</small></div>
+          <div class="metric"><span>Server CPU</span><strong id="cpu-status">-</strong><small id="ram-status">-</small></div>
+          <div class="metric"><span>ESP Heap</span><strong id="heap-status">-</strong><small id="heap-min">-</small></div>
+          <div class="metric"><span>Uptime</span><strong id="server-uptime">-</strong><small id="esp-uptime">-</small></div>
+        </section>
+
+        <section class="grid">
+          <section class="panel span-4">
+            <header><h2>Connections</h2><span id="esp-pill" class="pill warn">MOCK</span></header>
+            <div class="kv">
+              <div><span>ESP</span><b id="conn-esp">offline</b></div>
+              <div><span>STT</span><b id="conn-stt">faster_whisper</b></div>
+              <div><span>LLM</span><b id="conn-llm">openai</b></div>
+              <div><span>TTS</span><b id="conn-tts">openai</b></div>
+              <div><span>Reconnects</span><b id="conn-reconnects">0</b></div>
+            </div>
+            <p id="last-error" class="error"></p>
+          </section>
+
+          <section id="pipeline" class="panel span-8">
+            <header><h2>Voice Pipeline</h2><span id="stream-pill" class="pill info">STREAM OFF</span></header>
+            <div class="pipeline">
+              <div>
+                <label>Text test</label>
+                <div class="row">
+                  <input id="pipeline-input" placeholder="Pipeline'a test metni gonder" />
+                  <button id="pipeline-send">Send</button>
+                </div>
+                <div class="transcript">
+                  <span>User/STT</span>
+                  <p id="stt-text">No utterance yet</p>
+                  <span>LLM</span>
+                  <p id="llm-text">No response yet</p>
+                </div>
+              </div>
+              <div id="timeline" class="timeline"></div>
+            </div>
+          </section>
+
+          <section class="panel span-4">
+            <header><h2>Hardware</h2></header>
+            <div class="hardware">
+              <div><span>Mic</span><b id="hw-mic">unknown</b></div>
+              <div><span>Speaker</span><b id="hw-speaker">unknown</b></div>
+              <div><span>Servo</span><b id="hw-servo">center</b></div>
+              <div><span>Amp</span><b id="hw-amp">unknown</b></div>
+              <div><span>Wake</span><b id="hw-wake">unknown</b></div>
+              <div><span>State</span><b id="hw-state">OFFLINE</b></div>
+            </div>
+          </section>
+
+          <section id="commands" class="panel span-8">
+            <header><h2>Command Panel</h2></header>
+            <div id="esp-commands" class="commands"></div>
+            <div id="server-commands" class="commands secondary"></div>
+          </section>
+
+          <section id="config" class="panel span-12">
+            <header>
+              <h2>Config</h2>
+              <div class="actions">
+                <button id="config-export">Export</button>
+                <button id="config-save">Save</button>
+              </div>
+            </header>
+            <div class="config-grid">
+              <label><span>Panel port</span><input data-path="panel.port" type="number" /></label>
+              <label><span>Panel token</span><input data-path="panel.token" type="password" /></label>
+              <label><span>Panel password</span><input data-path="panel.password" type="password" /></label>
+              <label><span>ESP base URL</span><input data-path="esp.base_url" placeholder="http://192.168.1.50" /></label>
+              <label><span>STT model</span><input data-path="stt.model" /></label>
+              <label><span>LLM provider</span><select data-path="llm.provider"><option>openai</option><option>openrouter</option><option>mock</option><option>none</option></select></label>
+              <label><span>LLM model</span><input data-path="llm.model" /></label>
+              <label><span>LLM key</span><input data-path="llm.api_key" type="password" /></label>
+              <label><span>LLM base URL</span><input data-path="llm.base_url" /></label>
+              <label><span>TTS provider</span><select data-path="tts.provider"><option>openai</option><option>cartesia</option><option>elevenlabs</option><option>google_ai</option><option>google_cloud</option></select></label>
+              <label><span>PCM rate</span><input data-path="tts.pcm_sample_rate" type="number" /></label>
+              <label><span>OpenAI TTS key</span><input data-path="tts.openai.api_key" type="password" /></label>
+              <label><span>OpenAI voice</span><input data-path="tts.openai.voice" /></label>
+              <label><span>Cartesia key</span><input data-path="tts.cartesia.api_key" type="password" /></label>
+              <label><span>Cartesia voice</span><input data-path="tts.cartesia.voice_id" /></label>
+              <label><span>Safe mode</span><input data-path="safe_mode" type="checkbox" /></label>
+              <label><span>Debug logs</span><input data-path="debug_logs" type="checkbox" /></label>
+              <label class="wide"><span>LLM system prompt</span><textarea data-path="llm.system_prompt"></textarea></label>
+            </div>
+          </section>
+
+          <section id="prompts" class="panel span-6">
+            <header>
+              <h2>Prompt Editor</h2>
+              <div class="actions">
+                <button id="prompt-activate">Activate</button>
+                <button id="prompt-save">Save</button>
+              </div>
+            </header>
+            <div class="prompt-box">
+              <select id="prompt-select"></select>
+              <input id="prompt-name" />
+              <textarea id="prompt-text"></textarea>
+            </div>
+          </section>
+
+          <section id="logs" class="panel span-6">
+            <header>
+              <h2>Logs</h2>
+              <div class="actions">
+                <button id="logs-pause">Pause</button>
+                <button id="logs-clear">Clear</button>
+              </div>
+            </header>
+            <div class="log-tools">
+              <input id="log-search" placeholder="Search logs" />
+              <select id="log-level"><option>ALL</option><option>DEBUG</option><option>INFO</option><option>WARN</option><option>ERROR</option></select>
+              <select id="log-category"><option>ALL</option></select>
+            </div>
+            <div id="log-list" class="log-list"></div>
+          </section>
+        </section>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
+

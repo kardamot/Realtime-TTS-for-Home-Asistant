@@ -141,6 +141,6 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 ## Notes
 
 - This is the first integrated control-panel version.
-- Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; the old add-ons remain as stable references.
+- Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
+- The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
 - ESP WebSocket audio playback integration is intentionally left as a clear next step because the ESP API does not exist yet.
-
