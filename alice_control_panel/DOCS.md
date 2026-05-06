@@ -125,6 +125,16 @@ Expected `POST /api/command` body:
 {"command":"test_speaker","payload":{}}
 ```
 
+Expected `WS /ws` text messages:
+
+```json
+{"type":"status","payload":{"state":"IDLE","heap_free":180000}}
+{"type":"log","payload":{"level":"INFO","category":"ESP","message":"speaker test started","details":{}}}
+{"type":"event","payload":{"name":"wake_word","source":"mic"}}
+```
+
+The server reconnects to this socket automatically. If `esp.ws_url` is empty, it is derived from `esp.base_url` as `/ws`.
+
 Supported first-pass commands:
 
 ```text
@@ -143,5 +153,5 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.9` keeps that dashboard layout and adds practical controls for log download, config import/export with optional secrets, prompt create/copy/delete, and steadier live status refreshes.
+- `0.1.10` adds ESP WebSocket event/log/status listening with reconnect handling, plus a visible ESP WS connection row and config field.
 - ESP WebSocket audio playback integration is intentionally left as a clear next step because the ESP API does not exist yet.

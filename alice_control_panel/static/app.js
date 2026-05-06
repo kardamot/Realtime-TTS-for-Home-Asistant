@@ -214,7 +214,8 @@ async function loadStatus() {
   text("conn-llm", `${data.llm?.provider || "openai"} / ${data.llm?.model || "n/a"}`);
   text("conn-tts", `${data.tts?.provider || "openai"} / ${data.tts?.pcm_sample_rate || "n/a"}`);
   text("conn-reconnects", esp.reconnects || 0);
-  text("last-error", esp.last_error || "");
+  text("conn-esp-ws", esp.ws_connected ? "connected" : "offline");
+  text("last-error", esp.last_error || esp.last_ws_error || "");
   text("hw-mic", esp.hardware?.mic || "unknown");
   text("hw-speaker", esp.hardware?.speaker || "unknown");
   text("hw-servo", esp.hardware?.servo_position || "center");

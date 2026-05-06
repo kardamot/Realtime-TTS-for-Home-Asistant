@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-    <link rel="stylesheet" href="/styles.css?v=0.1.9" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.10" />
   </head>
   <body>
     <main class="shell">
@@ -63,6 +63,7 @@
             <header><h2>Connections</h2><span id="esp-pill" class="pill warn">MOCK</span></header>
             <div class="kv">
               <div><span>ESP</span><b id="conn-esp">offline</b></div>
+              <div><span>ESP WS</span><b id="conn-esp-ws">offline</b></div>
               <div><span>STT</span><b id="conn-stt">faster_whisper</b></div>
               <div><span>LLM</span><b id="conn-llm">openai</b></div>
               <div><span>TTS</span><b id="conn-tts">openai</b></div>
@@ -161,6 +162,7 @@
               <label><span>Panel token</span><input data-path="panel.token" type="password" /></label>
               <label><span>Panel password</span><input data-path="panel.password" type="password" /></label>
               <label><span>ESP base URL</span><input data-path="esp.base_url" placeholder="http://192.168.1.50" /></label>
+              <label><span>ESP WebSocket URL</span><input data-path="esp.ws_url" placeholder="ws://192.168.1.50/ws" /></label>
               <label><span>STT model</span><input data-path="stt.model" /></label>
               <label><span>LLM provider</span><select data-path="llm.provider"><option>openai</option><option>openrouter</option><option>mock</option><option>none</option></select></label>
               <label><span>LLM model</span><input data-path="llm.model" /></label>
@@ -180,6 +182,6 @@
         </section>
       </section>
     </main>
-    <script src="/app.js?v=0.1.9"></script>
+    <script src="/app.js?v=0.1.10"></script>
   </body>
 </html>

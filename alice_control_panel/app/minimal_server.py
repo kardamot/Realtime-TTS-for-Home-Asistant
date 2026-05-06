@@ -20,7 +20,7 @@ LOGS: list[dict] = []
 
 DEFAULT_CONFIG = {
     "panel": {"port": 8099, "token": "", "password": "", "title": "Alice Control Panel"},
-    "esp": {"base_url": "", "poll_interval_sec": 3, "reconnect_sec": 5, "mock_mode": True},
+    "esp": {"base_url": "", "ws_url": "", "poll_interval_sec": 3, "reconnect_sec": 5, "mock_mode": True},
     "stt": {"provider": "faster_whisper", "model": "small", "language": "tr", "compute_type": "int8"},
     "llm": {"provider": "openai", "model": "gpt-5-mini", "api_key": "", "base_url": "https://api.openai.com/v1", "system_prompt": ""},
     "tts": {
@@ -175,7 +175,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.9"
+    server_version = "AliceControlPanel/0.1.10"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -327,7 +327,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.9",
+        "version": "0.1.10",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
@@ -363,6 +363,9 @@ def esp_status() -> dict:
         },
         "last_seen": None,
         "last_error": "Stdlib fallback mode: ESP polling disabled until FastAPI runtime is enabled.",
+        "ws_connected": False,
+        "ws_url": "",
+        "last_ws_error": "",
         "reconnects": 0,
     }
 
