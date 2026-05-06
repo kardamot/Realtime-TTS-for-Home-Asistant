@@ -8,7 +8,13 @@ let currentConfig = {};
 let currentPrompt = {};
 let logs = [];
 let paused = false;
+let configDirty = false;
 let logSocket = null;
+let logSocketSeq = 0;
+let eventSocket = null;
+let eventSocketSeq = 0;
+let statusTimer = null;
+let statusRefreshTimer = null;
 
 const $ = (id) => document.getElementById(id);
 const text = (id, value) => { const el = $(id); if (el) el.textContent = value ?? "-"; };
@@ -18,6 +24,26 @@ function notice(value) {
   if (!value) { el.classList.add("hidden"); return; }
   el.textContent = value;
   el.classList.remove("hidden");
+}
+
+function rememberToken(value) {
+  token = value || "";
+  if (token) {
+    localStorage.setItem("alice_panel_token", token);
+    document.cookie = `alice_panel_token=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
+  } else {
+    localStorage.removeItem("alice_panel_token");
+    document.cookie = "alice_panel_token=; Max-Age=0; path=/; SameSite=Lax";
+  }
+}
+
+async function guard(label, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    notice(`${label}: ${err.message}`);
+    return null;
+  }
 }
 
 function fmtSeconds(value) {
@@ -89,17 +115,27 @@ function stripMasked(value) {
 
 async function boot() {
   renderButtons();
-  $("refresh-btn").onclick = loadStatus;
-  $("unlock-btn").onclick = unlock;
-  $("pipeline-send").onclick = runPipeline;
-  $("config-save").onclick = saveConfig;
-  $("config-export").onclick = exportConfig;
-  $("prompt-save").onclick = savePrompt;
-  $("prompt-activate").onclick = activatePrompt;
-  $("logs-clear").onclick = () => sendCommand("clear_logs");
+  $("refresh-btn").onclick = () => guard("Refresh failed", loadStatus);
+  $("unlock-btn").onclick = () => guard("Unlock failed", unlock);
+  $("pipeline-send").onclick = () => guard("Pipeline failed", runPipeline);
+  $("config-save").onclick = () => guard("Config save failed", saveConfig);
+  $("config-export").onclick = () => guard("Config export failed", exportConfig);
+  $("config-import").onclick = () => $("config-import-file").click();
+  $("config-import-file").onchange = () => guard("Config import failed", importConfig);
+  $("prompt-new").onclick = () => guard("Prompt create failed", createPrompt);
+  $("prompt-copy").onclick = () => guard("Prompt copy failed", copyPrompt);
+  $("prompt-delete").onclick = () => guard("Prompt delete failed", deletePrompt);
+  $("prompt-save").onclick = () => guard("Prompt save failed", savePrompt);
+  $("prompt-activate").onclick = () => guard("Prompt activate failed", activatePrompt);
+  $("logs-download").onclick = () => guard("Log download failed", downloadLogs);
+  $("logs-clear").onclick = () => guard("Clear logs failed", () => sendCommand("clear_logs"));
   $("logs-pause").onclick = () => {
     paused = !paused;
     $("logs-pause").textContent = paused ? "Resume" : "Pause";
+    if (!paused) {
+      loadLogSnapshot().catch(() => undefined);
+      if (!logSocket || logSocket.readyState === WebSocket.CLOSED) connectLogs();
+    }
   };
   $("log-search").oninput = renderLogs;
   $("log-level").onchange = renderLogs;
@@ -113,6 +149,8 @@ async function boot() {
     }
     await loadAll();
     connectLogs();
+    connectEvents();
+    startStatusPolling();
   } catch (err) {
     notice(err.message);
   }
@@ -122,12 +160,12 @@ async function unlock() {
   const draft = $("token-input").value;
   try {
     await api("/api/status", {}, draft);
-    token = draft;
-    localStorage.setItem("alice_panel_token", token);
-    document.cookie = `alice_panel_token=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
+    rememberToken(draft);
     $("login").classList.add("hidden");
     await loadAll();
     connectLogs();
+    connectEvents();
+    startStatusPolling();
   } catch (err) {
     $("login-error").textContent = err.message;
   }
@@ -138,13 +176,23 @@ async function loadAll() {
   await loadPrompts();
 }
 
+function startStatusPolling() {
+  if (statusTimer) window.clearInterval(statusTimer);
+  statusTimer = window.setInterval(() => loadStatus().catch(() => undefined), 5000);
+}
+
+function scheduleStatusRefresh(delay = 250) {
+  if (statusRefreshTimer) window.clearTimeout(statusRefreshTimer);
+  statusRefreshTimer = window.setTimeout(() => loadStatus().catch(() => undefined), delay);
+}
+
 async function loadStatus() {
   const data = await api("/api/status");
   const esp = data.esp || {};
   const pipe = data.pipeline || {};
   const health = (data.health || {}).system || {};
   const backend = data.health || {};
-  currentConfig = data.config || {};
+  if (!configDirty) currentConfig = data.config || {};
 
   $("summary").textContent = esp.online ? "Robot linked" : esp.mock_mode ? "ESP offline, mock mode active" : "Waiting for robot status";
   text("backend-version", `${backend.service || "alice_control_panel"} ${backend.version || ""} - FastAPI backend online`);
@@ -176,7 +224,7 @@ async function loadStatus() {
   text("stt-text", pipe.stt_result || pipe.last_user_text || "No utterance yet");
   text("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
   renderTimeline(pipe.timeline || []);
-  fillConfig();
+  if (!configDirty) fillConfig();
 }
 
 function fillConfig() {
@@ -185,6 +233,7 @@ function fillConfig() {
     if (el.type === "checkbox") el.checked = Boolean(value);
     else el.value = value ?? "";
     el.oninput = () => {
+      configDirty = true;
       const next = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
       setDeep(currentConfig, el.dataset.path, next);
     };
@@ -207,14 +256,14 @@ function renderButtons() {
   espCommands.forEach((cmd) => {
     const btn = document.createElement("button");
     btn.textContent = cmd.replaceAll("_", " ");
-    btn.onclick = () => sendCommand(cmd);
+    btn.onclick = () => guard("Command failed", () => sendCommand(cmd));
     $("esp-commands").appendChild(btn);
   });
   $("server-commands").innerHTML = "";
   serverCommands.forEach((cmd) => {
     const btn = document.createElement("button");
     btn.textContent = cmd.replaceAll("_", " ");
-    btn.onclick = () => sendCommand(cmd);
+    btn.onclick = () => guard("Command failed", () => sendCommand(cmd));
     $("server-commands").appendChild(btn);
   });
 }
@@ -229,48 +278,120 @@ async function sendCommand(command) {
 
 async function saveConfig() {
   await api("/api/config", { method: "POST", body: JSON.stringify(stripMasked(currentConfig)) });
+  const nextToken = getDeep(currentConfig, "panel.token") || getDeep(currentConfig, "panel.password");
+  if (nextToken && nextToken !== "********") rememberToken(nextToken);
+  configDirty = false;
   notice("Config saved");
   await loadStatus();
 }
 
 async function exportConfig() {
-  const data = await api("/api/config/export?include_secrets=false");
+  const includeSecrets = $("config-export-secrets").checked ? "true" : "false";
+  const data = await api(`/api/config/export?include_secrets=${includeSecrets}`);
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "alice_config.json";
+  a.download = includeSecrets === "true" ? "alice_config_with_secrets.json" : "alice_config.json";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
-async function loadPrompts() {
+async function importConfig() {
+  const input = $("config-import-file");
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const doc = JSON.parse(await file.text());
+  await api("/api/config/import", { method: "POST", body: JSON.stringify(doc) });
+  input.value = "";
+  configDirty = false;
+  notice("Config imported");
+  await loadStatus();
+}
+
+async function downloadLogs() {
+  const body = await api("/api/logs/download");
+  const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "alice_logs.txt";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+async function loadPrompts(preferredSlug) {
   const data = await api("/api/prompts");
   const select = $("prompt-select");
+  const profiles = data.profiles || [];
   select.innerHTML = "";
-  (data.profiles || []).forEach((profile) => {
+  profiles.forEach((profile) => {
     const opt = document.createElement("option");
     opt.value = profile.slug;
     opt.textContent = profile.name;
     select.appendChild(opt);
   });
-  select.value = data.active_profile || "alice";
+  const desired = [preferredSlug, data.active_profile, profiles[0]?.slug, "alice"].find((slug) =>
+    slug && profiles.some((profile) => profile.slug === slug)
+  );
+  select.value = desired || "";
   select.onchange = () => loadPrompt(select.value);
-  await loadPrompt(select.value);
+  if (select.value) await loadPrompt(select.value);
 }
 
 async function loadPrompt(slug) {
   currentPrompt = await api(`/api/prompts/${slug}`);
   $("prompt-name").value = currentPrompt.name || "";
+  $("prompt-description").value = currentPrompt.description || "";
   $("prompt-text").value = currentPrompt.prompt || "";
+}
+
+async function createPrompt() {
+  const name = window.prompt("New prompt profile name", "Alice Copy");
+  if (!name) return;
+  const result = await api("/api/prompts", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      description: "Custom prompt profile",
+      prompt: $("prompt-text").value || currentPrompt.prompt || "",
+    }),
+  });
+  notice("Prompt created");
+  await loadPrompts(result.prompt.slug);
+}
+
+async function copyPrompt() {
+  if (!currentPrompt.slug) return;
+  const name = window.prompt("Copied prompt profile name", `${currentPrompt.name || currentPrompt.slug} Copy`);
+  if (!name) return;
+  const result = await api(`/api/prompts/${currentPrompt.slug}/copy`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  notice("Prompt copied");
+  await loadPrompts(result.prompt.slug);
+}
+
+async function deletePrompt() {
+  if (!currentPrompt.slug) return;
+  if (!window.confirm(`Delete prompt profile "${currentPrompt.name || currentPrompt.slug}"?`)) return;
+  await api(`/api/prompts/${currentPrompt.slug}`, { method: "DELETE" });
+  notice("Prompt deleted");
+  await loadPrompts();
 }
 
 async function savePrompt() {
   currentPrompt.name = $("prompt-name").value;
+  currentPrompt.description = $("prompt-description").value;
   currentPrompt.prompt = $("prompt-text").value;
   await api(`/api/prompts/${currentPrompt.slug}`, { method: "POST", body: JSON.stringify(currentPrompt) });
   notice("Prompt saved");
-  await loadPrompts();
+  await loadPrompts(currentPrompt.slug);
 }
 
 async function activatePrompt() {
@@ -288,7 +409,11 @@ async function runPipeline() {
 }
 
 function connectLogs() {
-  if (logSocket) logSocket.close();
+  const seq = ++logSocketSeq;
+  if (logSocket) {
+    logSocket.onclose = null;
+    logSocket.close();
+  }
   loadLogSnapshot().catch(() => undefined);
   const socket = new WebSocket(wsPath("/api/ws/logs"));
   logSocket = socket;
@@ -298,7 +423,7 @@ function connectLogs() {
     const doc = JSON.parse(event.data);
     const incoming = doc.entries || [];
     if (!incoming.length) return;
-    logs = logs.concat(incoming).slice(-1000);
+    mergeLogs(incoming);
     renderLogCategories();
     renderLogs();
   };
@@ -308,16 +433,45 @@ function connectLogs() {
   };
   socket.onclose = () => {
     window.setTimeout(() => {
-      if (!paused) connectLogs();
+      if (logSocketSeq === seq && !paused) connectLogs();
     }, 3000);
   };
 }
 
 async function loadLogSnapshot() {
   const data = await api("/api/logs?limit=250");
-  logs = (data.entries || []).slice(-1000);
+  mergeLogs(data.entries || []);
   renderLogCategories();
   renderLogs();
+}
+
+function mergeLogs(entries) {
+  const map = new Map(logs.map((entry) => [entry.id, entry]));
+  entries.forEach((entry) => {
+    if (entry && entry.id) map.set(entry.id, entry);
+  });
+  logs = Array.from(map.values()).sort((a, b) => (a.ts || 0) - (b.ts || 0)).slice(-1000);
+}
+
+function connectEvents() {
+  const seq = ++eventSocketSeq;
+  if (eventSocket) {
+    eventSocket.onclose = null;
+    eventSocket.close();
+  }
+  const socket = new WebSocket(wsPath("/api/ws/events"));
+  eventSocket = socket;
+  socket.onmessage = (event) => {
+    const doc = JSON.parse(event.data);
+    if (doc.type === "snapshot" || doc.type === "esp_status" || doc.type === "pipeline_status" || doc.type === "config_updated") {
+      scheduleStatusRefresh();
+    }
+  };
+  socket.onclose = () => {
+    window.setTimeout(() => {
+      if (eventSocketSeq === seq) connectEvents();
+    }, 4000);
+  };
 }
 
 function renderLogCategories() {

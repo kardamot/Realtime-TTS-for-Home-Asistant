@@ -18,9 +18,10 @@ async def get_config(request: Request, _: None = Depends(require_request_auth)) 
 
 @router.post("")
 async def update_config(payload: dict[str, Any], request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
-    updated = await request.app.state.config_store.update(payload)
+    await request.app.state.config_store.update(payload)
+    updated = await request.app.state.config_store.get(include_secrets=False)
     await request.app.state.log_bus.emit("INFO", "UI/API", "Configuration updated")
-    await request.app.state.ws_hub.publish("config_updated", {"config": await request.app.state.config_store.get(False)})
+    await request.app.state.ws_hub.publish("config_updated", {"config": updated})
     return {"ok": True, "config": updated}
 
 
@@ -29,7 +30,8 @@ async def import_config(payload: dict[str, Any], request: Request, _: None = Dep
     imported = payload.get("config") if "config" in payload else payload
     if not isinstance(imported, dict):
         return {"ok": False, "message": "config payload must be an object"}
-    updated = await request.app.state.config_store.replace(imported)
+    await request.app.state.config_store.replace(imported)
+    updated = await request.app.state.config_store.get(include_secrets=False)
     await request.app.state.log_bus.emit("INFO", "UI/API", "Configuration imported")
     return {"ok": True, "config": updated}
 
@@ -45,4 +47,3 @@ async def export_config(
         exported,
         headers={"Content-Disposition": "attachment; filename=alice_config.json"},
     )
-

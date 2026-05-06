@@ -21,7 +21,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - ESP command stubs for the future lightweight ESP HTTP/WebSocket API.
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.8` makes logs span the top-right two-panel height, with Voice Pipeline and Command Panel side-by-side below.
+- Version `0.1.9` adds log download, config import/export options, prompt create/copy/delete controls, and steadier live status refreshes.
 
 The old add-ons remain untouched:
 

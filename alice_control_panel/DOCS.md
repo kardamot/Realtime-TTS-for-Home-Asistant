@@ -143,5 +143,5 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.8` runs the lightweight FastAPI backend with the revised dashboard layout: logs span the upper-right two-panel area, Voice Pipeline and Command Panel share the next row, prompts sit above config, and config stays at the bottom.
+- `0.1.9` keeps that dashboard layout and adds practical controls for log download, config import/export with optional secrets, prompt create/copy/delete, and steadier live status refreshes.
 - ESP WebSocket audio playback integration is intentionally left as a clear next step because the ESP API does not exist yet.

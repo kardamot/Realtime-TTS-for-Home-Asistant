@@ -58,6 +58,7 @@ nav a:hover { background: #121a25; color: var(--text); }
 .topbar p { margin: 4px 0 0; color: var(--muted); }
 .topbar small { display: block; margin-top: 4px; color: #6f8194; }
 .top-actions, .actions, .row { display: flex; align-items: center; gap: 8px; }
+.actions { flex-wrap: wrap; justify-content: flex-end; }
 .row input { flex: 1; }
 .hidden { display: none !important; }
 .notice, .login {
@@ -121,6 +122,16 @@ nav a:hover { background: #121a25; color: var(--text); }
 .config-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
 label { display: grid; gap: 6px; min-width: 0; }
 label.wide { grid-column: 1 / -1; }
+.inline-check {
+  display: inline-flex;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.inline-check input { width: 16px; height: 16px; }
 
 .prompt-box { display: grid; gap: 10px; }
 #prompt-text { min-height: 260px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.5; }

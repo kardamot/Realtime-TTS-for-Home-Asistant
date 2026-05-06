@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-    <link rel="stylesheet" href="/styles.css?v=0.1.8" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.9" />
   </head>
   <body>
     <main class="shell">
@@ -76,6 +76,7 @@
               <h2>Logs</h2>
               <div class="actions">
                 <button id="logs-pause">Pause</button>
+                <button id="logs-download">Download</button>
                 <button id="logs-clear">Clear</button>
               </div>
             </header>
@@ -129,6 +130,9 @@
             <header>
               <h2>Prompt Editor</h2>
               <div class="actions">
+                <button id="prompt-new">New</button>
+                <button id="prompt-copy">Copy</button>
+                <button id="prompt-delete">Delete</button>
                 <button id="prompt-activate">Activate</button>
                 <button id="prompt-save">Save</button>
               </div>
@@ -136,6 +140,7 @@
             <div class="prompt-box">
               <select id="prompt-select"></select>
               <input id="prompt-name" />
+              <input id="prompt-description" placeholder="Description" />
               <textarea id="prompt-text"></textarea>
             </div>
           </section>
@@ -144,8 +149,11 @@
             <header>
               <h2>Config</h2>
               <div class="actions">
+                <label class="inline-check"><input id="config-export-secrets" type="checkbox" /> Secrets</label>
+                <button id="config-import">Import</button>
                 <button id="config-export">Export</button>
                 <button id="config-save">Save</button>
+                <input id="config-import-file" class="hidden" type="file" accept="application/json,.json" />
               </div>
             </header>
             <div class="config-grid">
@@ -172,6 +180,6 @@
         </section>
       </section>
     </main>
-    <script src="/app.js?v=0.1.8"></script>
+    <script src="/app.js?v=0.1.9"></script>
   </body>
 </html>

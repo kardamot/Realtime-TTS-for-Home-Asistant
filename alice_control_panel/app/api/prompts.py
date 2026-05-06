@@ -50,6 +50,7 @@ async def copy_prompt(
     _: None = Depends(require_request_auth),
 ) -> dict[str, Any]:
     doc = await request.app.state.prompt_store.copy_profile(slug, str(payload.get("name") or f"{slug} copy"))
+    await request.app.state.log_bus.emit("INFO", "UI/API", "Prompt copied", {"source": slug, "slug": doc["slug"]})
     return {"ok": True, "prompt": doc}
 
 
@@ -59,6 +60,10 @@ async def delete_prompt(slug: str, request: Request, _: None = Depends(require_r
         await request.app.state.prompt_store.delete_profile(slug)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    config = await request.app.state.config_store.get(include_secrets=True)
+    if str(config.get("prompts", {}).get("active_profile") or "") == slug:
+        await request.app.state.config_store.set_active_prompt("alice")
+    await request.app.state.log_bus.emit("WARN", "UI/API", "Prompt deleted", {"slug": slug})
     return {"ok": True}
 
 
@@ -70,4 +75,3 @@ async def activate_prompt(slug: str, request: Request, _: None = Depends(require
         raise HTTPException(status_code=404, detail="Prompt not found") from exc
     await request.app.state.log_bus.emit("INFO", "PIPELINE", "Active prompt changed", {"slug": slug})
     return {"ok": True, "active_profile": slug}
-
