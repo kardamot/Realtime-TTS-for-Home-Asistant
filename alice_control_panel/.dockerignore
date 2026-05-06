@@ -1,7 +1,9 @@
 frontend/node_modules
 frontend/dist
+frontend
+examples
 __pycache__
 *.pyc
 .pytest_cache
 .mypy_cache
-
+*.md
