@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.5", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.6", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
@@ -78,15 +78,16 @@ def create_app() -> FastAPI:
     async def spa(full_path: str = ""):
         requested_path = (static_root / full_path).resolve()
         static_root_resolved = static_root.resolve()
+        no_cache = {"Cache-Control": "no-store"}
         if (
             full_path
             and requested_path.is_file()
             and str(requested_path).startswith(str(static_root_resolved))
         ):
-            return FileResponse(requested_path)
+            return FileResponse(requested_path, headers=no_cache)
         index_path = static_root / "index.html"
         if index_path.exists():
-            return FileResponse(index_path)
+            return FileResponse(index_path, headers=no_cache)
         return HTMLResponse(
             "<!doctype html><title>Alice Control Panel</title>"
             "<body style='font-family:system-ui;background:#111827;color:#e5e7eb;padding:32px'>"

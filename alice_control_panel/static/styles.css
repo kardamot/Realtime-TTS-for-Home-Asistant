@@ -56,6 +56,7 @@ nav a:hover { background: #121a25; color: var(--text); }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 18px; }
 .topbar h1 { margin: 0; font-size: 24px; }
 .topbar p { margin: 4px 0 0; color: var(--muted); }
+.topbar small { display: block; margin-top: 4px; color: #6f8194; }
 .top-actions, .actions, .row { display: flex; align-items: center; gap: 8px; }
 .row input { flex: 1; }
 .hidden { display: none !important; }
@@ -150,4 +151,3 @@ label.wide { grid-column: 1 / -1; }
   nav, .commands { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .row { flex-direction: column; align-items: stretch; }
 }
-

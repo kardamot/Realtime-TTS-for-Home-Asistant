@@ -175,7 +175,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.5"
+    server_version = "AliceControlPanel/0.1.6"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -258,10 +258,10 @@ class Handler(SimpleHTTPRequestHandler):
                 self.json({"ok": True})
             elif path == "/api/command":
                 command = str(payload.get("command", ""))
-                log("WARN", "COMMAND", "Command accepted in minimal install mode", {"command": command})
+                log("WARN", "COMMAND", "Command accepted in stdlib fallback mode", {"command": command})
                 if command == "clear_logs":
                     LOGS.clear()
-                self.json({"ok": command != "", "implemented": False, "message": "Minimal install mode: command logged only.", "command": command})
+                self.json({"ok": command != "", "implemented": False, "message": "Stdlib fallback mode: command logged only.", "command": command})
             elif path == "/api/pipeline/text":
                 text_value = str(payload.get("text", ""))
                 log("INFO", "PIPELINE", "Text pipeline test accepted", {"text": text_value})
@@ -327,7 +327,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.5",
+        "version": "0.1.6",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
@@ -362,7 +362,7 @@ def esp_status() -> dict:
             "errors": [],
         },
         "last_seen": None,
-        "last_error": "Minimal install mode: ESP polling disabled until FastAPI runtime is enabled.",
+        "last_error": "Stdlib fallback mode: ESP polling disabled until FastAPI runtime is enabled.",
         "reconnects": 0,
     }
 
@@ -372,10 +372,10 @@ def pipeline_status(text_value: str = "") -> dict:
         "state": "IDLE",
         "last_user_text": text_value,
         "stt_result": text_value,
-        "llm_response": "Minimal install mode: pipeline backend is not active yet.",
+        "llm_response": "Stdlib fallback mode: pipeline backend is not active yet.",
         "tts_status": "disabled_minimal_mode",
         "stream_active": False,
-        "timeline": [{"ts": time.time(), "category": "SYSTEM", "message": "Minimal install mode"}],
+        "timeline": [{"ts": time.time(), "category": "SYSTEM", "message": "Stdlib fallback mode"}],
     }
 
 

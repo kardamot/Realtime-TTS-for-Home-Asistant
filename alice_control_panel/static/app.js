@@ -8,6 +8,7 @@ let currentConfig = {};
 let currentPrompt = {};
 let logs = [];
 let paused = false;
+let logSocket = null;
 
 const $ = (id) => document.getElementById(id);
 const text = (id, value) => { const el = $(id); if (el) el.textContent = value ?? "-"; };
@@ -142,9 +143,11 @@ async function loadStatus() {
   const esp = data.esp || {};
   const pipe = data.pipeline || {};
   const health = (data.health || {}).system || {};
+  const backend = data.health || {};
   currentConfig = data.config || {};
 
   $("summary").textContent = esp.online ? "Robot linked" : esp.mock_mode ? "ESP offline, mock mode active" : "Waiting for robot status";
+  text("backend-version", `${backend.service || "alice_control_panel"} ${backend.version || ""} - FastAPI backend online`);
   setPill("state-pill", pipe.state || "IDLE");
   setPill("esp-pill", esp.online ? "ONLINE" : esp.mock_mode ? "MOCK" : "OFFLINE");
   setPill("stream-pill", pipe.stream_active ? "STREAM ON" : "STREAM OFF", pipe.stream_active ? "good" : "info");
@@ -171,7 +174,7 @@ async function loadStatus() {
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");
   text("hw-state", esp.state || "OFFLINE");
   text("stt-text", pipe.stt_result || pipe.last_user_text || "No utterance yet");
-  text("llm-text", pipe.llm_response || "No response yet");
+  text("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
   renderTimeline(pipe.timeline || []);
   fillConfig();
 }
@@ -285,7 +288,11 @@ async function runPipeline() {
 }
 
 function connectLogs() {
+  if (logSocket) logSocket.close();
+  loadLogSnapshot().catch(() => undefined);
   const socket = new WebSocket(wsPath("/api/ws/logs"));
+  logSocket = socket;
+  socket.onopen = () => notice("");
   socket.onmessage = (event) => {
     if (paused) return;
     const doc = JSON.parse(event.data);
@@ -295,6 +302,22 @@ function connectLogs() {
     renderLogCategories();
     renderLogs();
   };
+  socket.onerror = () => {
+    notice("Log WebSocket baglanamadi; HTTP log snapshot kullaniliyor.");
+    loadLogSnapshot().catch(() => undefined);
+  };
+  socket.onclose = () => {
+    window.setTimeout(() => {
+      if (!paused) connectLogs();
+    }, 3000);
+  };
+}
+
+async function loadLogSnapshot() {
+  const data = await api("/api/logs?limit=250");
+  logs = (data.entries || []).slice(-1000);
+  renderLogCategories();
+  renderLogs();
 }
 
 function renderLogCategories() {
@@ -326,4 +349,3 @@ function renderLogs() {
 }
 
 window.addEventListener("load", boot);
-

@@ -23,7 +23,7 @@ async def health(request: Request) -> dict[str, Any]:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.5",
+        "version": "0.1.6",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": system_health(),
@@ -52,7 +52,21 @@ async def events_ws(websocket: WebSocket) -> None:
     hub = websocket.app.state.ws_hub
     queue = await hub.subscribe()
     try:
-        await websocket.send_json({"type": "snapshot", "payload": await status(websocket)})
+        await websocket.send_json(
+            {
+                "type": "snapshot",
+                "payload": {
+                    "health": {
+                        "ok": True,
+                        "service": "alice_control_panel",
+                        "version": "0.1.6",
+                        "system": system_health(),
+                    },
+                    "esp": await websocket.app.state.esp_client.status(),
+                    "pipeline": await websocket.app.state.voice_pipeline.status(),
+                },
+            }
+        )
         while True:
             event = await queue.get()
             await websocket.send_json(event)
