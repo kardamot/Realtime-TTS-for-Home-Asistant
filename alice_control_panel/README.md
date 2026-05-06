@@ -21,7 +21,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - ESP command stubs for the future lightweight ESP HTTP/WebSocket API.
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.6` restores the lightweight FastAPI runtime, adds static asset cache-busting, and keeps npm plus heavy ML packages out of the image.
+- Version `0.1.7` moves live logs into the upper dashboard area and pushes config to the bottom while keeping the lightweight FastAPI runtime.
 
 The old add-ons remain untouched:
 

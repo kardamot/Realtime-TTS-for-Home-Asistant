@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-    <link rel="stylesheet" href="/styles.css?v=0.1.6" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.7" />
   </head>
   <body>
     <main class="shell">
@@ -18,11 +18,11 @@
         </div>
         <nav>
           <a href="#status">Status</a>
+          <a href="#logs">Logs</a>
           <a href="#pipeline">Pipeline</a>
           <a href="#commands">Commands</a>
-          <a href="#config">Config</a>
           <a href="#prompts">Prompts</a>
-          <a href="#logs">Logs</a>
+          <a href="#config">Config</a>
         </nav>
       </aside>
 
@@ -71,6 +71,34 @@
             <p id="last-error" class="error"></p>
           </section>
 
+          <section id="logs" class="panel span-8 log-panel">
+            <header>
+              <h2>Logs</h2>
+              <div class="actions">
+                <button id="logs-pause">Pause</button>
+                <button id="logs-clear">Clear</button>
+              </div>
+            </header>
+            <div class="log-tools">
+              <input id="log-search" placeholder="Search logs" />
+              <select id="log-level"><option>ALL</option><option>DEBUG</option><option>INFO</option><option>WARN</option><option>ERROR</option></select>
+              <select id="log-category"><option>ALL</option></select>
+            </div>
+            <div id="log-list" class="log-list"></div>
+          </section>
+
+          <section class="panel span-4">
+            <header><h2>Hardware</h2></header>
+            <div class="hardware">
+              <div><span>Mic</span><b id="hw-mic">unknown</b></div>
+              <div><span>Speaker</span><b id="hw-speaker">unknown</b></div>
+              <div><span>Servo</span><b id="hw-servo">center</b></div>
+              <div><span>Amp</span><b id="hw-amp">unknown</b></div>
+              <div><span>Wake</span><b id="hw-wake">unknown</b></div>
+              <div><span>State</span><b id="hw-state">OFFLINE</b></div>
+            </div>
+          </section>
+
           <section id="pipeline" class="panel span-8">
             <header><h2>Voice Pipeline</h2><span id="stream-pill" class="pill info">STREAM OFF</span></header>
             <div class="pipeline">
@@ -91,22 +119,25 @@
             </div>
           </section>
 
-          <section class="panel span-4">
-            <header><h2>Hardware</h2></header>
-            <div class="hardware">
-              <div><span>Mic</span><b id="hw-mic">unknown</b></div>
-              <div><span>Speaker</span><b id="hw-speaker">unknown</b></div>
-              <div><span>Servo</span><b id="hw-servo">center</b></div>
-              <div><span>Amp</span><b id="hw-amp">unknown</b></div>
-              <div><span>Wake</span><b id="hw-wake">unknown</b></div>
-              <div><span>State</span><b id="hw-state">OFFLINE</b></div>
-            </div>
-          </section>
-
-          <section id="commands" class="panel span-8">
+          <section id="commands" class="panel span-12">
             <header><h2>Command Panel</h2></header>
             <div id="esp-commands" class="commands"></div>
             <div id="server-commands" class="commands secondary"></div>
+          </section>
+
+          <section id="prompts" class="panel span-12 prompt-panel">
+            <header>
+              <h2>Prompt Editor</h2>
+              <div class="actions">
+                <button id="prompt-activate">Activate</button>
+                <button id="prompt-save">Save</button>
+              </div>
+            </header>
+            <div class="prompt-box">
+              <select id="prompt-select"></select>
+              <input id="prompt-name" />
+              <textarea id="prompt-text"></textarea>
+            </div>
           </section>
 
           <section id="config" class="panel span-12">
@@ -138,40 +169,9 @@
               <label class="wide"><span>LLM system prompt</span><textarea data-path="llm.system_prompt"></textarea></label>
             </div>
           </section>
-
-          <section id="prompts" class="panel span-6">
-            <header>
-              <h2>Prompt Editor</h2>
-              <div class="actions">
-                <button id="prompt-activate">Activate</button>
-                <button id="prompt-save">Save</button>
-              </div>
-            </header>
-            <div class="prompt-box">
-              <select id="prompt-select"></select>
-              <input id="prompt-name" />
-              <textarea id="prompt-text"></textarea>
-            </div>
-          </section>
-
-          <section id="logs" class="panel span-6">
-            <header>
-              <h2>Logs</h2>
-              <div class="actions">
-                <button id="logs-pause">Pause</button>
-                <button id="logs-clear">Clear</button>
-              </div>
-            </header>
-            <div class="log-tools">
-              <input id="log-search" placeholder="Search logs" />
-              <select id="log-level"><option>ALL</option><option>DEBUG</option><option>INFO</option><option>WARN</option><option>ERROR</option></select>
-              <select id="log-category"><option>ALL</option></select>
-            </div>
-            <div id="log-list" class="log-list"></div>
-          </section>
         </section>
       </section>
     </main>
-    <script src="/app.js?v=0.1.6"></script>
+    <script src="/app.js?v=0.1.7"></script>
   </body>
 </html>

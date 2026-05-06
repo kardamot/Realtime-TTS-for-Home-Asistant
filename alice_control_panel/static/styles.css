@@ -121,9 +121,10 @@ label { display: grid; gap: 6px; min-width: 0; }
 label.wide { grid-column: 1 / -1; }
 
 .prompt-box { display: grid; gap: 10px; }
-#prompt-text { min-height: 378px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.5; }
+#prompt-text { min-height: 260px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.5; }
 .log-tools { display: grid; grid-template-columns: minmax(0,1fr) 110px 136px; gap: 8px; margin-bottom: 10px; }
 .log-list { display: grid; align-content: start; gap: 4px; max-height: 430px; overflow: auto; }
+.log-panel .log-list { max-height: 238px; }
 .log-row { display: grid; grid-template-columns: 74px 52px 78px minmax(0,1fr); gap: 8px; min-height: 28px; border-radius: 6px; padding: 5px 7px; background: #101720; font-size: 12px; }
 .log-row time, .log-row span { color: var(--muted); }
 .log-row p { margin: 0; overflow-wrap: anywhere; }
