@@ -143,5 +143,5 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.3` runs `app.minimal_server` with Python standard library only. This is intentional install smoke mode; FastAPI, provider streaming, and STT packages are re-enabled after the add-on reliably installs.
+- `0.1.5` runs the lightweight FastAPI backend again. npm builds, faster-whisper, and onnxruntime remain disabled until the add-on is stable in Home Assistant.
 - ESP WebSocket audio playback integration is intentionally left as a clear next step because the ESP API does not exist yet.

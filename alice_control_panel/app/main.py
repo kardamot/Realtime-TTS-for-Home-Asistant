@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.4", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.5", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
@@ -76,6 +76,14 @@ def create_app() -> FastAPI:
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa(full_path: str = ""):
+        requested_path = (static_root / full_path).resolve()
+        static_root_resolved = static_root.resolve()
+        if (
+            full_path
+            and requested_path.is_file()
+            and str(requested_path).startswith(str(static_root_resolved))
+        ):
+            return FileResponse(requested_path)
         index_path = static_root / "index.html"
         if index_path.exists():
             return FileResponse(index_path)
