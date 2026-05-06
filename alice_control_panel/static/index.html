@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-    <link rel="stylesheet" href="/styles.css?v=0.1.7" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.8" />
   </head>
   <body>
     <main class="shell">
@@ -71,7 +71,7 @@
             <p id="last-error" class="error"></p>
           </section>
 
-          <section id="logs" class="panel span-8 log-panel">
+          <section id="logs" class="panel span-8 log-panel row-span-2">
             <header>
               <h2>Logs</h2>
               <div class="actions">
@@ -99,7 +99,7 @@
             </div>
           </section>
 
-          <section id="pipeline" class="panel span-8">
+          <section id="pipeline" class="panel span-6">
             <header><h2>Voice Pipeline</h2><span id="stream-pill" class="pill info">STREAM OFF</span></header>
             <div class="pipeline">
               <div>
@@ -119,7 +119,7 @@
             </div>
           </section>
 
-          <section id="commands" class="panel span-12">
+          <section id="commands" class="panel span-6 command-panel">
             <header><h2>Command Panel</h2></header>
             <div id="esp-commands" class="commands"></div>
             <div id="server-commands" class="commands secondary"></div>
@@ -172,6 +172,6 @@
         </section>
       </section>
     </main>
-    <script src="/app.js?v=0.1.7"></script>
+    <script src="/app.js?v=0.1.8"></script>
   </body>
 </html>
