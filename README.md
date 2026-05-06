@@ -24,7 +24,7 @@ Saglayici degistiginde firmware degistirmen gerekmez; yalnizca add-on ayarini gu
 add-on'u yeniden baslatman yeterlidir.
 
 `Alice Realtime Voice` ise yeni nesil dis voice pipeline icin hazirlanan ayri add-on'dur.
-Bu turda `0.9.1` ile yerel `faster-whisper` STT, endpointing eventleri, OpenAI-uyumlu streaming LLM,
+Bu turda `0.9.9` ile yerel `faster-whisper` STT, endpointing eventleri, OpenAI-uyumlu streaming LLM,
 HA conversation yonlendirmesi, mevcut TTS relay orkestrasyonu ve temel HA bridge komutlari icerir.
 
 Not: Home Assistant add-on ayarlari provider'a gore kosullu alan gizleme yapmaz; bunun yerine
