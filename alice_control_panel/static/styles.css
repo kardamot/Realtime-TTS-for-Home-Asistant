@@ -45,7 +45,18 @@ textarea { min-height: 108px; resize: vertical; }
 .shell { display: grid; grid-template-columns: 248px minmax(0,1fr); min-height: 100vh; }
 .sidebar { position: sticky; top: 0; height: 100vh; padding: 20px 14px; background: var(--side); border-right: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 12px; padding: 6px 8px 22px; }
-.mark { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 8px; background: linear-gradient(135deg,#17324a,#204d42); font-weight: 800; }
+.mark {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255,189,84,.32);
+  border-radius: 8px;
+  background: #0f1520;
+  box-shadow: 0 0 0 1px rgba(255,105,97,.08), 0 8px 24px rgba(0,0,0,.28);
+}
+.mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .brand strong, .brand span { display: block; }
 .brand span { color: var(--muted); font-size: 13px; }
 nav { display: grid; gap: 6px; }
