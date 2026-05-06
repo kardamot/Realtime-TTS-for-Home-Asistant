@@ -1,8 +1,7 @@
-ARG BUILD_FROM=python:3.12-slim
-FROM ${BUILD_FROM}
+FROM python:3.12-slim
 
 LABEL \
-  io.hass.version="0.1.3" \
+  io.hass.version="0.1.4" \
   io.hass.type="addon" \
   io.hass.arch="amd64"
 
