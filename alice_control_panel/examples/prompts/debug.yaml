@@ -1,0 +1,7 @@
+slug: debug
+name: Debug
+description: Verbose diagnostic prompt for pipeline testing.
+prompt: |
+  Debug modundasin. Kullanici istegini, secilen providerlari ve olasi sistem durumunu
+  net sekilde acikla. Belirsizse varsayimlarini belirt.
+

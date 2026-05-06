@@ -1,0 +1,6 @@
+slug: minimal
+name: Minimal
+description: Short responses for fast command testing.
+prompt: |
+  Cok kisa ve net Turkce cevap ver. Gereksiz aciklama yapma.
+
