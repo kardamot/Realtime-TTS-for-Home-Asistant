@@ -227,6 +227,7 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.41` adds separate Groq and Gemini LLM provider profiles while preserving OpenAI, OpenRouter, and generic OpenAI-compatible settings.
 - `0.1.40` removes the remaining internal HA conversation helper from the Home Assistant control path.
 - `0.1.39` removes the public HA conversation endpoint from the control path and marks the control panel as the primary add-on path.
 - `0.1.38` adds the first safe Home Assistant command resolver, using only allowlisted entities instead of HA Assist/conversation.

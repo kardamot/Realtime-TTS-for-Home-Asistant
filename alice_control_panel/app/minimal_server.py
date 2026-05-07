@@ -47,6 +47,8 @@ DEFAULT_CONFIG = {
         "providers": {
             "openai": {"api_key": "", "model": "gpt-5-mini", "base_url": "https://api.openai.com/v1"},
             "openrouter": {"api_key": "", "model": "openai/gpt-5-mini", "base_url": "https://openrouter.ai/api/v1"},
+            "groq": {"api_key": "", "model": "openai/gpt-oss-20b", "base_url": "https://api.groq.com/openai/v1"},
+            "gemini": {"api_key": "", "model": "gemini-2.5-flash", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai"},
             "openai_compatible": {"api_key": "", "model": "", "base_url": ""},
         },
     },
@@ -310,7 +312,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.40"
+    server_version = "AliceControlPanel/0.1.41"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -471,7 +473,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.40",
+        "version": "0.1.41",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

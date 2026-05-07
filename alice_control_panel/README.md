@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.41` adds separate Groq and Gemini LLM provider profiles while preserving OpenAI, OpenRouter, and generic OpenAI-compatible settings.
 - Version `0.1.40` removes the remaining internal HA conversation helper from the Home Assistant control path.
 - Version `0.1.39` removes the public HA conversation endpoint from the control path and marks the control panel as the primary add-on path.
 - Version `0.1.38` adds the first safe Home Assistant command resolver, using only allowlisted entities instead of HA Assist/conversation.

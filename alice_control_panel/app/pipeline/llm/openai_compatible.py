@@ -19,6 +19,14 @@ LLM_PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
         "model": "openai/gpt-5-mini",
         "base_url": "https://openrouter.ai/api/v1",
     },
+    "groq": {
+        "model": "openai/gpt-oss-20b",
+        "base_url": "https://api.groq.com/openai/v1",
+    },
+    "gemini": {
+        "model": "gemini-2.5-flash",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+    },
     "openai_compatible": {
         "model": "gpt-5-mini",
         "base_url": "",

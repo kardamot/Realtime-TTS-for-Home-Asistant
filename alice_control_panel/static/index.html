@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.40" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.40" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.41" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.41" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-            <div class="title-logo"><img src="/alice-logo.png?v=0.1.40" alt="Alice" /></div>
+            <div class="title-logo"><img src="/alice-logo.png?v=0.1.41" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -233,13 +233,15 @@
                   <div class="provider-switch" data-provider-kind="llm">
                     <button data-provider="openai">OpenAI</button>
                     <button data-provider="openrouter">OpenRouter</button>
+                    <button data-provider="groq">Groq</button>
+                    <button data-provider="gemini">Gemini</button>
                     <button data-provider="openai_compatible">Compatible</button>
                     <button data-provider="mock">Mock</button>
                     <button data-provider="none">None</button>
                   </div>
                 </header>
                 <div class="config-grid compact">
-                  <label><span>Active LLM</span><select data-path="llm.provider" data-provider-select="llm"><option>openai</option><option>openrouter</option><option>openai_compatible</option><option>mock</option><option>none</option></select></label>
+                  <label><span>Active LLM</span><select data-path="llm.provider" data-provider-select="llm"><option>openai</option><option>openrouter</option><option>groq</option><option>gemini</option><option>openai_compatible</option><option>mock</option><option>none</option></select></label>
                   <label><span>Temperature</span><input data-path="llm.temperature" type="number" step="0.05" /></label>
                   <label class="check-row"><input data-path="llm.stream" type="checkbox" /><span>Streaming</span></label>
                   <label class="wide"><span>LLM system prompt</span><textarea data-path="llm.system_prompt"></textarea></label>
@@ -256,6 +258,18 @@
                     <label><span>API key</span><input data-path="llm.providers.openrouter.api_key" type="password" /></label>
                     <label><span>Model</span><input data-path="llm.providers.openrouter.model" /></label>
                     <label><span>Base URL</span><input data-path="llm.providers.openrouter.base_url" /></label>
+                  </section>
+                  <section class="provider-card" data-provider-kind="llm" data-provider-card="groq">
+                    <h4>Groq</h4>
+                    <label><span>API key</span><input data-path="llm.providers.groq.api_key" type="password" /></label>
+                    <label><span>Model</span><input data-path="llm.providers.groq.model" /></label>
+                    <label><span>Base URL</span><input data-path="llm.providers.groq.base_url" /></label>
+                  </section>
+                  <section class="provider-card" data-provider-kind="llm" data-provider-card="gemini">
+                    <h4>Gemini</h4>
+                    <label><span>API key</span><input data-path="llm.providers.gemini.api_key" type="password" /></label>
+                    <label><span>Model</span><input data-path="llm.providers.gemini.model" /></label>
+                    <label><span>Base URL</span><input data-path="llm.providers.gemini.base_url" /></label>
                   </section>
                   <section class="provider-card" data-provider-kind="llm" data-provider-card="openai_compatible">
                     <h4>OpenAI Compatible</h4>
@@ -332,6 +346,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.40"></script>
+  <script src="/app.js?v=0.1.41"></script>
   </body>
 </html>

@@ -58,6 +58,16 @@ DEFAULT_CONFIG: dict[str, Any] = {
                 "model": "openai/gpt-5-mini",
                 "base_url": "https://openrouter.ai/api/v1",
             },
+            "groq": {
+                "api_key": "",
+                "model": "openai/gpt-oss-20b",
+                "base_url": "https://api.groq.com/openai/v1",
+            },
+            "gemini": {
+                "api_key": "",
+                "model": "gemini-2.5-flash",
+                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+            },
             "openai_compatible": {
                 "api_key": "",
                 "model": "",

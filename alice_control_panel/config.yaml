@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.40"
+version: "0.1.41"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -64,6 +64,14 @@ options:
         api_key: ""
         model: "openai/gpt-5-mini"
         base_url: "https://openrouter.ai/api/v1"
+      groq:
+        api_key: ""
+        model: "openai/gpt-oss-20b"
+        base_url: "https://api.groq.com/openai/v1"
+      gemini:
+        api_key: ""
+        model: "gemini-2.5-flash"
+        base_url: "https://generativelanguage.googleapis.com/v1beta/openai"
       openai_compatible:
         api_key: ""
         model: ""
@@ -166,7 +174,7 @@ schema:
     live_vad_max_utterance_ms: int
     live_vad_max_buffer_sec: int
   llm:
-    provider: list(openai|openrouter|openai_compatible|mock|none)
+    provider: list(openai|openrouter|groq|gemini|openai_compatible|mock|none)
     model: str
     api_key: password
     base_url: str
@@ -179,6 +187,14 @@ schema:
         model: str
         base_url: str
       openrouter:
+        api_key: password
+        model: str
+        base_url: str
+      groq:
+        api_key: password
+        model: str
+        base_url: str
+      gemini:
         api_key: password
         model: str
         base_url: str
