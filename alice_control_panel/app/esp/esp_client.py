@@ -75,7 +75,7 @@ class EspClient:
         self._stop = asyncio.Event()
         self._last_poll_log_at = 0.0
         self._last_ws_log_at = 0.0
-        self._last_pause_log_at = 0.0
+        self._pause_log_emitted = False
         self._audio_ack_waiters: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._active_audio_stream_id = ""
         self._active_mic_stream: dict[str, Any] | None = None
@@ -534,6 +534,7 @@ class EspClient:
             self._status["last_seen"] = time.time()
             self._status["reconnects"] = 0
             self._status["auto_reconnect_paused"] = False
+            self._pause_log_emitted = False
             self._status["ip"] = self._status.get("ip") or self._host_from_url(ws_url)
             if str(self._status.get("state") or "").upper() == "OFFLINE":
                 self._status["state"] = "IDLE"
@@ -601,17 +602,20 @@ class EspClient:
         self._status["auto_reconnect_paused"] = False
         self._status["last_error"] = ""
         self._status["last_ws_error"] = ""
+        self._pause_log_emitted = False
 
     async def _pause_if_reconnect_limit_reached(self, esp_cfg: dict[str, Any]) -> bool:
         max_attempts = self._max_auto_reconnects(esp_cfg)
         if not max_attempts:
             self._status["auto_reconnect_paused"] = False
             self._status["max_auto_reconnects"] = 0
+            self._pause_log_emitted = False
             return False
         reconnects = int(self._status.get("reconnects") or 0)
         if reconnects < max_attempts:
             self._status["auto_reconnect_paused"] = False
             self._status["max_auto_reconnects"] = max_attempts
+            self._pause_log_emitted = False
             return False
         self._status["reconnects"] = max_attempts
         self._status["max_auto_reconnects"] = max_attempts
@@ -623,9 +627,8 @@ class EspClient:
             f"Auto reconnect paused after {max_attempts} failed attempts. "
             "Press reconnect to try again."
         )
-        now = time.time()
-        if now - self._last_pause_log_at > 60:
-            self._last_pause_log_at = now
+        if not self._pause_log_emitted:
+            self._pause_log_emitted = True
             await self._log_bus.emit(
                 "WARN",
                 "ESP",
