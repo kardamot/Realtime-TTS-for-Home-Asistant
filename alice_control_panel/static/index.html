@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-    <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.11" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.11" />
+    <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.12" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.12" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="mark"><img src="/alice-logo.png?v=0.1.11" alt="Alice" /></div>
+          <div class="mark"><img src="/alice-logo.png?v=0.1.12" alt="Alice" /></div>
           <div>
             <strong>Alice</strong>
             <span>Control Panel</span>
@@ -60,7 +60,7 @@
         </section>
 
         <section class="grid">
-          <section class="panel span-4">
+          <section class="panel span-4 connections-panel">
             <header><h2>Connections</h2><span id="esp-pill" class="pill warn">MOCK</span></header>
             <div class="kv">
               <div><span>ESP</span><b id="conn-esp">offline</b></div>
@@ -90,7 +90,7 @@
             <div id="log-list" class="log-list"></div>
           </section>
 
-          <section class="panel span-4">
+          <section class="panel span-4 hardware-panel">
             <header><h2>Hardware</h2></header>
             <div class="hardware">
               <div><span>Mic</span><b id="hw-mic">unknown</b></div>
@@ -183,6 +183,6 @@
         </section>
       </section>
     </main>
-    <script src="/app.js?v=0.1.11"></script>
+    <script src="/app.js?v=0.1.12"></script>
   </body>
 </html>
