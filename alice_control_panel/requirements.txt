@@ -1,4 +1,5 @@
 aiohttp
+faster-whisper
 fastapi
 google-auth
 psutil
