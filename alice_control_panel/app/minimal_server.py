@@ -72,8 +72,6 @@ DEFAULT_CONFIG = {
     "ha_bridge": {
         "enabled": True,
         "api_base_url": "http://supervisor/core/api",
-        "conversation_agent_id": "",
-        "conversation_language": "tr",
         "route_home_control": True,
         "strict_allowlist": True,
         "exposed_entities": "",
@@ -312,7 +310,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.38"
+    server_version = "AliceControlPanel/0.1.40"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -473,7 +471,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.38",
+        "version": "0.1.40",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

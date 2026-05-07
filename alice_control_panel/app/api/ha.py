@@ -79,20 +79,3 @@ async def ha_text_command(payload: dict[str, Any], request: Request, _: None = D
         return {"handled": False, "ok": False, "message": "text is required"}
     result = await request.app.state.ha_bridge.handle_text_command(text)
     return result
-
-
-@router.post("/conversation")
-async def ha_conversation(payload: dict[str, Any], request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
-    text = str(payload.get("text") or "").strip()
-    if not text:
-        return {"ok": False, "message": "text is required"}
-    try:
-        result = await request.app.state.ha_bridge.conversation(
-            text,
-            language=str(payload.get("language") or ""),
-            conversation_id=str(payload.get("conversation_id") or ""),
-        )
-    except PermissionError as exc:
-        return {"ok": False, "message": str(exc)}
-    speech = request.app.state.ha_bridge.extract_conversation_speech(result)
-    return {"ok": True, "speech": speech, "result": result}

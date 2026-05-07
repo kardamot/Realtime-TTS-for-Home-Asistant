@@ -155,7 +155,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.38",
+                "version": "0.1.40",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -224,7 +224,7 @@ class VoicePipeline:
                         await self._ws_hub.publish("pipeline_status", await self.status())
                         continue
                     if msg_type == "conversation_reset":
-                        self._last_audio_capture.pop("ha_conversation", None)
+                        self._llm_response = ""
                         await websocket.send_json({"type": "conversation_reset_done", "session_id": session_id})
                         continue
                     if await self._handle_ha_ws_message(websocket, doc):
@@ -449,7 +449,7 @@ class VoicePipeline:
 
     async def _handle_ha_ws_message(self, websocket: WebSocket, doc: dict[str, Any]) -> bool:
         msg_type = str(doc.get("type") or "").strip().lower()
-        if msg_type not in {"ha_get_state", "ha_list_states", "ha_search_entities", "ha_call_service", "ha_text_command", "ha_conversation"}:
+        if msg_type not in {"ha_get_state", "ha_list_states", "ha_search_entities", "ha_call_service", "ha_text_command"}:
             return False
         if self._ha_bridge is None:
             await websocket.send_json({"type": "ha_error", "ok": False, "error": "ha_bridge is not available"})
@@ -496,20 +496,6 @@ class VoicePipeline:
                 result = await self._ha_bridge.handle_text_command(str(doc.get("text") or ""))
                 await websocket.send_json({"type": "ha_text_command_result", **result})
                 return True
-            result = await self._ha_bridge.conversation(
-                str(doc.get("text") or ""),
-                language=str(doc.get("language") or ""),
-                conversation_id=str(doc.get("conversation_id") or ""),
-            )
-            await websocket.send_json(
-                {
-                    "type": "ha_conversation_result",
-                    "ok": True,
-                    "speech": self._ha_bridge.extract_conversation_speech(result),
-                    "result": result,
-                }
-            )
-            return True
         except Exception as exc:
             await websocket.send_json({"type": f"{msg_type}_result", "ok": False, "error": str(exc)})
             return True

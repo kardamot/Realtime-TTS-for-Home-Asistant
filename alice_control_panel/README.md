@@ -25,11 +25,13 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.40` removes the remaining internal HA conversation helper from the Home Assistant control path.
+- Version `0.1.39` removes the public HA conversation endpoint from the control path and marks the control panel as the primary add-on path.
 - Version `0.1.38` adds the first safe Home Assistant command resolver, using only allowlisted entities instead of HA Assist/conversation.
 - Version `0.1.37` makes Home Assistant access allowlist-only: only entity IDs in the panel list can be read or controlled, and legacy broad access fields are ignored.
-- Version `0.1.36` adds the first integrated OpenAI Realtime `/voice/ws` bridge path so the old realtime voice add-on can be bypassed when an OpenAI key is configured.
-- Version `0.1.35` fixes the integrated ElevenLabs relay config shape after the `0.1.34` legacy migration.
-- Version `0.1.34` folds in the missing legacy pieces: ElevenLabs TTS, direct `/tts/ws` and `/voice/ws` compatibility endpoints, and Home Assistant bridge APIs.
+- Version `0.1.36` adds the first integrated OpenAI Realtime `/voice/ws` bridge path for live-duplex voice.
+- Version `0.1.35` fixes the integrated ElevenLabs relay config shape.
+- Version `0.1.34` folds in ElevenLabs TTS, direct `/tts/ws` and `/voice/ws` compatibility endpoints, and Home Assistant bridge APIs.
 - Version `0.1.33` makes Silero VAD the default live mic endpointing provider, with energy endpointing kept as fallback.
 - Version `0.1.32` adds `/api/pipeline/mic/ws`, a live PCM WebSocket for future continuous voice sessions.
 - Version `0.1.31` adds voice session controls and a cancellable TTS response path for barge-in groundwork.
@@ -41,10 +43,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - Version `0.1.25` adds the first ESP mic-capture bridge into the panel STT path.
 - Version `0.1.24` chunks the ESP silence prefix and clears ESP playback state on failed audio frames.
 
-The old add-ons remain untouched:
-
-- `alice_realtime_tts`
-- `alice_realtime_voice`
+The legacy add-on folders are reference archives only. `Alice Control Panel` is the primary runtime for panel, ESP, STT, LLM, TTS, and Home Assistant control.
 
 ## ESP Interface Target
 

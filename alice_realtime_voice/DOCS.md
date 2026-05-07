@@ -1,5 +1,8 @@
 # Alice Realtime Voice
 
+> Arsiv/referans add-on. Aktif yeni kurulum ve runtime hedefi `Alice Control Panel`
+> add-on'udur; STT/LLM/TTS/HA kontrol akisi oraya tasinmistir.
+
 Bu add-on, Alice icin yeni nesil konusma hattinin ilk iskeletidir.
 
 Surum: `0.9.21`

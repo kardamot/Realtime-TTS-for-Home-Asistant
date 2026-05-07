@@ -73,8 +73,9 @@ GET  /api/ha/health
 GET  /api/ha/states
 GET  /api/ha/states/{entity_id}
 GET  /api/ha/search?q=...
+GET  /api/ha/allowed
 POST /api/ha/service
-POST /api/ha/conversation
+POST /api/ha/command
 ```
 
 Home Assistant access is allowlist-only. Add entity IDs in
@@ -95,7 +96,7 @@ POST /api/command
 POST /api/esp/command
 ```
 
-TTS relay:
+Voice and TTS endpoints:
 
 ```text
 WS /api/pipeline/tts/ws
@@ -115,10 +116,10 @@ The TTS WebSocket accepts JSON commands:
 
 `POST /api/pipeline/tts/text` accepts `{"text":"Merhaba"}` and sends generated TTS audio directly to the connected ESP WebSocket when `pipeline.stream_to_esp` is enabled.
 
-Legacy compatibility:
+Compatibility endpoints for firmware/client migration:
 
-- `/voice/ws` and `/ws` send an initial `hello` event compatible with the old voice server, then accept PCM/binary audio plus `start`, `eos`, `cancel_response`, `reset`, and Home Assistant helper messages.
-- `/tts/ws` and `/ws?mode=tts` accept the old TTS relay `start`/`append` JSON flow and stream PCM frames back to the client.
+- `/voice/ws` and `/ws` accept PCM/binary audio plus `start`, `eos`, `cancel_response`, `reset`, and safe Home Assistant helper messages.
+- `/tts/ws` and `/ws?mode=tts` accept the TTS relay `start`/`append` JSON flow and stream PCM frames back to the client.
 
 For streaming text providers:
 
@@ -226,11 +227,13 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.40` removes the remaining internal HA conversation helper from the Home Assistant control path.
+- `0.1.39` removes the public HA conversation endpoint from the control path and marks the control panel as the primary add-on path.
 - `0.1.38` adds the first safe Home Assistant command resolver, using only allowlisted entities instead of HA Assist/conversation.
 - `0.1.37` makes Home Assistant access allowlist-only: only entity IDs in the panel list can be read or controlled, and legacy broad access fields are ignored.
-- `0.1.36` adds the first integrated OpenAI Realtime `/voice/ws` bridge path so the old realtime voice add-on can be bypassed when an OpenAI key is configured.
-- `0.1.35` fixes the integrated ElevenLabs relay config shape after the `0.1.34` legacy migration.
-- `0.1.34` folds in legacy add-on migration pieces: ElevenLabs TTS, direct `/tts/ws` and `/voice/ws` compatibility endpoints, and Home Assistant bridge APIs.
+- `0.1.36` adds the first integrated OpenAI Realtime `/voice/ws` bridge path for live-duplex voice.
+- `0.1.35` fixes the integrated ElevenLabs relay config shape.
+- `0.1.34` folds in ElevenLabs TTS, direct `/tts/ws` and `/voice/ws` compatibility endpoints, and Home Assistant bridge APIs.
 - `0.1.33` makes Silero VAD the default live mic endpointing provider, with energy endpointing kept as fallback.
 - `0.1.32` adds `/api/pipeline/mic/ws`, a live PCM WebSocket for future continuous voice sessions.
 - `0.1.31` adds voice session start/stop/cancel controls and a cancellable ESP TTS stream path for barge-in groundwork.

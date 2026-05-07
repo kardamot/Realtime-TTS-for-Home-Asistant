@@ -230,25 +230,6 @@ class HomeAssistantBridge:
                     return await resp.json()
                 return await resp.text()
 
-    async def conversation(self, text: str, language: str = "", conversation_id: str = "") -> dict[str, Any]:
-        cfg = await self._cfg()
-        if not bool(cfg.get("unsafe_allow_conversation_tool", False)):
-            raise PermissionError(
-                "Home Assistant conversation is disabled because it cannot be constrained to the Alice entity allowlist."
-            )
-        payload: dict[str, Any] = {
-            "text": text,
-            "language": language or str(cfg.get("conversation_language") or "tr"),
-        }
-        if cfg.get("conversation_agent_id"):
-            payload["agent_id"] = str(cfg["conversation_agent_id"])
-        if conversation_id:
-            payload["conversation_id"] = conversation_id
-        async with self._session() as session:
-            async with session.post(f"{self._base_url(cfg)}/conversation/process", headers=self._headers(), json=payload) as resp:
-                resp.raise_for_status()
-                return await resp.json()
-
     async def handle_text_command(self, text: str) -> dict[str, Any]:
         cfg = await self._cfg()
         action = self._detect_action(text)
@@ -301,18 +282,6 @@ class HomeAssistantBridge:
             "speech": self._service_speech(friendly, action),
             "result": result,
         }
-
-    @staticmethod
-    def extract_conversation_speech(result: dict[str, Any]) -> str:
-        response = result.get("response") or {}
-        speech = response.get("speech") or {}
-        plain = speech.get("plain") or {}
-        if isinstance(plain, dict) and isinstance(plain.get("speech"), str):
-            return plain["speech"].strip()
-        ssml = speech.get("ssml") or {}
-        if isinstance(ssml, dict) and isinstance(ssml.get("speech"), str):
-            return ssml["speech"].strip()
-        return ""
 
     async def should_route_home_control(self, text: str) -> bool:
         cfg = await self._cfg()

@@ -87,8 +87,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "ha_bridge": {
         "enabled": True,
         "api_base_url": "http://supervisor/core/api",
-        "conversation_agent_id": "",
-        "conversation_language": "tr",
         "route_home_control": True,
         "strict_allowlist": True,
         "exposed_entities": "",

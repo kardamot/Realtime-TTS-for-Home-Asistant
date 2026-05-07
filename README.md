@@ -6,10 +6,9 @@ Bu klasor, HAOS tarafina tasinabilecek yerel add-on dosyalarini icerir.
 
 1. `home_assistant_addons` klasorunu Home Assistant'in gorebilecegi bir yere kopyala.
 2. Home Assistant'ta yerel add-on repository olarak bu klasoru ekle.
-3. Yeni entegre panel icin `Alice Control Panel` add-on'unu kur veya mevcut referanslar icin
-   `Alice Realtime TTS` / `Alice Realtime Voice` add-on'larini kullan.
-4. Secili add-on'un ilgili ayarlarini doldur.
-5. Mevcut firmware tarafinda TTS relay adresi `ws://192.168.1.168:8765/ws` olarak beklenir.
+3. `Alice Control Panel` add-on'unu kur. Yeni birincil sistem budur.
+4. Panel ayarlarini doldur.
+5. Paneli `http://HOME_ASSISTANT_IP:8099` adresinden ac.
 
 ## Not
 
@@ -24,12 +23,12 @@ Bu surum tek ic protokolle birden fazla TTS saglayicisini destekler:
 Saglayici degistiginde firmware degistirmen gerekmez; yalnizca add-on ayarini guncelleyip
 add-on'u yeniden baslatman yeterlidir.
 
-`Alice Control Panel`, yeni tek parca panel/server hedefidir. Varsayilan portu `8099`'dur ve
+`Alice Control Panel`, tek parca panel/server add-on'udur. Varsayilan portu `8099`'dur ve
 Home Assistant ingress kullanmadan `http://HOME_ASSISTANT_IP:8099` adresinden acilir.
 
-`Alice Realtime Voice` ise yeni nesil dis voice pipeline icin hazirlanan ayri add-on'dur.
-Bu turda `0.9.9` ile yerel `faster-whisper` STT, endpointing eventleri, OpenAI-uyumlu streaming LLM,
-HA conversation yonlendirmesi, mevcut TTS relay orkestrasyonu ve temel HA bridge komutlari icerir.
+`Alice Realtime TTS` ve `Alice Realtime Voice` klasorleri artik aktif hedef degil; referans/arsiv
+olarak tutulur. Yeni kurulum, panel, TTS, STT, LLM, ESP ve Home Assistant kontrol akisi
+`alice_control_panel` icinden ilerler.
 
 Not: Home Assistant add-on ayarlari provider'a gore kosullu alan gizleme yapmaz; bunun yerine
 ayarlar saglayici bazli gruplar halinde toplanmistir.

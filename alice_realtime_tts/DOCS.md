@@ -1,5 +1,8 @@
 # Alice Realtime TTS
 
+> Arsiv/referans add-on. Aktif yeni kurulum ve runtime hedefi `Alice Control Panel`
+> add-on'udur; TTS relay mantigi oraya tasinmistir.
+
 Bu add-on, Home Assistant'in `intent` sonunda uretilen yanit metnini alip secilen TTS
 saglayicisindan dusuk gecikmeli `PCM` akisi ceker ve Alice cihazi buna `WebSocket`
 ile baglanip sesi blok blok oynatir.

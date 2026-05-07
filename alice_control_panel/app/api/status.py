@@ -23,7 +23,7 @@ async def health(request: Request) -> dict[str, Any]:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.38",
+        "version": "0.1.40",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": system_health(),
@@ -33,7 +33,7 @@ async def health(request: Request) -> dict[str, Any]:
 @router.get("/health")
 async def legacy_health(request: Request) -> dict[str, Any]:
     value = await health(request)
-    value["legacy_ws"] = {
+    value["compat_ws"] = {
         "voice": "/ws or /voice/ws",
         "tts": "/ws?mode=tts or /tts/ws",
     }
@@ -71,7 +71,7 @@ async def events_ws(websocket: WebSocket) -> None:
                     "health": {
                         "ok": True,
                         "service": "alice_control_panel",
-                        "version": "0.1.38",
+                        "version": "0.1.40",
                         "system": system_health(),
                     },
                     "esp": await websocket.app.state.esp_client.status(),
