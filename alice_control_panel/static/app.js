@@ -249,6 +249,7 @@ async function loadStatus() {
   setPill("state-pill", pipe.state || "IDLE");
   const session = pipe.session || {};
   const liveMic = pipe.live_mic || {};
+  const realtime = pipe.realtime || {};
   setPill("session-pill", session.active ? "SESSION ON" : "SESSION OFF", session.active ? "good" : "info");
   setPill("esp-pill", esp.online ? "ONLINE" : reconnectPaused ? "PAUSED" : esp.mock_mode ? "MOCK" : "OFFLINE");
   setPill("stream-pill", pipe.stream_active ? "STREAM ON" : "STREAM OFF", pipe.stream_active ? "good" : "info");
@@ -256,7 +257,9 @@ async function loadStatus() {
     "session-meta",
     session.active
       ? `${session.mode || "manual"} - ${fmtSeconds(session.uptime_sec)} - ${session.turns || 0} turns - ${session.last_event || "active"}`
-      : `session idle - ${session.last_event || "ready"} - live ws ${liveMic.clients || 0}`
+      : realtime.active
+        ? `realtime ${realtime.connected ? "connected" : "active"} - ${realtime.model || "model n/a"} - ${realtime.last_event || "active"}`
+        : `session idle - ${session.last_event || "ready"} - live ws ${liveMic.clients || 0}`
   );
   text("robot-status", esp.online ? "ONLINE" : esp.mock_mode ? "MOCK" : "OFFLINE");
   text("robot-ip", esp.ip || "no ESP base URL");

@@ -21,6 +21,7 @@ from app.core.prompt_store import PromptStore
 from app.core.ws_hub import WsHub
 from app.esp.esp_client import EspClient
 from app.pipeline.llm.openai_compatible import OpenAICompatibleLlm
+from app.pipeline.realtime.openai_realtime import OpenAIRealtimeBridge
 from app.pipeline.stt.manager import SttManager
 from app.pipeline.tts.relay import TtsRelay
 from app.pipeline.voice_pipeline import VoicePipeline
@@ -44,7 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.35", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.36", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
@@ -54,7 +55,18 @@ def create_app() -> FastAPI:
     llm = OpenAICompatibleLlm(config_store, prompt_store, log_bus)
     stt_manager = SttManager(config_store, log_bus)
     tts_relay = TtsRelay(config_store, log_bus)
-    voice_pipeline = VoicePipeline(config_store, log_bus, ws_hub, llm, stt_manager, tts_relay, esp_client, ha_bridge)
+    realtime_bridge = OpenAIRealtimeBridge(config_store, prompt_store, log_bus, ws_hub, tts_relay, esp_client)
+    voice_pipeline = VoicePipeline(
+        config_store,
+        log_bus,
+        ws_hub,
+        llm,
+        stt_manager,
+        tts_relay,
+        esp_client,
+        ha_bridge,
+        realtime_bridge,
+    )
     esp_client.set_mic_stream_handler(voice_pipeline.run_audio_capture)
 
     app.state.config_store = config_store
@@ -63,6 +75,7 @@ def create_app() -> FastAPI:
     app.state.prompt_store = prompt_store
     app.state.esp_client = esp_client
     app.state.ha_bridge = ha_bridge
+    app.state.realtime_bridge = realtime_bridge
     app.state.stt_manager = stt_manager
     app.state.llm = llm
     app.state.tts_relay = tts_relay

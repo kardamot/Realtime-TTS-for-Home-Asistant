@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.35" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.35" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.36" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.36" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-            <div class="title-logo"><img src="/alice-logo.png?v=0.1.35" alt="Alice" /></div>
+            <div class="title-logo"><img src="/alice-logo.png?v=0.1.36" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -194,6 +194,12 @@
                   <label><span>Compute type</span><input data-path="stt.compute_type" /></label>
                   <label><span>Beam size</span><input data-path="stt.beam_size" type="number" /></label>
                   <label class="check-row"><input data-path="stt.vad_filter" type="checkbox" /><span>STT VAD filter</span></label>
+                  <label class="check-row"><input data-path="realtime.enabled" type="checkbox" /><span>OpenAI Realtime</span></label>
+                  <label><span>Realtime model</span><input data-path="realtime.model" /></label>
+                  <label><span>Realtime WS URL</span><input data-path="realtime.ws_url" /></label>
+                  <label><span>Realtime input rate</span><input data-path="realtime.input_sample_rate" type="number" /></label>
+                  <label><span>Realtime STT model</span><input data-path="realtime.transcription_model" /></label>
+                  <label><span>Transcript wait ms</span><input data-path="realtime.transcript_wait_ms" type="number" /></label>
                   <label><span>Turn detection</span><select data-path="realtime.turn_detection"><option>server_vad</option><option>semantic_vad</option></select></label>
                   <label><span>VAD threshold</span><input data-path="realtime.vad_threshold" type="number" step="0.01" /></label>
                   <label><span>Prefix padding ms</span><input data-path="realtime.prefix_padding_ms" type="number" /></label>
@@ -332,6 +338,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.35"></script>
+  <script src="/app.js?v=0.1.36"></script>
   </body>
 </html>

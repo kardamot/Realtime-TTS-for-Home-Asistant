@@ -213,8 +213,9 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 ## Notes
 
 - This is the first integrated control-panel version.
-- Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime code paths are scaffolded for the later live-duplex migration.
+- Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.36` adds the first integrated OpenAI Realtime `/voice/ws` bridge path so the old realtime voice add-on can be bypassed when an OpenAI key is configured.
 - `0.1.35` fixes the integrated ElevenLabs relay config shape after the `0.1.34` legacy migration.
 - `0.1.34` folds in legacy add-on migration pieces: ElevenLabs TTS, direct `/tts/ws` and `/voice/ws` compatibility endpoints, and Home Assistant bridge APIs.
 - `0.1.33` makes Silero VAD the default live mic endpointing provider, with energy endpointing kept as fallback.

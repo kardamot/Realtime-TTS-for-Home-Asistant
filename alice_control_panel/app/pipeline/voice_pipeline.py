@@ -13,6 +13,7 @@ from app.core.log_bus import LogBus
 from app.core.ws_hub import WsHub
 from app.esp.esp_client import EspClient
 from app.pipeline.llm.openai_compatible import OpenAICompatibleLlm
+from app.pipeline.realtime.openai_realtime import OpenAIRealtimeBridge
 from app.pipeline.stt.manager import SttManager
 from app.pipeline.stt.vad import SileroVadRuntime
 from app.pipeline.tts.relay import TtsRelay
@@ -29,6 +30,7 @@ class VoicePipeline:
         tts_relay: TtsRelay,
         esp: EspClient,
         ha_bridge: Any | None = None,
+        realtime_bridge: OpenAIRealtimeBridge | None = None,
     ) -> None:
         self._config_store = config_store
         self._log_bus = log_bus
@@ -38,6 +40,7 @@ class VoicePipeline:
         self._tts_relay = tts_relay
         self._esp = esp
         self._ha_bridge = ha_bridge
+        self._realtime_bridge = realtime_bridge
         self._state = "IDLE"
         self._last_user_text = ""
         self._stt_result = ""
@@ -80,6 +83,7 @@ class VoicePipeline:
                 "clients": self._live_clients,
                 "last": self._last_live_mic,
             },
+            "realtime": await self._realtime_bridge.status() if self._realtime_bridge else {},
         }
 
     async def restart_tts(self) -> dict[str, Any]:
@@ -123,6 +127,8 @@ class VoicePipeline:
         self._session_last_event = "cancel_requested"
         self._mark("SESSION", f"response cancel requested: {reason}")
         await self._log_bus.emit("WARN", "PIPELINE", "Response cancel requested", {"reason": reason})
+        if self._realtime_bridge:
+            await self._realtime_bridge.cancel(reason)
         if self._stream_active or self._state in {"LLM", "TTS"}:
             try:
                 await self._esp.send_audio_error(f"cancelled: {reason}")
@@ -132,6 +138,9 @@ class VoicePipeline:
         return await self.status()
 
     async def live_mic_websocket(self, websocket: WebSocket) -> None:
+        if self._realtime_bridge and await self._realtime_bridge.should_handle_voice_ws():
+            await self._realtime_bridge.websocket_session(websocket)
+            return
         await websocket.accept()
         self._live_clients += 1
         session_id = f"live-{uuid.uuid4().hex[:10]}"
@@ -146,7 +155,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.34",
+                "version": "0.1.36",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
