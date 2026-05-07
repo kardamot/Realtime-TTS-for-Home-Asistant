@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.17" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.17" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.18" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.18" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="mark"><img src="/alice-logo.png?v=0.1.17" alt="Alice" /></div>
+          <div class="mark"><img src="/alice-logo.png?v=0.1.18" alt="Alice" /></div>
           <div>
             <strong>Alice</strong>
             <span>Control Panel</span>
@@ -109,8 +109,8 @@
                 <label>Text test</label>
                 <div class="row">
                   <input id="pipeline-input" placeholder="Pipeline'a test metni gonder" />
-                  <button id="pipeline-send">Send</button>
-                  <button id="pipeline-tts-send">TTS</button>
+                  <button id="pipeline-send">LLM + TTS</button>
+                  <button id="pipeline-tts-send">TTS only</button>
                 </div>
                 <div class="transcript">
                   <span>User/STT</span>
@@ -244,6 +244,7 @@
                 <div class="config-grid compact">
                   <label><span>Active TTS</span><select data-path="tts.provider" data-provider-select="tts"><option>openai</option><option>cartesia</option><option>elevenlabs</option><option>google_ai</option><option>google_cloud</option></select></label>
                   <label><span>PCM rate</span><input data-path="tts.pcm_sample_rate" type="number" /></label>
+                  <label><span>ESP start buffer ms</span><input data-path="tts.esp_initial_buffer_ms" type="number" /></label>
                   <label class="check-row"><input data-path="tts.enabled" type="checkbox" /><span>TTS enabled</span></label>
                   <label class="check-row"><input data-path="pipeline.stream_to_esp" type="checkbox" /><span>Stream TTS to ESP</span></label>
                 </div>
@@ -292,6 +293,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.17"></script>
+  <script src="/app.js?v=0.1.18"></script>
   </body>
 </html>

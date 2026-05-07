@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.17"
+version: "0.1.18"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -66,6 +66,7 @@ options:
     enabled: true
     provider: "openai"
     pcm_sample_rate: 44100
+    esp_initial_buffer_ms: 900
     openai:
       api_key: ""
       model: "gpt-4o-mini-tts"
@@ -147,6 +148,7 @@ schema:
     enabled: bool
     provider: list(openai|cartesia|elevenlabs|google_ai|google_cloud)
     pcm_sample_rate: int
+    esp_initial_buffer_ms: int
     openai:
       api_key: password
       model: str

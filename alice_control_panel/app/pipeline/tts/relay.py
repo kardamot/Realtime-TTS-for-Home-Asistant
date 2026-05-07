@@ -31,6 +31,7 @@ class TtsRelayConfig:
     enabled: bool = True
     provider: str = "openai"
     pcm_sample_rate: int = DEFAULT_PCM_SAMPLE_RATE
+    esp_initial_buffer_ms: int = 900
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini-tts"
     openai_voice: str = "coral"
@@ -51,6 +52,8 @@ class StreamCommand:
 
 
 class PcmOutput:
+    pace_pcm = True
+
     async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
         raise NotImplementedError
 
@@ -82,21 +85,38 @@ class WebSocketPcmOutput(PcmOutput):
 
 
 class EspPcmOutput(PcmOutput):
-    def __init__(self, esp_client: Any, log_bus: LogBus) -> None:
+    pace_pcm = False
+
+    def __init__(self, esp_client: Any, log_bus: LogBus, initial_buffer_ms: int = 900) -> None:
         self._esp_client = esp_client
         self._log_bus = log_bus
+        self._sample_rate = DEFAULT_PCM_SAMPLE_RATE
+        self._channels = DEFAULT_PCM_CHANNELS
+        self._started = False
+        self._buffer = bytearray()
+        self._initial_buffer_ms = max(0, int(initial_buffer_ms))
         self.bytes_sent = 0
         self.failed = False
         self.error_message = ""
 
     async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
-        await self._esp_client.send_audio_start(sample_rate=sample_rate, channels=channels)
+        self._sample_rate = sample_rate
+        self._channels = channels
 
     async def write(self, pcm: bytes) -> None:
-        await self._esp_client.send_audio_chunk(pcm)
-        self.bytes_sent += len(pcm)
+        if not pcm:
+            return
+        if not self._started:
+            self._buffer.extend(pcm)
+            if len(self._buffer) < self._initial_buffer_bytes:
+                return
+            await self._flush_start()
+            return
+        await self._send_chunk(pcm)
 
     async def done(self) -> None:
+        if not self._started:
+            await self._flush_start()
         await self._esp_client.send_audio_end(ok=True)
 
     async def error(self, message: str, status: int = 500) -> None:
@@ -107,6 +127,25 @@ class EspPcmOutput(PcmOutput):
             await self._esp_client.send_audio_error(message)
         except Exception as exc:
             await self._log_bus.emit("WARN", "TTS", "ESP audio error notification failed", {"error": safe_exc_message(exc)})
+
+    @property
+    def _initial_buffer_bytes(self) -> int:
+        bytes_per_second = max(1, self._sample_rate) * max(1, self._channels) * 2
+        return int(bytes_per_second * self._initial_buffer_ms / 1000)
+
+    async def _flush_start(self) -> None:
+        if self._started:
+            return
+        self._started = True
+        await self._esp_client.send_audio_start(sample_rate=self._sample_rate, channels=self._channels)
+        buffered = bytes(self._buffer)
+        self._buffer.clear()
+        for offset in range(0, len(buffered), RELAY_CHUNK_BYTES):
+            await self._send_chunk(buffered[offset : offset + RELAY_CHUNK_BYTES])
+
+    async def _send_chunk(self, pcm: bytes) -> None:
+        await self._esp_client.send_audio_chunk(pcm)
+        self.bytes_sent += len(pcm)
 
 
 class PcmPacer:
@@ -207,6 +246,7 @@ def relay_config_from_panel(config: dict[str, Any], provider_override: str = "")
         enabled=bool(tts.get("enabled", True)),
         provider=(provider_override or str(tts.get("provider") or "openai")).lower(),
         pcm_sample_rate=int(tts.get("pcm_sample_rate") or DEFAULT_PCM_SAMPLE_RATE),
+        esp_initial_buffer_ms=int(tts.get("esp_initial_buffer_ms") or 900),
         openai_api_key=str(openai.get("api_key") or tts.get("openai_api_key") or ""),
         openai_model=str(openai.get("model") or tts.get("openai_model") or tts.get("model") or "gpt-4o-mini-tts"),
         openai_voice=str(openai.get("voice") or tts.get("openai_voice") or tts.get("voice") or "coral"),
@@ -266,7 +306,7 @@ class CartesiaContinuationRelay:
                     pcm = base64.b64decode(audio_b64)
                     if not self._start_sent:
                         await self._output.start(self._cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
-                        self._pacer = PcmPacer(self._cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
+                        self._pacer = PcmPacer(self._cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS) if self._output.pace_pcm else None
                         self._start_sent = True
                     await send_pcm_bytes_to_output(self._output, pcm, self._pacer)
                     continue
@@ -386,7 +426,7 @@ class TtsRelay:
         if not await esp_client.audio_stream_ready():
             return {"ok": False, "status": "esp_ws_offline", "message": "ESP WebSocket is not connected."}
 
-        output = EspPcmOutput(esp_client, self._log_bus)
+        output = EspPcmOutput(esp_client, self._log_bus, cfg.esp_initial_buffer_ms)
         await self._log_bus.emit("INFO", "TTS", "ESP TTS stream starting", {"provider": cfg.provider})
         async with aiohttp.ClientSession() as session:
             if cfg.provider == "openai":
@@ -444,7 +484,7 @@ class TtsRelay:
                     await output.error(f"OpenAI TTS error: {body[:300]}", resp.status)
                     return
                 await output.start(cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
-                pacer = PcmPacer(cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
+                pacer = PcmPacer(cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS) if output.pace_pcm else None
                 pending = b""
                 async for chunk in resp.content.iter_chunked(RELAY_CHUNK_BYTES):
                     if not chunk:

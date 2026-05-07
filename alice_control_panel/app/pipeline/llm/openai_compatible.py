@@ -63,8 +63,11 @@ class OpenAICompatibleLlm:
         config = await self._config_store.get(include_secrets=True)
         cfg = active_llm_config(config)
         provider = str(cfg.get("provider") or "openai").lower()
-        if provider in {"none", "mock"}:
-            yield f"Mock LLM: {user_text}"
+        if provider == "mock":
+            yield f"Buradayim. Test mesajini aldim: {user_text}"
+            return
+        if provider == "none":
+            yield user_text
             return
         api_key = str(cfg.get("api_key") or "").strip()
         if not api_key:
