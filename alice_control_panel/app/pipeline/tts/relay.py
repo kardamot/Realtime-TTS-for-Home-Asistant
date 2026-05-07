@@ -50,6 +50,11 @@ class TtsRelayConfig:
     cartesia_voice_id: str = ""
     cartesia_language: str = "tr"
     cartesia_version: str = "2026-03-01"
+    elevenlabs_api_key: str = ""
+    elevenlabs_model_id: str = "eleven_flash_v2_5"
+    elevenlabs_voice_id: str = ""
+    elevenlabs_output_format: str = "pcm_16000"
+    elevenlabs_latency_mode: int = 3
     google_ai_api_key: str = ""
     google_ai_model: str = "gemini-2.5-flash-preview-tts"
     google_ai_voice_name: str = "Kore"

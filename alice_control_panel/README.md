@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.35` fixes the integrated ElevenLabs relay config shape after the `0.1.34` legacy migration.
 - Version `0.1.34` folds in the missing legacy pieces: ElevenLabs TTS, direct `/tts/ws` and `/voice/ws` compatibility endpoints, and Home Assistant bridge APIs.
 - Version `0.1.33` makes Silero VAD the default live mic endpointing provider, with energy endpointing kept as fallback.
 - Version `0.1.32` adds `/api/pipeline/mic/ws`, a live PCM WebSocket for future continuous voice sessions.
