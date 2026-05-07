@@ -63,7 +63,8 @@ DEFAULT_CONFIG = {
         "enabled": True,
         "provider": "openai",
         "pcm_sample_rate": 44100,
-        "esp_initial_buffer_ms": 900,
+        "esp_initial_buffer_ms": 1500,
+        "esp_silence_prefix_ms": 450,
         "openai": {"api_key": "", "model": "gpt-4o-mini-tts", "voice": "coral", "instructions": ""},
         "cartesia": {"api_key": "", "model_id": "sonic-3", "voice_id": "", "language": "tr", "version": "2026-03-01"},
         "elevenlabs": {"api_key": "", "model_id": "eleven_flash_v2_5", "voice_id": "", "output_format": "pcm_16000", "latency_mode": 3},
@@ -262,7 +263,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.22"
+    server_version = "AliceControlPanel/0.1.23"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -414,7 +415,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-            "version": "0.1.22",
+            "version": "0.1.23",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

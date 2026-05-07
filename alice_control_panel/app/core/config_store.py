@@ -83,7 +83,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": True,
         "provider": "openai",
         "pcm_sample_rate": 44100,
-        "esp_initial_buffer_ms": 900,
+        "esp_initial_buffer_ms": 1500,
+        "esp_silence_prefix_ms": 450,
         "openai": {
             "api_key": "",
             "model": "gpt-4o-mini-tts",

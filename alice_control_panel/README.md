@@ -25,7 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.22` adds Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths.
+- Version `0.1.23` increases ESP audio prebuffering and adds an ESP silence prefix to smooth TTS startup.
 
 The old add-ons remain untouched:
 
