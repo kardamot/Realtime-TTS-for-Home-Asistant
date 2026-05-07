@@ -11,6 +11,7 @@ DATA_DIR = Path(os.getenv("ALICE_DATA_DIR", "/data"))
 OPTIONS_PATH = Path(os.getenv("ALICE_OPTIONS_PATH", str(DATA_DIR / "options.json")))
 CONFIG_PATH = Path(os.getenv("ALICE_CONFIG_PATH", str(DATA_DIR / "alice_config.json")))
 PROMPTS_DIR = Path(os.getenv("ALICE_PROMPTS_DIR", str(DATA_DIR / "prompts")))
+MODELS_DIR = Path(os.getenv("ALICE_MODELS_DIR", str(DATA_DIR / "models")))
 STATIC_DIR = Path(os.getenv("ALICE_STATIC_DIR", str(ADDON_ROOT / "static")))
 FRONTEND_DIST_DIR = ADDON_ROOT / "frontend" / "dist"
 
@@ -18,4 +19,4 @@ FRONTEND_DIST_DIR = ADDON_ROOT / "frontend" / "dist"
 def ensure_data_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
-
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)

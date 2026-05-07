@@ -132,8 +132,17 @@ class VoicePipeline:
             self._last_user_text = text
             self._last_audio_capture["stt"] = result
             if result.get("ok") and text:
-                self._state = "LLM"
-                await self.run_text(text)
+                config = await self._config_store.get(include_secrets=False)
+                mode = str(config.get("pipeline", {}).get("mic_response_mode") or "assistant").lower()
+                if mode == "echo":
+                    await self._echo_transcript(text, config)
+                elif mode == "echo_then_assistant":
+                    await self._echo_transcript(text, config)
+                    self._state = "LLM"
+                    await self.run_text(text)
+                else:
+                    self._state = "LLM"
+                    await self.run_text(text)
             else:
                 self._state = "IDLE"
                 self._mark("STT", "capture stored; STT engine pending")
@@ -146,6 +155,16 @@ class VoicePipeline:
         finally:
             self._stream_active = False
             await self._ws_hub.publish("pipeline_status", await self.status())
+
+    async def _echo_transcript(self, text: str, config: dict[str, Any]) -> None:
+        self._state = "TTS"
+        self._llm_response = text
+        self._tts_status = "queued"
+        self._mark("STT", "transcript echo queued")
+        await self._log_bus.emit("INFO", "PIPELINE", "STT transcript echo queued", {"text": text})
+        await self._ws_hub.publish("pipeline_status", await self.status())
+        await self._stream_tts_to_esp(text, config)
+        self._state = "IDLE"
 
     async def _stream_tts_to_esp(self, text: str, config: dict[str, Any]) -> None:
         if not config.get("pipeline", {}).get("stream_to_esp", True):

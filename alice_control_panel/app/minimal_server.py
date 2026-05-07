@@ -29,7 +29,13 @@ DEFAULT_CONFIG = {
         "audio_ack_timeout_sec": 3,
         "mock_mode": True,
     },
-    "stt": {"provider": "faster_whisper", "model": "small", "language": "tr", "compute_type": "int8"},
+    "stt": {
+        "provider": "faster_whisper",
+        "model": "small",
+        "model_cache_dir": "/data/models/faster_whisper",
+        "language": "tr",
+        "compute_type": "int8",
+    },
     "llm": {
         "provider": "openai",
         "model": "gpt-5-mini",
@@ -72,7 +78,7 @@ DEFAULT_CONFIG = {
         "google_cloud": {"credentials_json": "", "voice_name": "tr-TR-Chirp3-HD-Kore", "language_code": "tr-TR", "ssml_gender": "FEMALE"},
     },
     "prompts": {"active_profile": "alice"},
-    "pipeline": {"stream_to_esp": True, "max_log_events_per_sec": 10},
+    "pipeline": {"stream_to_esp": True, "max_log_events_per_sec": 10, "mic_response_mode": "assistant"},
     "debug_logs": True,
     "safe_mode": False,
 }
@@ -149,7 +155,7 @@ def options_to_config(raw: dict) -> dict:
         esp["audio_ack_timeout_sec"] = raw["esp_audio_ack_timeout_sec"]
     if esp:
         mapped["esp"] = esp
-    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts"):
+    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts", "pipeline"):
         if key in raw:
             mapped[key] = raw[key]
     return mapped
@@ -263,7 +269,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.29"
+    server_version = "AliceControlPanel/0.1.30"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -415,7 +421,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-            "version": "0.1.29",
+            "version": "0.1.30",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
@@ -479,7 +485,12 @@ def status() -> dict:
         "health": health(),
         "esp": esp_status(),
         "pipeline": pipeline_status(),
-        "stt": {"provider": cfg.get("stt", {}).get("provider", "faster_whisper"), "model": cfg.get("stt", {}).get("model", "small"), "loaded": False},
+        "stt": {
+            "provider": cfg.get("stt", {}).get("provider", "faster_whisper"),
+            "model": cfg.get("stt", {}).get("model", "small"),
+            "model_cache_dir": cfg.get("stt", {}).get("model_cache_dir", "/data/models/faster_whisper"),
+            "loaded": False,
+        },
         "llm": {"provider": llm.get("provider", "openai"), "model": llm.get("model", "gpt-5-mini"), "api_key_configured": bool(llm.get("api_key"))},
         "tts": {"enabled": cfg.get("tts", {}).get("enabled", True), "provider": cfg.get("tts", {}).get("provider", "openai"), "pcm_sample_rate": cfg.get("tts", {}).get("pcm_sample_rate", 44100)},
         "config": mask_secrets(cfg),

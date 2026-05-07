@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 LABEL \
-      io.hass.version="0.1.29" \
+      io.hass.version="0.1.30" \
   io.hass.type="addon" \
   io.hass.arch="amd64"
 
@@ -14,6 +14,9 @@ COPY app /app/app
 COPY static /app/static
 
 ENV ALICE_STATIC_DIR=/app/static
+ENV ALICE_MODELS_DIR=/data/models
+ENV HF_HOME=/data/models/huggingface
+ENV HF_HUB_CACHE=/data/models/huggingface/hub
 ENV PYTHONUNBUFFERED=1
 
 CMD ["python3", "-m", "app.main"]

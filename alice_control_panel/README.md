@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.30` stores faster-whisper models under `/data/models` and adds mic response modes for assistant, transcript echo, or both.
 - Version `0.1.29` wires captured ESP PCM into faster-whisper STT.
 - Version `0.1.28` enlarges the header logo, tightens connection errors, and logs reconnect pause once.
 - Version `0.1.27` moves the Alice logo into the main header and trims the sidebar.

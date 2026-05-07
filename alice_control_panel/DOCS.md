@@ -176,8 +176,9 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 ## Notes
 
 - This is the first integrated control-panel version.
-- Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
+- Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime code paths are scaffolded for the later live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.30` persists faster-whisper models under `/data/models` and adds selectable mic response modes.
 - `0.1.29` wires captured ESP PCM into faster-whisper STT for one-shot mic pipeline tests.
 - `0.1.28` enlarges the header logo, tightens connection errors, and logs reconnect pause once.
 - `0.1.27` moves the Alice logo into the main header and trims desktop/mobile sidebar space.

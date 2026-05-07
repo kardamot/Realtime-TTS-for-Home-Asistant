@@ -33,6 +33,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "stt": {
         "provider": "faster_whisper",
         "model": "small",
+        "model_cache_dir": "/data/models/faster_whisper",
         "language": "tr",
         "compute_type": "int8",
         "beam_size": 1,
@@ -127,6 +128,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "pipeline": {
         "stream_to_esp": True,
         "max_log_events_per_sec": 10,
+        "mic_response_mode": "assistant",
     },
     "ui": {
         "dark_mode": True,
@@ -177,7 +179,7 @@ def _addon_options_to_config(raw: dict[str, Any]) -> dict[str, Any]:
         esp["audio_ack_timeout_sec"] = raw["esp_audio_ack_timeout_sec"]
     if esp:
         mapped["esp"] = esp
-    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts", "ui"):
+    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts", "pipeline", "ui"):
         if key in raw:
             mapped[key] = raw[key]
     return mapped

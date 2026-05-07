@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.29"
+version: "0.1.30"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -24,10 +24,15 @@ options:
   stt:
     provider: "faster_whisper"
     model: "small"
+    model_cache_dir: "/data/models/faster_whisper"
     language: "tr"
     compute_type: "int8"
     beam_size: 1
     vad_filter: false
+  pipeline:
+    stream_to_esp: true
+    max_log_events_per_sec: 10
+    mic_response_mode: "assistant"
   llm:
     provider: "openai"
     model: "gpt-5-mini"
@@ -108,10 +113,15 @@ schema:
   stt:
     provider: list(faster_whisper)
     model: str
+    model_cache_dir: str
     language: str
     compute_type: str
     beam_size: int
     vad_filter: bool
+  pipeline:
+    stream_to_esp: bool
+    max_log_events_per_sec: int
+    mic_response_mode: list(assistant|echo|echo_then_assistant)
   llm:
     provider: list(openai|openrouter|openai_compatible|mock|none)
     model: str

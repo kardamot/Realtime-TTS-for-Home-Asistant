@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.29" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.29" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.30" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.30" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-            <div class="title-logo"><img src="/alice-logo.png?v=0.1.29" alt="Alice" /></div>
+            <div class="title-logo"><img src="/alice-logo.png?v=0.1.30" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -176,6 +176,7 @@
                 <div class="config-grid compact">
                   <label><span>STT provider</span><select data-path="stt.provider"><option>faster_whisper</option></select></label>
                   <label><span>STT model</span><input data-path="stt.model" /></label>
+                  <label><span>Model cache</span><input data-path="stt.model_cache_dir" /></label>
                   <label><span>Language</span><input data-path="stt.language" /></label>
                   <label><span>Compute type</span><input data-path="stt.compute_type" /></label>
                   <label><span>Beam size</span><input data-path="stt.beam_size" type="number" /></label>
@@ -243,6 +244,7 @@
                   <label><span>PCM rate</span><input data-path="tts.pcm_sample_rate" type="number" /></label>
                   <label><span>ESP start buffer ms</span><input data-path="tts.esp_initial_buffer_ms" type="number" /></label>
                   <label><span>ESP silence prefix ms</span><input data-path="tts.esp_silence_prefix_ms" type="number" /></label>
+                  <label><span>Mic response</span><select data-path="pipeline.mic_response_mode"><option value="assistant">Assistant</option><option value="echo">Echo transcript</option><option value="echo_then_assistant">Echo + assistant</option></select></label>
                   <label class="check-row"><input data-path="tts.enabled" type="checkbox" /><span>TTS enabled</span></label>
                   <label class="check-row"><input data-path="pipeline.stream_to_esp" type="checkbox" /><span>Stream TTS to ESP</span></label>
                 </div>
@@ -291,6 +293,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.29"></script>
+  <script src="/app.js?v=0.1.30"></script>
   </body>
 </html>

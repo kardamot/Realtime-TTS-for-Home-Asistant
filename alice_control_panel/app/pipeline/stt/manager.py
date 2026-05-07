@@ -9,6 +9,7 @@ from typing import Any
 
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
+from app.core.paths import MODELS_DIR
 
 
 class SttManager:
@@ -27,6 +28,7 @@ class SttManager:
         return {
             "provider": cfg.get("provider", "faster_whisper"),
             "model": cfg.get("model", "small"),
+            "model_cache_dir": cfg.get("model_cache_dir", str(MODELS_DIR / "faster_whisper")),
             "language": cfg.get("language", "tr"),
             "compute_type": cfg.get("compute_type", "int8"),
             "beam_size": cfg.get("beam_size", 1),
@@ -144,11 +146,13 @@ class SttManager:
 
         model_name = str(cfg.get("model") or "small")
         compute_type = str(cfg.get("compute_type") or "int8")
-        model_key = f"{model_name}|{compute_type}"
+        cache_dir = str(cfg.get("model_cache_dir") or MODELS_DIR / "faster_whisper")
+        os.makedirs(cache_dir, exist_ok=True)
+        model_key = f"{model_name}|{compute_type}|{cache_dir}"
         if self._model is not None and self._model_key == model_key:
             return self._model
 
-        self._model = WhisperModel(model_name, device="cpu", compute_type=compute_type)
+        self._model = WhisperModel(model_name, device="cpu", compute_type=compute_type, download_root=cache_dir)
         self._model_key = model_key
         self._loaded = True
         self._started_at = self._started_at or time.time()
