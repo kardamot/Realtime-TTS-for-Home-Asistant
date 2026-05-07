@@ -38,6 +38,7 @@ DEFAULT_CONFIG = {
         "cartesia": {"api_key": "", "model_id": "sonic-3", "voice_id": "", "language": "tr", "version": "2026-03-01"},
     },
     "prompts": {"active_profile": "alice"},
+    "pipeline": {"stream_to_esp": True, "max_log_events_per_sec": 10},
     "debug_logs": True,
     "safe_mode": False,
 }
@@ -120,8 +121,8 @@ def options_to_config(raw: dict) -> dict:
 
 def load_config() -> dict:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    config = deep_merge(DEFAULT_CONFIG, read_json(CONFIG_PATH))
-    config = deep_merge(config, options_to_config(read_json(OPTIONS_PATH)))
+    config = deep_merge(DEFAULT_CONFIG, options_to_config(read_json(OPTIONS_PATH)))
+    config = deep_merge(config, read_json(CONFIG_PATH))
     if not CONFIG_PATH.exists():
         write_json(CONFIG_PATH, config)
     return config
@@ -184,7 +185,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.13"
+    server_version = "AliceControlPanel/0.1.15"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -336,7 +337,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.13",
+        "version": "0.1.15",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

@@ -65,6 +65,8 @@ class EspClient:
         self._status: dict[str, Any] = copy.deepcopy(DEFAULT_STATUS)
         self._poll_task: asyncio.Task[None] | None = None
         self._ws_task: asyncio.Task[None] | None = None
+        self._ws: aiohttp.ClientWebSocketResponse | None = None
+        self._ws_send_lock = asyncio.Lock()
         self._session: aiohttp.ClientSession | None = None
         self._stop = asyncio.Event()
         self._last_poll_log_at = 0.0
@@ -95,9 +97,45 @@ class EspClient:
         if self._session:
             await self._session.close()
             self._session = None
+        self._ws = None
 
     async def status(self) -> dict[str, Any]:
         return dict(self._status)
+
+    async def audio_stream_ready(self) -> bool:
+        return bool(self._status.get("ws_connected")) and self._ws is not None and not self._ws.closed
+
+    async def send_audio_start(
+        self,
+        sample_rate: int,
+        channels: int = 1,
+        encoding: str = "pcm_s16le",
+    ) -> None:
+        await self._send_ws_json(
+            {
+                "type": "audio_start",
+                "payload": {
+                    "encoding": encoding,
+                    "sample_rate": sample_rate,
+                    "channels": channels,
+                },
+            }
+        )
+
+    async def send_audio_chunk(self, chunk: bytes) -> None:
+        if not chunk:
+            return
+        async with self._ws_send_lock:
+            ws = self._ws
+            if ws is None or ws.closed:
+                raise RuntimeError("ESP WebSocket is not connected.")
+            await ws.send_bytes(chunk)
+
+    async def send_audio_end(self, ok: bool = True, message: str = "") -> None:
+        await self._send_ws_json({"type": "audio_end", "payload": {"ok": ok, "message": message}})
+
+    async def send_audio_error(self, message: str) -> None:
+        await self._send_ws_json({"type": "audio_error", "payload": {"message": message}})
 
     async def poll_once(self, force: bool = False) -> dict[str, Any]:
         config = await self._config_store.get(include_secrets=True)
@@ -232,8 +270,11 @@ class EspClient:
                 continue
             session = self._session or aiohttp.ClientSession()
             self._session = session
+            active_ws: aiohttp.ClientWebSocketResponse | None = None
             try:
                 async with session.ws_connect(ws_url, heartbeat=20, receive_timeout=120) as ws:
+                    active_ws = ws
+                    self._ws = ws
                     self._set_ws_state(True, ws_url, "")
                     await self._log_bus.emit("INFO", "ESP", "ESP WebSocket connected", {"url": ws_url})
                     await self._ws_hub.publish("esp_status", await self.status())
@@ -246,6 +287,7 @@ class EspClient:
                             continue
                         if msg.type == aiohttp.WSMsgType.ERROR:
                             raise RuntimeError(f"ESP websocket error: {ws.exception()}")
+                    self._set_ws_state(False, ws_url, "ESP websocket closed")
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -255,6 +297,9 @@ class EspClient:
                 if now - self._last_ws_log_at > 15:
                     self._last_ws_log_at = now
                     await self._log_bus.emit("WARN", "ESP", "ESP WebSocket disconnected", {"url": ws_url, "error": str(exc)})
+            finally:
+                if self._ws is active_ws:
+                    self._ws = None
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=reconnect_sec)
             except asyncio.TimeoutError:
@@ -330,6 +375,13 @@ class EspClient:
         status["max_auto_reconnects"] = int(self._status.get("max_auto_reconnects") or 40)
         status["auto_reconnect_paused"] = False
         return status
+
+    async def _send_ws_json(self, payload: dict[str, Any]) -> None:
+        async with self._ws_send_lock:
+            ws = self._ws
+            if ws is None or ws.closed:
+                raise RuntimeError("ESP WebSocket is not connected.")
+            await ws.send_json(payload)
 
     def _max_auto_reconnects(self, esp_cfg: dict[str, Any]) -> int:
         try:

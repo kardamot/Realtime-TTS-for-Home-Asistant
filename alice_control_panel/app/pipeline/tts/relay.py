@@ -28,6 +28,7 @@ API_KEY_QUERY_RE = re.compile(r"(api_key=)[^&\s]+")
 
 @dataclass(slots=True)
 class TtsRelayConfig:
+    enabled: bool = True
     provider: str = "openai"
     pcm_sample_rate: int = DEFAULT_PCM_SAMPLE_RATE
     openai_api_key: str = ""
@@ -47,6 +48,65 @@ class StreamCommand:
     text: str
     final: bool
     provider: str
+
+
+class PcmOutput:
+    async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
+        raise NotImplementedError
+
+    async def write(self, pcm: bytes) -> None:
+        raise NotImplementedError
+
+    async def done(self) -> None:
+        raise NotImplementedError
+
+    async def error(self, message: str, status: int = 500) -> None:
+        raise NotImplementedError
+
+
+class WebSocketPcmOutput(PcmOutput):
+    def __init__(self, ws: WebSocket) -> None:
+        self._ws = ws
+
+    async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
+        await send_pcm_start(self._ws, sample_rate, channels)
+
+    async def write(self, pcm: bytes) -> None:
+        await self._ws.send_bytes(pcm)
+
+    async def done(self) -> None:
+        await send_done(self._ws)
+
+    async def error(self, message: str, status: int = 500) -> None:
+        await send_error(self._ws, message, status)
+
+
+class EspPcmOutput(PcmOutput):
+    def __init__(self, esp_client: Any, log_bus: LogBus) -> None:
+        self._esp_client = esp_client
+        self._log_bus = log_bus
+        self.bytes_sent = 0
+        self.failed = False
+        self.error_message = ""
+
+    async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
+        await self._esp_client.send_audio_start(sample_rate=sample_rate, channels=channels)
+
+    async def write(self, pcm: bytes) -> None:
+        await self._esp_client.send_audio_chunk(pcm)
+        self.bytes_sent += len(pcm)
+
+    async def done(self) -> None:
+        await self._esp_client.send_audio_end(ok=True)
+
+    async def error(self, message: str, status: int = 500) -> None:
+        self.failed = True
+        self.error_message = message
+        await self._log_bus.emit("ERROR", "TTS", "ESP audio stream error", {"status": status, "message": message})
+        try:
+            await self._esp_client.send_audio_error(message)
+        except Exception as exc:
+            await self._log_bus.emit("WARN", "TTS", "ESP audio error notification failed", {"error": safe_exc_message(exc)})
 
 
 class PcmPacer:
@@ -125,12 +185,16 @@ async def send_done(ws: WebSocket) -> None:
 
 
 async def send_pcm_bytes(ws: WebSocket, pcm: bytes, pacer: PcmPacer | None = None) -> None:
+    await send_pcm_bytes_to_output(WebSocketPcmOutput(ws), pcm, pacer)
+
+
+async def send_pcm_bytes_to_output(output: PcmOutput, pcm: bytes, pacer: PcmPacer | None = None) -> None:
     even_len = len(pcm) & ~1
     if even_len <= 0:
         return
     for i in range(0, even_len, RELAY_CHUNK_BYTES):
         chunk = pcm[i : i + RELAY_CHUNK_BYTES]
-        await ws.send_bytes(chunk)
+        await output.write(chunk)
         if pacer is not None:
             await pacer.after_send(len(chunk))
 
@@ -140,6 +204,7 @@ def relay_config_from_panel(config: dict[str, Any], provider_override: str = "")
     openai = tts.get("openai", {}) if isinstance(tts.get("openai"), dict) else {}
     cartesia = tts.get("cartesia", {}) if isinstance(tts.get("cartesia"), dict) else {}
     return TtsRelayConfig(
+        enabled=bool(tts.get("enabled", True)),
         provider=(provider_override or str(tts.get("provider") or "openai")).lower(),
         pcm_sample_rate=int(tts.get("pcm_sample_rate") or DEFAULT_PCM_SAMPLE_RATE),
         openai_api_key=str(openai.get("api_key") or ""),
@@ -155,9 +220,9 @@ def relay_config_from_panel(config: dict[str, Any], provider_override: str = "")
 
 
 class CartesiaContinuationRelay:
-    def __init__(self, session: aiohttp.ClientSession, ws: WebSocket, cfg: TtsRelayConfig, log_bus: LogBus) -> None:
+    def __init__(self, session: aiohttp.ClientSession, output: PcmOutput, cfg: TtsRelayConfig, log_bus: LogBus) -> None:
         self._session = session
-        self._ws = ws
+        self._output = output
         self._cfg = cfg
         self._log_bus = log_bus
         self._context_id = f"alice-{uuid.uuid4()}"
@@ -200,29 +265,29 @@ class CartesiaContinuationRelay:
                         continue
                     pcm = base64.b64decode(audio_b64)
                     if not self._start_sent:
-                        await send_pcm_start(self._ws, self._cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
+                        await self._output.start(self._cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
                         self._pacer = PcmPacer(self._cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
                         self._start_sent = True
-                    await send_pcm_bytes(self._ws, pcm, self._pacer)
+                    await send_pcm_bytes_to_output(self._output, pcm, self._pacer)
                     continue
                 if msg_type == "done":
                     if not self._start_sent:
-                        await send_pcm_start(self._ws, self._cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
+                        await self._output.start(self._cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
                         self._start_sent = True
-                    await send_done(self._ws)
+                    await self._output.done()
                     self._done.set()
                     return
                 if msg_type == "error":
                     error = str(doc.get("error") or doc.get("message") or "Cartesia returned an error.")
                     self._error = error
-                    await send_error(self._ws, f"Cartesia TTS error: {error[:300]}", int(doc.get("status_code", 502) or 502))
+                    await self._output.error(f"Cartesia TTS error: {error[:300]}", int(doc.get("status_code", 502) or 502))
                     self._done.set()
                     return
         except Exception as exc:
             self._error = safe_exc_message(exc)
             await self._log_bus.emit("ERROR", "TTS", "Cartesia receiver failed", {"error": self._error})
             try:
-                await send_error(self._ws, f"Cartesia continuation error: {self._error}", 502)
+                await self._output.error(f"Cartesia continuation error: {self._error}", 502)
             except Exception:
                 pass
             self._done.set()
@@ -274,7 +339,7 @@ class TtsRelay:
     async def status(self) -> dict[str, Any]:
         cfg = relay_config_from_panel(await self._config_store.get(include_secrets=False))
         return {
-            "enabled": (await self._config_store.get(include_secrets=False)).get("tts", {}).get("enabled", True),
+            "enabled": cfg.enabled,
             "provider": cfg.provider,
             "pcm_sample_rate": cfg.pcm_sample_rate,
             "openai_api_key_configured": bool(cfg.openai_api_key),
@@ -288,15 +353,16 @@ class TtsRelay:
         try:
             first_cmd = await receive_stream_command(ws, expect_start=True)
             cfg = relay_config_from_panel(await self._config_store.get(include_secrets=True), first_cmd.provider)
+            output = WebSocketPcmOutput(ws)
             await self._log_bus.emit("INFO", "TTS", "TTS relay websocket started", {"provider": cfg.provider})
             async with aiohttp.ClientSession() as session:
                 if cfg.provider == "cartesia":
-                    await self._relay_cartesia_continuation(session, ws, cfg, first_cmd)
+                    await self._relay_cartesia_continuation(session, output, cfg, first_cmd, ws)
                 elif cfg.provider == "openai":
                     text = first_cmd.text if first_cmd.final else await self._collect_buffered_stream_text(ws, first_cmd)
-                    await self._relay_openai_stream(session, ws, cfg, text)
+                    await self._relay_openai_stream(session, output, cfg, text)
                 else:
-                    await send_error(ws, f"TTS provider '{cfg.provider}' is configured but not implemented in this preview.", 501)
+                    await output.error(f"TTS provider '{cfg.provider}' is configured but not implemented in this preview.", 501)
         except WebSocketDisconnect:
             await self._log_bus.emit("INFO", "TTS", "TTS relay websocket disconnected")
         except Exception as exc:
@@ -311,6 +377,37 @@ class TtsRelay:
             except Exception:
                 pass
 
+    async def synthesize_to_esp(self, text: str, esp_client: Any) -> dict[str, Any]:
+        cfg = relay_config_from_panel(await self._config_store.get(include_secrets=True))
+        if not cfg.enabled:
+            return {"ok": False, "status": "disabled", "message": "TTS is disabled."}
+        if not text.strip():
+            return {"ok": False, "status": "empty_text", "message": "TTS text is empty."}
+        if not await esp_client.audio_stream_ready():
+            return {"ok": False, "status": "esp_ws_offline", "message": "ESP WebSocket is not connected."}
+
+        output = EspPcmOutput(esp_client, self._log_bus)
+        await self._log_bus.emit("INFO", "TTS", "ESP TTS stream starting", {"provider": cfg.provider})
+        async with aiohttp.ClientSession() as session:
+            if cfg.provider == "openai":
+                await self._relay_openai_stream(session, output, cfg, text)
+            elif cfg.provider == "cartesia":
+                first_cmd = StreamCommand(msg_type="start", text=text, final=True, provider=cfg.provider)
+                await self._relay_cartesia_continuation(session, output, cfg, first_cmd)
+            else:
+                await output.error(f"TTS provider '{cfg.provider}' is configured but not implemented in this preview.", 501)
+                return {"ok": False, "status": "provider_not_implemented", "provider": cfg.provider}
+        if output.failed:
+            return {
+                "ok": False,
+                "status": "stream_failed",
+                "provider": cfg.provider,
+                "message": output.error_message,
+                "bytes": output.bytes_sent,
+            }
+        await self._log_bus.emit("INFO", "TTS", "ESP TTS stream finished", {"bytes": output.bytes_sent})
+        return {"ok": True, "status": "streamed_to_esp", "provider": cfg.provider, "bytes": output.bytes_sent}
+
     async def _collect_buffered_stream_text(self, ws: WebSocket, first_cmd: StreamCommand) -> str:
         chunks = [first_cmd.text]
         cmd = first_cmd
@@ -322,12 +419,12 @@ class TtsRelay:
     async def _relay_openai_stream(
         self,
         session: aiohttp.ClientSession,
-        ws: WebSocket,
+        output: PcmOutput,
         cfg: TtsRelayConfig,
         text: str,
     ) -> None:
         if not cfg.openai_api_key:
-            await send_error(ws, "OpenAI API key is not configured.", 500)
+            await output.error("OpenAI API key is not configured.", 500)
             return
         headers = {"Authorization": f"Bearer {cfg.openai_api_key}", "Content-Type": "application/json"}
         payload: dict[str, Any] = {
@@ -344,9 +441,9 @@ class TtsRelay:
                 if resp.status != 200:
                     body = await resp.text()
                     await self._log_bus.emit("ERROR", "TTS", "OpenAI TTS failed", {"status": resp.status, "body": body[:500]})
-                    await send_error(ws, f"OpenAI TTS error: {body[:300]}", resp.status)
+                    await output.error(f"OpenAI TTS error: {body[:300]}", resp.status)
                     return
-                await send_pcm_start(ws, cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
+                await output.start(cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
                 pacer = PcmPacer(cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
                 pending = b""
                 async for chunk in resp.content.iter_chunked(RELAY_CHUNK_BYTES):
@@ -355,34 +452,37 @@ class TtsRelay:
                     pending += chunk
                     even_len = len(pending) & ~1
                     if even_len:
-                        await send_pcm_bytes(ws, pending[:even_len], pacer)
+                        await send_pcm_bytes_to_output(output, pending[:even_len], pacer)
                         pending = pending[even_len:]
-                await send_done(ws)
+                await output.done()
         except Exception as exc:
             await self._log_bus.emit("ERROR", "TTS", "OpenAI TTS stream failed", {"error": safe_exc_message(exc)})
-            await send_error(ws, f"OpenAI stream error: {safe_exc_message(exc)}", 502)
+            await output.error(f"OpenAI stream error: {safe_exc_message(exc)}", 502)
 
     async def _relay_cartesia_continuation(
         self,
         session: aiohttp.ClientSession,
-        ws: WebSocket,
+        output: PcmOutput,
         cfg: TtsRelayConfig,
         first_cmd: StreamCommand,
+        input_ws: WebSocket | None = None,
     ) -> None:
         if not cfg.cartesia_api_key:
-            await send_error(ws, "Cartesia API key is not configured.", 500)
+            await output.error("Cartesia API key is not configured.", 500)
             return
         if not cfg.cartesia_voice_id:
-            await send_error(ws, "Cartesia voice_id is not configured.", 500)
+            await output.error("Cartesia voice_id is not configured.", 500)
             return
-        relay = CartesiaContinuationRelay(session, ws, cfg, self._log_bus)
+        relay = CartesiaContinuationRelay(session, output, cfg, self._log_bus)
         try:
             await relay.send_input(first_cmd.text, first_cmd.final)
             cmd = first_cmd
             while not cmd.final:
-                cmd = await receive_stream_command(ws, expect_start=False, timeout=60)
+                if input_ws is None:
+                    await output.error("Cartesia continuation needs an input WebSocket for non-final chunks.", 500)
+                    return
+                cmd = await receive_stream_command(input_ws, expect_start=False, timeout=60)
                 await relay.send_input(cmd.text, cmd.final)
             await relay.wait_done()
         finally:
             await relay.close()
-

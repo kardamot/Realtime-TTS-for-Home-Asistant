@@ -188,9 +188,8 @@ class ConfigStore:
         async with self._lock:
             file_config = _read_json(self._config_path)
             addon_options = _addon_options_to_config(_read_json(self._options_path))
-            self._config = deep_merge(DEFAULT_CONFIG, file_config)
-            if addon_options:
-                self._config = deep_merge(self._config, addon_options)
+            self._config = deep_merge(DEFAULT_CONFIG, addon_options)
+            self._config = deep_merge(self._config, file_config)
             if not self._config_path.exists():
                 self._config["updated_at"] = time.time()
                 self._write_locked()

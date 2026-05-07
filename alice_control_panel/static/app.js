@@ -118,6 +118,7 @@ async function boot() {
   $("refresh-btn").onclick = () => guard("Refresh failed", loadStatus);
   $("unlock-btn").onclick = () => guard("Unlock failed", unlock);
   $("pipeline-send").onclick = () => guard("Pipeline failed", runPipeline);
+  $("pipeline-tts-send").onclick = () => guard("TTS test failed", runTtsTest);
   $("config-save").onclick = () => guard("Config save failed", saveConfig);
   $("config-export").onclick = () => guard("Config export failed", exportConfig);
   $("config-import").onclick = () => $("config-import-file").click();
@@ -413,6 +414,14 @@ async function runPipeline() {
   const input = $("pipeline-input");
   if (!input.value.trim()) return;
   await api("/api/pipeline/text", { method: "POST", body: JSON.stringify({ text: input.value }) });
+  input.value = "";
+  await loadStatus();
+}
+
+async function runTtsTest() {
+  const input = $("pipeline-input");
+  if (!input.value.trim()) return;
+  await api("/api/pipeline/tts/text", { method: "POST", body: JSON.stringify({ text: input.value }) });
   input.value = "";
   await loadStatus();
 }

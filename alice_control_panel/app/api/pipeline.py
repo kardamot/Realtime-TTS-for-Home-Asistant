@@ -24,6 +24,15 @@ async def pipeline_text(payload: dict[str, Any], request: Request, _: None = Dep
     return {"ok": True, "pipeline": status}
 
 
+@router.post("/tts/text")
+async def pipeline_tts_text(payload: dict[str, Any], request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        return {"ok": False, "message": "text is required"}
+    status = await request.app.state.voice_pipeline.run_tts_text(text)
+    return {"ok": True, "pipeline": status}
+
+
 @router.get("/stt")
 async def stt_status(request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
     return await request.app.state.stt_manager.status()
@@ -45,4 +54,3 @@ async def tts_websocket(websocket: WebSocket) -> None:
         await websocket.close(code=1008)
         return
     await websocket.app.state.tts_relay.websocket_session(websocket)
-

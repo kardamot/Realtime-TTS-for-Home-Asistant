@@ -42,13 +42,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.13", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.15", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
     prompt_store = PromptStore(config_store)
     esp_client = EspClient(config_store, log_bus, ws_hub)
     llm = OpenAICompatibleLlm(config_store, prompt_store, log_bus)
+    tts_relay = TtsRelay(config_store, log_bus)
 
     app.state.config_store = config_store
     app.state.log_bus = log_bus
@@ -57,8 +58,8 @@ def create_app() -> FastAPI:
     app.state.esp_client = esp_client
     app.state.stt_manager = SttManager(config_store, log_bus)
     app.state.llm = llm
-    app.state.tts_relay = TtsRelay(config_store, log_bus)
-    app.state.voice_pipeline = VoicePipeline(config_store, log_bus, ws_hub, llm, esp_client)
+    app.state.tts_relay = tts_relay
+    app.state.voice_pipeline = VoicePipeline(config_store, log_bus, ws_hub, llm, tts_relay, esp_client)
 
     app.include_router(status.router)
     app.include_router(config.router)

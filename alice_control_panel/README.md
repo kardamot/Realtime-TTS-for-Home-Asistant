@@ -15,14 +15,16 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - FastAPI backend with modular config, prompt, log, ESP, and pipeline services.
 - Installer-safe static dashboard UI. The React/Vite source is kept under `frontend/` for the next richer panel pass.
 - `/data/alice_config.json` central persistent config.
+- Panel-saved config in `/data/alice_config.json` wins over Home Assistant bootstrap options after the first save.
 - `/data/prompts/*.yaml` prompt profiles.
 - Unified in-memory log ring buffer with WebSocket streaming.
 - ESP offline/mock mode when `esp_base_url` is empty or unavailable.
 - ESP auto reconnect pauses after `esp_max_auto_reconnects` failures; `0` keeps unlimited retries.
+- TTS relay can stream generated PCM audio to the connected ESP WebSocket using the lightweight `audio_start` / binary PCM / `audio_end` protocol.
 - ESP command stubs for the future lightweight ESP HTTP/WebSocket API.
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.13` pauses automatic ESP reconnect attempts after the configured limit; press reconnect to try again.
+- Version `0.1.15` adds the backend TTS-to-ESP WebSocket PCM stream path while preserving the existing TTS relay websocket.
 
 The old add-ons remain untouched:
 

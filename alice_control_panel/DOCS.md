@@ -25,6 +25,7 @@ Runtime state is stored in the add-on `/data` directory:
 ```
 
 Secrets are never committed to the repository. The UI masks secrets on export unless `include secrets` is explicitly selected.
+After the first panel save, `/data/alice_config.json` is the source of truth. Home Assistant add-on options are used as bootstrap defaults and no longer overwrite panel-saved values during updates/restarts.
 
 ## API
 
@@ -68,6 +69,7 @@ TTS relay:
 
 ```text
 WS /api/pipeline/tts/ws
+POST /api/pipeline/tts/text
 ```
 
 The TTS WebSocket accepts JSON commands:
@@ -75,6 +77,8 @@ The TTS WebSocket accepts JSON commands:
 ```json
 {"type":"start","provider":"openai","text":"Merhaba","final":true}
 ```
+
+`POST /api/pipeline/tts/text` accepts `{"text":"Merhaba"}` and sends generated TTS audio directly to the connected ESP WebSocket when `pipeline.stream_to_esp` is enabled.
 
 For streaming text providers:
 
@@ -136,6 +140,17 @@ Expected `WS /ws` text messages:
 
 The server reconnects to this socket automatically. If `esp.ws_url` is empty, it is derived from `esp.base_url` as `/ws`.
 
+When TTS stream-to-ESP is enabled, the server sends audio over the same ESP WebSocket:
+
+```text
+TEXT   {"type":"audio_start","payload":{"encoding":"pcm_s16le","sample_rate":44100,"channels":1}}
+BINARY raw little-endian signed 16-bit PCM chunks
+TEXT   {"type":"audio_end","payload":{"ok":true,"message":""}}
+TEXT   {"type":"audio_error","payload":{"message":"..."}}
+```
+
+If ESP audio playback support is not implemented yet, the backend logs the failure and the rest of the panel remains usable.
+
 Supported first-pass commands:
 
 ```text
@@ -154,5 +169,5 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.13` pauses automatic ESP reconnect attempts after the configured limit; press reconnect to try again.
-- ESP WebSocket audio playback integration is intentionally left as a clear next step because the ESP API does not exist yet.
+- `0.1.15` adds the backend TTS-to-ESP WebSocket PCM stream path while preserving the existing TTS relay websocket.
+- ESP-side audio playback for this protocol can be implemented independently after this backend path is installed.

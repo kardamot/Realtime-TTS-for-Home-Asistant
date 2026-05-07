@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-    <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.13" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.13" />
+    <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.15" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.15" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="mark"><img src="/alice-logo.png?v=0.1.13" alt="Alice" /></div>
+          <div class="mark"><img src="/alice-logo.png?v=0.1.15" alt="Alice" /></div>
           <div>
             <strong>Alice</strong>
             <span>Control Panel</span>
@@ -110,6 +110,7 @@
                 <div class="row">
                   <input id="pipeline-input" placeholder="Pipeline'a test metni gonder" />
                   <button id="pipeline-send">Send</button>
+                  <button id="pipeline-tts-send">TTS</button>
                 </div>
                 <div class="transcript">
                   <span>User/STT</span>
@@ -176,6 +177,7 @@
               <label><span>OpenAI voice</span><input data-path="tts.openai.voice" /></label>
               <label><span>Cartesia key</span><input data-path="tts.cartesia.api_key" type="password" /></label>
               <label><span>Cartesia voice</span><input data-path="tts.cartesia.voice_id" /></label>
+              <label><span>Stream TTS to ESP</span><input data-path="pipeline.stream_to_esp" type="checkbox" /></label>
               <label><span>Safe mode</span><input data-path="safe_mode" type="checkbox" /></label>
               <label><span>Debug logs</span><input data-path="debug_logs" type="checkbox" /></label>
               <label class="wide"><span>LLM system prompt</span><textarea data-path="llm.system_prompt"></textarea></label>
@@ -184,6 +186,6 @@
         </section>
       </section>
     </main>
-    <script src="/app.js?v=0.1.13"></script>
+    <script src="/app.js?v=0.1.15"></script>
   </body>
 </html>
