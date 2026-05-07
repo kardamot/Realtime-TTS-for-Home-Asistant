@@ -10,6 +10,39 @@ from app.core.log_bus import LogBus
 from app.core.prompt_store import PromptStore
 
 
+LLM_PROVIDER_DEFAULTS: dict[str, dict[str, str]] = {
+    "openai": {
+        "model": "gpt-5-mini",
+        "base_url": "https://api.openai.com/v1",
+    },
+    "openrouter": {
+        "model": "openai/gpt-5-mini",
+        "base_url": "https://openrouter.ai/api/v1",
+    },
+    "openai_compatible": {
+        "model": "gpt-5-mini",
+        "base_url": "",
+    },
+}
+
+
+def active_llm_config(config: dict[str, Any]) -> dict[str, Any]:
+    cfg = config.get("llm", {}) if isinstance(config, dict) else {}
+    if not isinstance(cfg, dict):
+        return {}
+    provider = str(cfg.get("provider") or "openai").lower()
+    providers = cfg.get("providers", {}) if isinstance(cfg.get("providers"), dict) else {}
+    profile = providers.get(provider, {}) if isinstance(providers.get(provider), dict) else {}
+    defaults = LLM_PROVIDER_DEFAULTS.get(provider, LLM_PROVIDER_DEFAULTS["openai"])
+    return {
+        **cfg,
+        "provider": provider,
+        "model": str(profile.get("model") or cfg.get("model") or defaults.get("model") or ""),
+        "api_key": str(profile.get("api_key") or cfg.get("api_key") or ""),
+        "base_url": str(profile.get("base_url") or cfg.get("base_url") or defaults.get("base_url") or ""),
+    }
+
+
 class OpenAICompatibleLlm:
     def __init__(self, config_store: ConfigStore, prompt_store: PromptStore, log_bus: LogBus) -> None:
         self._config_store = config_store
@@ -17,7 +50,7 @@ class OpenAICompatibleLlm:
         self._log_bus = log_bus
 
     async def status(self) -> dict[str, Any]:
-        cfg = (await self._config_store.get(include_secrets=False)).get("llm", {})
+        cfg = active_llm_config(await self._config_store.get(include_secrets=False))
         return {
             "provider": cfg.get("provider", "openai"),
             "model": cfg.get("model", "gpt-5-mini"),
@@ -28,7 +61,7 @@ class OpenAICompatibleLlm:
 
     async def stream_chat(self, user_text: str) -> AsyncIterator[str]:
         config = await self._config_store.get(include_secrets=True)
-        cfg = config.get("llm", {})
+        cfg = active_llm_config(config)
         provider = str(cfg.get("provider") or "openai").lower()
         if provider in {"none", "mock"}:
             yield f"Mock LLM: {user_text}"
@@ -51,6 +84,9 @@ class OpenAICompatibleLlm:
             "stream": True,
         }
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        if provider == "openrouter":
+            headers["HTTP-Referer"] = "https://local.alice/addons"
+            headers["X-Title"] = "Alice Control Panel"
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=payload, timeout=60) as resp:
                 if resp.status >= 400:
@@ -71,4 +107,3 @@ class OpenAICompatibleLlm:
                     delta = doc.get("choices", [{}])[0].get("delta", {}).get("content")
                     if delta:
                         yield str(delta)
-

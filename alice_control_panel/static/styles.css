@@ -155,9 +155,73 @@ nav a:hover { background: #121a25; color: var(--text); }
 .commands { display: grid; grid-template-columns: repeat(auto-fit,minmax(118px,1fr)); gap: 8px; }
 .command-panel .commands { grid-template-columns: repeat(auto-fit,minmax(132px,1fr)); }
 .commands.secondary { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.config-layout { display: grid; gap: 16px; }
+.config-group {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(38,50,65,.75);
+}
+.config-group:first-child { padding-top: 0; border-top: 0; }
+.config-group h3, .provider-card h4 { margin: 0; font-size: 14px; }
+.config-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
 .config-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.config-grid.compact { align-items: end; }
+.provider-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.provider-switch button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  font-size: 13px;
+}
+.provider-switch button.active {
+  border-color: rgba(57,197,187,.5);
+  background: rgba(57,197,187,.16);
+  color: #d7fffb;
+}
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(240px,1fr));
+  gap: 10px;
+}
+.provider-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(38,50,65,.9);
+  border-radius: 8px;
+  background: #101720;
+  padding: 12px;
+  opacity: .78;
+}
+.provider-card.active {
+  border-color: rgba(57,197,187,.62);
+  box-shadow: 0 0 0 1px rgba(57,197,187,.08) inset;
+  opacity: 1;
+}
+.provider-card textarea { min-height: 76px; }
 label { display: grid; gap: 6px; min-width: 0; }
 label.wide { grid-column: 1 / -1; }
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 2px;
+}
+.check-row input { flex: 0 0 auto; }
+.check-row span { min-width: 0; }
 .inline-check {
   display: inline-flex;
   grid-auto-flow: column;
@@ -224,6 +288,8 @@ label.wide { grid-column: 1 / -1; }
     min-height: 360px;
   }
   .config-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .config-group-head { align-items: flex-start; flex-direction: column; }
+  .provider-switch { justify-content: flex-start; }
 }
 @media (max-width: 780px) {
   .shell { grid-template-columns: 1fr; }

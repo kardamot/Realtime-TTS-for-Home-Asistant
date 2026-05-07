@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.16"
+version: "0.1.17"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -33,6 +33,35 @@ options:
     api_key: ""
     base_url: "https://api.openai.com/v1"
     system_prompt: ""
+    temperature: 0.6
+    stream: true
+    providers:
+      openai:
+        api_key: ""
+        model: "gpt-5-mini"
+        base_url: "https://api.openai.com/v1"
+      openrouter:
+        api_key: ""
+        model: "openai/gpt-5-mini"
+        base_url: "https://openrouter.ai/api/v1"
+      openai_compatible:
+        api_key: ""
+        model: ""
+        base_url: ""
+  realtime:
+    enabled: true
+    provider: "openai"
+    model: "gpt-realtime-mini"
+    ws_url: "wss://api.openai.com/v1/realtime"
+    input_sample_rate: 24000
+    turn_detection: "server_vad"
+    vad_threshold: 0.5
+    prefix_padding_ms: 300
+    silence_duration_ms: 420
+    transcription_model: "gpt-4o-mini-transcribe"
+    response_timeout_ms: 12000
+    noise_reduction: "near_field"
+    instructions: ""
   tts:
     enabled: true
     provider: "openai"
@@ -48,6 +77,22 @@ options:
       voice_id: ""
       language: "tr"
       version: "2026-03-01"
+    elevenlabs:
+      api_key: ""
+      model_id: "eleven_flash_v2_5"
+      voice_id: ""
+      output_format: "pcm_16000"
+      latency_mode: 3
+    google_ai:
+      api_key: ""
+      model: "gemini-3.1-flash-tts-preview"
+      voice_name: "Kore"
+      prompt_prefix: ""
+    google_cloud:
+      credentials_json: ""
+      voice_name: ""
+      language_code: "tr-TR"
+      ssml_gender: "FEMALE"
 schema:
   port: port
   panel_token: password
@@ -64,11 +109,40 @@ schema:
     beam_size: int
     vad_filter: bool
   llm:
-    provider: list(openai|openrouter|mock|none)
+    provider: list(openai|openrouter|openai_compatible|mock|none)
     model: str
     api_key: password
     base_url: str
     system_prompt: str
+    temperature: float
+    stream: bool
+    providers:
+      openai:
+        api_key: password
+        model: str
+        base_url: str
+      openrouter:
+        api_key: password
+        model: str
+        base_url: str
+      openai_compatible:
+        api_key: password
+        model: str
+        base_url: str
+  realtime:
+    enabled: bool
+    provider: list(openai)
+    model: str
+    ws_url: str
+    input_sample_rate: int
+    turn_detection: list(server_vad|semantic_vad)
+    vad_threshold: float
+    prefix_padding_ms: int
+    silence_duration_ms: int
+    transcription_model: str
+    response_timeout_ms: int
+    noise_reduction: list(near_field|far_field|none)
+    instructions: str
   tts:
     enabled: bool
     provider: list(openai|cartesia|elevenlabs|google_ai|google_cloud)
@@ -84,3 +158,19 @@ schema:
       voice_id: str
       language: str
       version: str
+    elevenlabs:
+      api_key: password
+      model_id: str
+      voice_id: str
+      output_format: str
+      latency_mode: int
+    google_ai:
+      api_key: password
+      model: str
+      voice_name: str
+      prompt_prefix: str
+    google_cloud:
+      credentials_json: password
+      voice_name: str
+      language_code: str
+      ssml_gender: list(SSML_VOICE_GENDER_UNSPECIFIED|MALE|FEMALE|NEUTRAL)

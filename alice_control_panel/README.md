@@ -24,7 +24,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - ESP command stubs for the future lightweight ESP HTTP/WebSocket API.
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.16` adds the backend TTS-to-ESP WebSocket PCM stream path while preserving the existing TTS relay websocket.
+- Version `0.1.17` improves provider profile switching and keeps inactive LLM/TTS provider settings while preserving the TTS-to-ESP WebSocket PCM stream path.
 
 The old add-ons remain untouched:
 

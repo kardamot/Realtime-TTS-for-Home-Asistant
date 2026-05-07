@@ -115,6 +115,7 @@ function stripMasked(value) {
 
 async function boot() {
   renderButtons();
+  initProviderSwitches();
   $("refresh-btn").onclick = () => guard("Refresh failed", loadStatus);
   $("unlock-btn").onclick = () => guard("Unlock failed", unlock);
   $("pipeline-send").onclick = () => guard("Pipeline failed", runPipeline);
@@ -242,12 +243,53 @@ function fillConfig() {
     const value = getDeep(currentConfig, el.dataset.path);
     if (el.type === "checkbox") el.checked = Boolean(value);
     else el.value = value ?? "";
-    el.oninput = () => {
+    const updateValue = () => {
       configDirty = true;
       const next = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
       setDeep(currentConfig, el.dataset.path, next);
+      if (el.dataset.providerSelect) renderProviderSwitches();
     };
+    el.oninput = updateValue;
+    el.onchange = el.dataset.providerSelect
+      ? () => guard("Provider switch failed", () => selectProvider(el.dataset.providerSelect, el.value))
+      : updateValue;
   });
+  renderProviderSwitches();
+}
+
+function initProviderSwitches() {
+  document.querySelectorAll(".provider-switch button").forEach((button) => {
+    const group = button.closest(".provider-switch");
+    if (!group) return;
+    button.onclick = () => guard("Provider switch failed", () => selectProvider(group.dataset.providerKind, button.dataset.provider));
+  });
+}
+
+function renderProviderSwitches() {
+  document.querySelectorAll(".provider-switch").forEach((group) => {
+    const kind = group.dataset.providerKind;
+    const active = String(getDeep(currentConfig, `${kind}.provider`) || "").toLowerCase();
+    group.querySelectorAll("button").forEach((button) => {
+      button.classList.toggle("active", button.dataset.provider === active);
+    });
+  });
+  document.querySelectorAll("[data-provider-select]").forEach((select) => {
+    const kind = select.dataset.providerSelect;
+    const active = String(getDeep(currentConfig, `${kind}.provider`) || "").toLowerCase();
+    if (active) select.value = active;
+  });
+  document.querySelectorAll(".provider-card").forEach((card) => {
+    const active = String(getDeep(currentConfig, `${card.dataset.providerKind}.provider`) || "").toLowerCase();
+    card.classList.toggle("active", card.dataset.providerCard === active);
+  });
+}
+
+async function selectProvider(kind, provider) {
+  if (!kind || !provider) return;
+  setDeep(currentConfig, `${kind}.provider`, provider);
+  configDirty = true;
+  renderProviderSwitches();
+  await saveConfig();
 }
 
 function renderTimeline(items) {

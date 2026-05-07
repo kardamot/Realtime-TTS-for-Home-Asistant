@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.16" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.16" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.17" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.17" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="mark"><img src="/alice-logo.png?v=0.1.16" alt="Alice" /></div>
+          <div class="mark"><img src="/alice-logo.png?v=0.1.17" alt="Alice" /></div>
           <div>
             <strong>Alice</strong>
             <span>Control Panel</span>
@@ -159,33 +159,139 @@
                 <input id="config-import-file" class="hidden" type="file" accept="application/json,.json" />
               </div>
             </header>
-            <div class="config-grid">
-              <label><span>Panel port</span><input data-path="panel.port" type="number" /></label>
-              <label><span>Panel token</span><input data-path="panel.token" type="password" /></label>
-              <label><span>Panel password</span><input data-path="panel.password" type="password" /></label>
-              <label><span>ESP base URL</span><input data-path="esp.base_url" placeholder="http://192.168.1.50" /></label>
-              <label><span>ESP WebSocket URL</span><input data-path="esp.ws_url" placeholder="ws://192.168.1.50/ws" /></label>
-              <label><span>ESP max auto reconnects</span><input data-path="esp.max_auto_reconnects" type="number" /></label>
-              <label><span>STT model</span><input data-path="stt.model" /></label>
-              <label><span>LLM provider</span><select data-path="llm.provider"><option>openai</option><option>openrouter</option><option>mock</option><option>none</option></select></label>
-              <label><span>LLM model</span><input data-path="llm.model" /></label>
-              <label><span>LLM key</span><input data-path="llm.api_key" type="password" /></label>
-              <label><span>LLM base URL</span><input data-path="llm.base_url" /></label>
-              <label><span>TTS provider</span><select data-path="tts.provider"><option>openai</option><option>cartesia</option><option>elevenlabs</option><option>google_ai</option><option>google_cloud</option></select></label>
-              <label><span>PCM rate</span><input data-path="tts.pcm_sample_rate" type="number" /></label>
-              <label><span>OpenAI TTS key</span><input data-path="tts.openai.api_key" type="password" /></label>
-              <label><span>OpenAI voice</span><input data-path="tts.openai.voice" /></label>
-              <label><span>Cartesia key</span><input data-path="tts.cartesia.api_key" type="password" /></label>
-              <label><span>Cartesia voice</span><input data-path="tts.cartesia.voice_id" /></label>
-              <label><span>Stream TTS to ESP</span><input data-path="pipeline.stream_to_esp" type="checkbox" /></label>
-              <label><span>Safe mode</span><input data-path="safe_mode" type="checkbox" /></label>
-              <label><span>Debug logs</span><input data-path="debug_logs" type="checkbox" /></label>
-              <label class="wide"><span>LLM system prompt</span><textarea data-path="llm.system_prompt"></textarea></label>
+            <div class="config-layout">
+              <section class="config-group">
+                <h3>Panel & ESP</h3>
+                <div class="config-grid compact">
+                  <label><span>Panel port</span><input data-path="panel.port" type="number" /></label>
+                  <label><span>Panel token</span><input data-path="panel.token" type="password" /></label>
+                  <label><span>Panel password</span><input data-path="panel.password" type="password" /></label>
+                  <label><span>ESP base URL</span><input data-path="esp.base_url" placeholder="http://192.168.1.50" /></label>
+                  <label><span>ESP WebSocket URL</span><input data-path="esp.ws_url" placeholder="ws://192.168.1.50/ws" /></label>
+                  <label><span>ESP max auto reconnects</span><input data-path="esp.max_auto_reconnects" type="number" /></label>
+                  <label class="check-row"><input data-path="debug_logs" type="checkbox" /><span>Debug logs</span></label>
+                  <label class="check-row"><input data-path="safe_mode" type="checkbox" /><span>Safe mode</span></label>
+                </div>
+              </section>
+
+              <section class="config-group">
+                <h3>STT & VAD</h3>
+                <div class="config-grid compact">
+                  <label><span>STT provider</span><select data-path="stt.provider"><option>faster_whisper</option></select></label>
+                  <label><span>STT model</span><input data-path="stt.model" /></label>
+                  <label><span>Language</span><input data-path="stt.language" /></label>
+                  <label><span>Compute type</span><input data-path="stt.compute_type" /></label>
+                  <label><span>Beam size</span><input data-path="stt.beam_size" type="number" /></label>
+                  <label class="check-row"><input data-path="stt.vad_filter" type="checkbox" /><span>STT VAD filter</span></label>
+                  <label><span>Turn detection</span><select data-path="realtime.turn_detection"><option>server_vad</option><option>semantic_vad</option></select></label>
+                  <label><span>VAD threshold</span><input data-path="realtime.vad_threshold" type="number" step="0.01" /></label>
+                  <label><span>Prefix padding ms</span><input data-path="realtime.prefix_padding_ms" type="number" /></label>
+                  <label><span>Silence ms</span><input data-path="realtime.silence_duration_ms" type="number" /></label>
+                  <label><span>Noise reduction</span><select data-path="realtime.noise_reduction"><option>near_field</option><option>far_field</option><option>none</option></select></label>
+                </div>
+              </section>
+
+              <section class="config-group">
+                <header class="config-group-head">
+                  <h3>LLM</h3>
+                  <div class="provider-switch" data-provider-kind="llm">
+                    <button data-provider="openai">OpenAI</button>
+                    <button data-provider="openrouter">OpenRouter</button>
+                    <button data-provider="openai_compatible">Compatible</button>
+                    <button data-provider="mock">Mock</button>
+                    <button data-provider="none">None</button>
+                  </div>
+                </header>
+                <div class="config-grid compact">
+                  <label><span>Active LLM</span><select data-path="llm.provider" data-provider-select="llm"><option>openai</option><option>openrouter</option><option>openai_compatible</option><option>mock</option><option>none</option></select></label>
+                  <label><span>Temperature</span><input data-path="llm.temperature" type="number" step="0.05" /></label>
+                  <label class="check-row"><input data-path="llm.stream" type="checkbox" /><span>Streaming</span></label>
+                  <label class="wide"><span>LLM system prompt</span><textarea data-path="llm.system_prompt"></textarea></label>
+                </div>
+                <div class="provider-grid">
+                  <section class="provider-card" data-provider-kind="llm" data-provider-card="openai">
+                    <h4>OpenAI</h4>
+                    <label><span>API key</span><input data-path="llm.providers.openai.api_key" type="password" /></label>
+                    <label><span>Model</span><input data-path="llm.providers.openai.model" /></label>
+                    <label><span>Base URL</span><input data-path="llm.providers.openai.base_url" /></label>
+                  </section>
+                  <section class="provider-card" data-provider-kind="llm" data-provider-card="openrouter">
+                    <h4>OpenRouter</h4>
+                    <label><span>API key</span><input data-path="llm.providers.openrouter.api_key" type="password" /></label>
+                    <label><span>Model</span><input data-path="llm.providers.openrouter.model" /></label>
+                    <label><span>Base URL</span><input data-path="llm.providers.openrouter.base_url" /></label>
+                  </section>
+                  <section class="provider-card" data-provider-kind="llm" data-provider-card="openai_compatible">
+                    <h4>OpenAI Compatible</h4>
+                    <label><span>API key</span><input data-path="llm.providers.openai_compatible.api_key" type="password" /></label>
+                    <label><span>Model</span><input data-path="llm.providers.openai_compatible.model" /></label>
+                    <label><span>Base URL</span><input data-path="llm.providers.openai_compatible.base_url" /></label>
+                  </section>
+                </div>
+              </section>
+
+              <section class="config-group">
+                <header class="config-group-head">
+                  <h3>TTS</h3>
+                  <div class="provider-switch" data-provider-kind="tts">
+                    <button data-provider="openai">OpenAI</button>
+                    <button data-provider="cartesia">Cartesia</button>
+                    <button data-provider="elevenlabs">ElevenLabs</button>
+                    <button data-provider="google_ai">Google AI</button>
+                    <button data-provider="google_cloud">Google Cloud</button>
+                  </div>
+                </header>
+                <div class="config-grid compact">
+                  <label><span>Active TTS</span><select data-path="tts.provider" data-provider-select="tts"><option>openai</option><option>cartesia</option><option>elevenlabs</option><option>google_ai</option><option>google_cloud</option></select></label>
+                  <label><span>PCM rate</span><input data-path="tts.pcm_sample_rate" type="number" /></label>
+                  <label class="check-row"><input data-path="tts.enabled" type="checkbox" /><span>TTS enabled</span></label>
+                  <label class="check-row"><input data-path="pipeline.stream_to_esp" type="checkbox" /><span>Stream TTS to ESP</span></label>
+                </div>
+                <div class="provider-grid">
+                  <section class="provider-card" data-provider-kind="tts" data-provider-card="openai">
+                    <h4>OpenAI</h4>
+                    <label><span>API key</span><input data-path="tts.openai.api_key" type="password" /></label>
+                    <label><span>Model</span><input data-path="tts.openai.model" /></label>
+                    <label><span>Voice</span><input data-path="tts.openai.voice" /></label>
+                    <label><span>Instructions</span><textarea data-path="tts.openai.instructions"></textarea></label>
+                  </section>
+                  <section class="provider-card" data-provider-kind="tts" data-provider-card="cartesia">
+                    <h4>Cartesia</h4>
+                    <label><span>API key</span><input data-path="tts.cartesia.api_key" type="password" /></label>
+                    <label><span>Model ID</span><input data-path="tts.cartesia.model_id" /></label>
+                    <label><span>Voice ID</span><input data-path="tts.cartesia.voice_id" /></label>
+                    <label><span>Language</span><input data-path="tts.cartesia.language" /></label>
+                    <label><span>Version</span><input data-path="tts.cartesia.version" /></label>
+                  </section>
+                  <section class="provider-card" data-provider-kind="tts" data-provider-card="elevenlabs">
+                    <h4>ElevenLabs</h4>
+                    <label><span>API key</span><input data-path="tts.elevenlabs.api_key" type="password" /></label>
+                    <label><span>Model ID</span><input data-path="tts.elevenlabs.model_id" /></label>
+                    <label><span>Voice ID</span><input data-path="tts.elevenlabs.voice_id" /></label>
+                    <label><span>Output format</span><input data-path="tts.elevenlabs.output_format" /></label>
+                    <label><span>Latency mode</span><input data-path="tts.elevenlabs.latency_mode" type="number" /></label>
+                  </section>
+                  <section class="provider-card" data-provider-kind="tts" data-provider-card="google_ai">
+                    <h4>Google AI</h4>
+                    <label><span>API key</span><input data-path="tts.google_ai.api_key" type="password" /></label>
+                    <label><span>Model</span><input data-path="tts.google_ai.model" /></label>
+                    <label><span>Voice name</span><input data-path="tts.google_ai.voice_name" /></label>
+                    <label><span>Prompt prefix</span><textarea data-path="tts.google_ai.prompt_prefix"></textarea></label>
+                  </section>
+                  <section class="provider-card" data-provider-kind="tts" data-provider-card="google_cloud">
+                    <h4>Google Cloud</h4>
+                    <label><span>Credentials JSON</span><textarea data-path="tts.google_cloud.credentials_json"></textarea></label>
+                    <label><span>Voice name</span><input data-path="tts.google_cloud.voice_name" /></label>
+                    <label><span>Language code</span><input data-path="tts.google_cloud.language_code" /></label>
+                    <label><span>SSML gender</span><select data-path="tts.google_cloud.ssml_gender"><option>SSML_VOICE_GENDER_UNSPECIFIED</option><option>MALE</option><option>FEMALE</option><option>NEUTRAL</option></select></label>
+                  </section>
+                </div>
+              </section>
             </div>
           </section>
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.16"></script>
+  <script src="/app.js?v=0.1.17"></script>
   </body>
 </html>

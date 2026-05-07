@@ -169,5 +169,5 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.16` adds the backend TTS-to-ESP WebSocket PCM stream path while preserving the existing TTS relay websocket.
+- `0.1.17` improves provider profile switching and keeps inactive LLM/TTS provider settings while preserving the TTS-to-ESP WebSocket PCM stream path.
 - ESP-side audio playback for this protocol can be implemented independently after this backend path is installed.

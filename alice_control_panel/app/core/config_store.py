@@ -45,6 +45,23 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "system_prompt": "",
         "temperature": 0.6,
         "stream": True,
+        "providers": {
+            "openai": {
+                "api_key": "",
+                "model": "gpt-5-mini",
+                "base_url": "https://api.openai.com/v1",
+            },
+            "openrouter": {
+                "api_key": "",
+                "model": "openai/gpt-5-mini",
+                "base_url": "https://openrouter.ai/api/v1",
+            },
+            "openai_compatible": {
+                "api_key": "",
+                "model": "",
+                "base_url": "",
+            },
+        },
     },
     "realtime": {
         "enabled": True,
@@ -176,6 +193,43 @@ def mask_secrets(value: Any) -> Any:
     return value
 
 
+def hydrate_provider_profiles(config: dict[str, Any]) -> dict[str, Any]:
+    llm = config.get("llm")
+    if isinstance(llm, dict):
+        providers = llm.setdefault("providers", {})
+        if isinstance(providers, dict):
+            active_provider = str(llm.get("provider") or "openai").lower()
+            active_profile = providers.setdefault(active_provider, {})
+            if isinstance(active_profile, dict):
+                default_profile = (
+                    DEFAULT_CONFIG.get("llm", {})
+                    .get("providers", {})
+                    .get(active_provider, {})
+                )
+                for key in ("api_key", "model", "base_url"):
+                    if llm.get(key) and (
+                        not active_profile.get(key)
+                        or active_profile.get(key) == default_profile.get(key)
+                    ):
+                        active_profile[key] = llm[key]
+
+    tts = config.get("tts")
+    if isinstance(tts, dict):
+        for provider in ("openai", "cartesia", "elevenlabs", "google_ai", "google_cloud"):
+            group = tts.setdefault(provider, {})
+            if not isinstance(group, dict):
+                continue
+            flat_api_key = tts.get(f"{provider}_api_key")
+            if flat_api_key and not group.get("api_key"):
+                group["api_key"] = flat_api_key
+            flat_voice = tts.get(f"{provider}_voice") or tts.get(f"{provider}_voice_id")
+            if flat_voice and not group.get("voice_id") and provider in {"cartesia", "elevenlabs"}:
+                group["voice_id"] = flat_voice
+            if flat_voice and not group.get("voice") and provider == "openai":
+                group["voice"] = flat_voice
+    return config
+
+
 class ConfigStore:
     def __init__(self, config_path: Path = CONFIG_PATH, options_path: Path = OPTIONS_PATH) -> None:
         self._config_path = config_path
@@ -190,6 +244,7 @@ class ConfigStore:
             addon_options = _addon_options_to_config(_read_json(self._options_path))
             self._config = deep_merge(DEFAULT_CONFIG, addon_options)
             self._config = deep_merge(self._config, file_config)
+            self._config = hydrate_provider_profiles(self._config)
             if not self._config_path.exists():
                 self._config["updated_at"] = time.time()
                 self._write_locked()
@@ -203,6 +258,7 @@ class ConfigStore:
     async def update(self, patch: dict[str, Any]) -> dict[str, Any]:
         async with self._lock:
             self._config = deep_merge(self._config, patch)
+            self._config = hydrate_provider_profiles(self._config)
             self._config["updated_at"] = time.time()
             self._write_locked()
             return copy.deepcopy(self._config)
@@ -210,6 +266,7 @@ class ConfigStore:
     async def replace(self, config: dict[str, Any]) -> dict[str, Any]:
         async with self._lock:
             self._config = deep_merge(DEFAULT_CONFIG, config)
+            self._config = hydrate_provider_profiles(self._config)
             self._config["updated_at"] = time.time()
             self._write_locked()
             return copy.deepcopy(self._config)

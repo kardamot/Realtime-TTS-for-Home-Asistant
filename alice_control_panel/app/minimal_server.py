@@ -29,13 +29,44 @@ DEFAULT_CONFIG = {
         "mock_mode": True,
     },
     "stt": {"provider": "faster_whisper", "model": "small", "language": "tr", "compute_type": "int8"},
-    "llm": {"provider": "openai", "model": "gpt-5-mini", "api_key": "", "base_url": "https://api.openai.com/v1", "system_prompt": ""},
+    "llm": {
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "api_key": "",
+        "base_url": "https://api.openai.com/v1",
+        "system_prompt": "",
+        "temperature": 0.6,
+        "stream": True,
+        "providers": {
+            "openai": {"api_key": "", "model": "gpt-5-mini", "base_url": "https://api.openai.com/v1"},
+            "openrouter": {"api_key": "", "model": "openai/gpt-5-mini", "base_url": "https://openrouter.ai/api/v1"},
+            "openai_compatible": {"api_key": "", "model": "", "base_url": ""},
+        },
+    },
+    "realtime": {
+        "enabled": True,
+        "provider": "openai",
+        "model": "gpt-realtime-mini",
+        "ws_url": "wss://api.openai.com/v1/realtime",
+        "input_sample_rate": 24000,
+        "turn_detection": "server_vad",
+        "vad_threshold": 0.5,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 420,
+        "transcription_model": "gpt-4o-mini-transcribe",
+        "response_timeout_ms": 12000,
+        "noise_reduction": "near_field",
+        "instructions": "",
+    },
     "tts": {
         "enabled": True,
         "provider": "openai",
         "pcm_sample_rate": 44100,
         "openai": {"api_key": "", "model": "gpt-4o-mini-tts", "voice": "coral", "instructions": ""},
         "cartesia": {"api_key": "", "model_id": "sonic-3", "voice_id": "", "language": "tr", "version": "2026-03-01"},
+        "elevenlabs": {"api_key": "", "model_id": "eleven_flash_v2_5", "voice_id": "", "output_format": "pcm_16000", "latency_mode": 3},
+        "google_ai": {"api_key": "", "model": "gemini-3.1-flash-tts-preview", "voice_name": "Kore", "prompt_prefix": ""},
+        "google_cloud": {"credentials_json": "", "voice_name": "", "language_code": "tr-TR", "ssml_gender": "FEMALE"},
     },
     "prompts": {"active_profile": "alice"},
     "pipeline": {"stream_to_esp": True, "max_log_events_per_sec": 10},
@@ -113,16 +144,50 @@ def options_to_config(raw: dict) -> dict:
         esp["max_auto_reconnects"] = raw["esp_max_auto_reconnects"]
     if esp:
         mapped["esp"] = esp
-    for key in ("debug_logs", "safe_mode", "stt", "llm", "tts"):
+    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts"):
         if key in raw:
             mapped[key] = raw[key]
     return mapped
+
+
+def hydrate_provider_profiles(config: dict) -> dict:
+    llm = config.get("llm")
+    if isinstance(llm, dict):
+        providers = llm.setdefault("providers", {})
+        if isinstance(providers, dict):
+            active_provider = str(llm.get("provider") or "openai").lower()
+            active_profile = providers.setdefault(active_provider, {})
+            if isinstance(active_profile, dict):
+                default_profile = DEFAULT_CONFIG.get("llm", {}).get("providers", {}).get(active_provider, {})
+                for key in ("api_key", "model", "base_url"):
+                    if llm.get(key) and (
+                        not active_profile.get(key)
+                        or active_profile.get(key) == default_profile.get(key)
+                    ):
+                        active_profile[key] = llm[key]
+    return config
+
+
+def active_llm_config(config: dict) -> dict:
+    llm = config.get("llm", {}) if isinstance(config, dict) else {}
+    if not isinstance(llm, dict):
+        return {}
+    provider = str(llm.get("provider") or "openai").lower()
+    providers = llm.get("providers", {}) if isinstance(llm.get("providers"), dict) else {}
+    profile = providers.get(provider, {}) if isinstance(providers.get(provider), dict) else {}
+    return {
+        "provider": provider,
+        "model": profile.get("model") or llm.get("model") or "gpt-5-mini",
+        "api_key": profile.get("api_key") or llm.get("api_key") or "",
+        "base_url": profile.get("base_url") or llm.get("base_url") or "",
+    }
 
 
 def load_config() -> dict:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     config = deep_merge(DEFAULT_CONFIG, options_to_config(read_json(OPTIONS_PATH)))
     config = deep_merge(config, read_json(CONFIG_PATH))
+    config = hydrate_provider_profiles(config)
     if not CONFIG_PATH.exists():
         write_json(CONFIG_PATH, config)
     return config
@@ -185,7 +250,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.16"
+    server_version = "AliceControlPanel/0.1.17"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -257,13 +322,13 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             payload = self.read_body()
             if path == "/api/config":
-                cfg = deep_merge(load_config(), payload if isinstance(payload, dict) else {})
+                cfg = hydrate_provider_profiles(deep_merge(load_config(), payload if isinstance(payload, dict) else {}))
                 write_json(CONFIG_PATH, cfg)
                 log("INFO", "UI/API", "Configuration updated")
                 self.json({"ok": True, "config": cfg})
             elif path == "/api/config/import":
                 cfg = payload.get("config", payload) if isinstance(payload, dict) else {}
-                write_json(CONFIG_PATH, deep_merge(DEFAULT_CONFIG, cfg))
+                write_json(CONFIG_PATH, hydrate_provider_profiles(deep_merge(DEFAULT_CONFIG, cfg)))
                 log("INFO", "UI/API", "Configuration imported")
                 self.json({"ok": True})
             elif path == "/api/command":
@@ -337,7 +402,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-            "version": "0.1.16",
+            "version": "0.1.17",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
@@ -396,12 +461,13 @@ def pipeline_status(text_value: str = "") -> dict:
 
 def status() -> dict:
     cfg = load_config()
+    llm = active_llm_config(cfg)
     return {
         "health": health(),
         "esp": esp_status(),
         "pipeline": pipeline_status(),
         "stt": {"provider": cfg.get("stt", {}).get("provider", "faster_whisper"), "model": cfg.get("stt", {}).get("model", "small"), "loaded": False},
-        "llm": {"provider": cfg.get("llm", {}).get("provider", "openai"), "model": cfg.get("llm", {}).get("model", "gpt-5-mini"), "api_key_configured": bool(cfg.get("llm", {}).get("api_key"))},
+        "llm": {"provider": llm.get("provider", "openai"), "model": llm.get("model", "gpt-5-mini"), "api_key_configured": bool(llm.get("api_key"))},
         "tts": {"enabled": cfg.get("tts", {}).get("enabled", True), "provider": cfg.get("tts", {}).get("provider", "openai"), "pcm_sample_rate": cfg.get("tts", {}).get("pcm_sample_rate", 44100)},
         "config": mask_secrets(cfg),
     }
