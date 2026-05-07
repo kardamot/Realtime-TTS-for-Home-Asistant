@@ -90,11 +90,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "conversation_agent_id": "",
         "conversation_language": "tr",
         "route_home_control": True,
-        "expose_all_entities": False,
+        "strict_allowlist": True,
         "exposed_entities": "",
-        "exposed_domains": "",
-        "blocked_entities": "",
-        "allow_conversation_tool": False,
     },
     "tts": {
         "enabled": True,
@@ -230,6 +227,12 @@ def mask_secrets(value: Any) -> Any:
 
 
 def hydrate_provider_profiles(config: dict[str, Any]) -> dict[str, Any]:
+    ha_bridge = config.get("ha_bridge")
+    if isinstance(ha_bridge, dict):
+        ha_bridge["strict_allowlist"] = True
+        for key in ("expose_all_entities", "exposed_domains", "blocked_entities", "allow_conversation_tool"):
+            ha_bridge.pop(key, None)
+
     llm = config.get("llm")
     if isinstance(llm, dict):
         providers = llm.setdefault("providers", {})

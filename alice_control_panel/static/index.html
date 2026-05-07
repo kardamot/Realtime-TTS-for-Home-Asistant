@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.36" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.36" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.37" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.37" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-            <div class="title-logo"><img src="/alice-logo.png?v=0.1.36" alt="Alice" /></div>
+            <div class="title-logo"><img src="/alice-logo.png?v=0.1.37" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -223,13 +223,9 @@
                   <label><span>HA API base</span><input data-path="ha_bridge.api_base_url" /></label>
                   <label><span>Conversation agent</span><input data-path="ha_bridge.conversation_agent_id" /></label>
                   <label><span>Language</span><input data-path="ha_bridge.conversation_language" /></label>
-                  <label><span>Exposed entities</span><input data-path="ha_bridge.exposed_entities" placeholder="weather.home light.salon*" /></label>
-                  <label><span>Exposed domains</span><input data-path="ha_bridge.exposed_domains" placeholder="weather sensor light" /></label>
-                  <label><span>Blocked entities</span><input data-path="ha_bridge.blocked_entities" /></label>
+                  <label class="wide"><span>Allowed entity IDs</span><textarea data-path="ha_bridge.exposed_entities" placeholder="weather.home&#10;light.salon_*&#10;switch.kahve_makinesi"></textarea></label>
                   <label class="check-row"><input data-path="ha_bridge.enabled" type="checkbox" /><span>HA bridge</span></label>
                   <label class="check-row"><input data-path="ha_bridge.route_home_control" type="checkbox" /><span>Route home control</span></label>
-                  <label class="check-row"><input data-path="ha_bridge.expose_all_entities" type="checkbox" /><span>Expose all entities</span></label>
-                  <label class="check-row"><input data-path="ha_bridge.allow_conversation_tool" type="checkbox" /><span>HA conversation tool</span></label>
                 </div>
               </section>
 
@@ -338,6 +334,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.36"></script>
+  <script src="/app.js?v=0.1.37"></script>
   </body>
 </html>

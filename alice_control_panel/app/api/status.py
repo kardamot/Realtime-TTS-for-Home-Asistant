@@ -23,7 +23,7 @@ async def health(request: Request) -> dict[str, Any]:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.36",
+        "version": "0.1.37",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": system_health(),
@@ -71,7 +71,7 @@ async def events_ws(websocket: WebSocket) -> None:
                     "health": {
                         "ok": True,
                         "service": "alice_control_panel",
-                        "version": "0.1.36",
+                        "version": "0.1.37",
                         "system": system_health(),
                     },
                     "esp": await websocket.app.state.esp_client.status(),

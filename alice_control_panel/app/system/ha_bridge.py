@@ -15,6 +15,11 @@ def _scope_items(value: str) -> list[str]:
     return [item.strip().lower() for item in re.split(r"[\s,]+", value or "") if item.strip()]
 
 
+def _allowed_entity_patterns(cfg: dict[str, Any]) -> list[str]:
+    value = cfg.get("allowed_entities") or cfg.get("exposed_entities") or ""
+    return _scope_items(str(value))
+
+
 _TR_TRANSLATION_TABLE = str.maketrans(
     {
         "\u00e7": "c",
@@ -46,9 +51,23 @@ class HomeAssistantBridge:
         cfg = await self._cfg()
         token = self._token()
         if not cfg.get("enabled", True):
-            return {"enabled": False, "connected": False, "reason": "disabled"}
+            return {
+                "enabled": False,
+                "connected": False,
+                "reason": "disabled",
+                "strict_allowlist": True,
+                "allowlist_count": len(_allowed_entity_patterns(cfg)),
+                "entity_scope": self.has_entity_scope(cfg),
+            }
         if not token:
-            return {"enabled": True, "connected": False, "reason": "missing_supervisor_token"}
+            return {
+                "enabled": True,
+                "connected": False,
+                "reason": "missing_supervisor_token",
+                "strict_allowlist": True,
+                "allowlist_count": len(_allowed_entity_patterns(cfg)),
+                "entity_scope": self.has_entity_scope(cfg),
+            }
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
                 async with session.get(self._base_url(cfg), headers=self._headers(token)) as resp:
@@ -59,11 +78,19 @@ class HomeAssistantBridge:
                         "status": resp.status,
                         "body": body[:96],
                         "route_home_control": bool(cfg.get("route_home_control", True)),
-                        "allow_conversation_tool": bool(cfg.get("allow_conversation_tool", False)),
+                        "strict_allowlist": True,
+                        "allowlist_count": len(_allowed_entity_patterns(cfg)),
                         "entity_scope": self.has_entity_scope(cfg),
                     }
         except Exception as exc:
-            return {"enabled": True, "connected": False, "reason": str(exc)}
+            return {
+                "enabled": True,
+                "connected": False,
+                "reason": str(exc),
+                "strict_allowlist": True,
+                "allowlist_count": len(_allowed_entity_patterns(cfg)),
+                "entity_scope": self.has_entity_scope(cfg),
+            }
 
     async def is_ready(self) -> bool:
         cfg = await self._cfg()
@@ -132,8 +159,8 @@ class HomeAssistantBridge:
     async def call_service(self, domain: str, service: str, data: dict[str, Any] | None = None) -> Any:
         cfg = await self._cfg()
         entity_ids = self._service_entity_ids(data)
-        if not entity_ids and not bool(cfg.get("expose_all_entities", False)):
-            raise PermissionError("Service call requires an allowed entity_id unless expose_all_entities is enabled.")
+        if not entity_ids:
+            raise PermissionError("Home Assistant service calls require one or more allowlisted entity_id values.")
         for entity_id in entity_ids:
             self.assert_entity_allowed(entity_id, cfg)
         async with self._session() as session:
@@ -149,8 +176,10 @@ class HomeAssistantBridge:
 
     async def conversation(self, text: str, language: str = "", conversation_id: str = "") -> dict[str, Any]:
         cfg = await self._cfg()
-        if not bool(cfg.get("allow_conversation_tool", False)):
-            raise PermissionError("ha_conversation tool is disabled in config.")
+        if not bool(cfg.get("unsafe_allow_conversation_tool", False)):
+            raise PermissionError(
+                "Home Assistant conversation is disabled because it cannot be constrained to the Alice entity allowlist."
+            )
         payload: dict[str, Any] = {
             "text": text,
             "language": language or str(cfg.get("conversation_language") or "tr"),
@@ -180,6 +209,8 @@ class HomeAssistantBridge:
         cfg = await self._cfg()
         if not bool(cfg.get("route_home_control", True)) or not await self.is_ready():
             return False
+        if not self.has_entity_scope(cfg) or not bool(cfg.get("unsafe_allow_conversation_tool", False)):
+            return False
         normalized = _normalize_tr(text)
         weather_terms = ["hava", "derece", "sicaklik", "nem", "ruzgar", "yagmur"]
         device_terms = ["isik", "lamba", "priz", "klima", "perde", "panjur", "isitici", "fan", "sensor", "kamera"]
@@ -189,37 +220,29 @@ class HomeAssistantBridge:
         )
 
     def has_entity_scope(self, cfg: dict[str, Any]) -> bool:
-        return bool(cfg.get("expose_all_entities", False)) or bool(_scope_items(str(cfg.get("exposed_entities") or ""))) or bool(
-            _scope_items(str(cfg.get("exposed_domains") or ""))
-        )
+        return bool(_allowed_entity_patterns(cfg))
 
     def is_entity_allowed(self, entity_id: str, cfg: dict[str, Any]) -> bool:
         entity_id = (entity_id or "").strip().lower()
         if not entity_id:
             return False
-        blocked = _scope_items(str(cfg.get("blocked_entities") or ""))
-        if any(fnmatch.fnmatch(entity_id, pattern) for pattern in blocked):
-            return False
-        domain = entity_id.split(".", 1)[0] if "." in entity_id else ""
-        if bool(cfg.get("expose_all_entities", False)):
-            return True
-        if domain and domain in _scope_items(str(cfg.get("exposed_domains") or "")):
-            return True
-        return any(fnmatch.fnmatch(entity_id, pattern) for pattern in _scope_items(str(cfg.get("exposed_entities") or "")))
+        return any(fnmatch.fnmatch(entity_id, pattern) for pattern in _allowed_entity_patterns(cfg))
 
     def assert_entity_allowed(self, entity_id: str, cfg: dict[str, Any]) -> None:
         if not self.is_entity_allowed(entity_id, cfg):
-            raise PermissionError(f"Entity is not exposed to Alice Control Panel: {entity_id}")
+            raise PermissionError(f"Entity is not allowlisted for Alice Control Panel: {entity_id}")
 
     def _service_entity_ids(self, data: dict[str, Any] | None) -> list[str]:
         if not isinstance(data, dict):
             return []
-        raw = data.get("entity_id")
-        if isinstance(raw, str):
-            return [item.strip() for item in raw.split(",") if item.strip()]
-        if isinstance(raw, list):
-            return [str(item).strip() for item in raw if str(item).strip()]
-        return []
+        values: list[str] = []
+        target = data.get("target") if isinstance(data.get("target"), dict) else {}
+        for raw in (data.get("entity_id"), target.get("entity_id")):
+            if isinstance(raw, str):
+                values.extend(item.strip() for item in raw.split(",") if item.strip())
+            elif isinstance(raw, list):
+                values.extend(str(item).strip() for item in raw if str(item).strip())
+        return values
 
     async def _cfg(self) -> dict[str, Any]:
         config = await self._config_store.get(include_secrets=True)

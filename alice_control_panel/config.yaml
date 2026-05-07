@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.36"
+version: "0.1.37"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -92,8 +92,9 @@ options:
     conversation_agent_id: ""
     conversation_language: "tr"
     route_home_control: true
-    expose_all_entities: false
+    strict_allowlist: true
     exposed_entities: ""
+    expose_all_entities: false
     exposed_domains: ""
     blocked_entities: ""
     allow_conversation_tool: false
@@ -209,8 +210,9 @@ schema:
     conversation_agent_id: str
     conversation_language: str
     route_home_control: bool
-    expose_all_entities: bool
+    strict_allowlist: bool
     exposed_entities: str
+    expose_all_entities: bool
     exposed_domains: str
     blocked_entities: str
     allow_conversation_tool: bool
