@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.26` waits for wake/mic ownership to release before panel mic capture.
 - Version `0.1.25` adds the first ESP mic-capture bridge into the panel STT path.
 - Version `0.1.24` chunks the ESP silence prefix and clears ESP playback state on failed audio frames.
 
