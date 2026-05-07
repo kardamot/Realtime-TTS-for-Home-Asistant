@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.32" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.32" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.33" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.33" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-            <div class="title-logo"><img src="/alice-logo.png?v=0.1.32" alt="Alice" /></div>
+            <div class="title-logo"><img src="/alice-logo.png?v=0.1.33" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -198,12 +198,15 @@
                   <label><span>Prefix padding ms</span><input data-path="realtime.prefix_padding_ms" type="number" /></label>
                   <label><span>Silence ms</span><input data-path="realtime.silence_duration_ms" type="number" /></label>
                   <label><span>Noise reduction</span><select data-path="realtime.noise_reduction"><option>near_field</option><option>far_field</option><option>none</option></select></label>
-                  <label><span>Live start RMS</span><input data-path="pipeline.live_vad_start_rms" type="number" /></label>
-                  <label><span>Live end RMS</span><input data-path="pipeline.live_vad_end_rms" type="number" /></label>
+                  <label><span>Live VAD provider</span><select data-path="pipeline.live_vad_provider"><option>silero</option><option>energy</option></select></label>
+                  <label><span>Silero start prob</span><input data-path="pipeline.live_vad_silero_start_prob" type="number" step="0.01" /></label>
+                  <label><span>Silero end prob</span><input data-path="pipeline.live_vad_silero_end_prob" type="number" step="0.01" /></label>
+                  <label><span>Energy start RMS</span><input data-path="pipeline.live_vad_start_rms" type="number" /></label>
+                  <label><span>Energy end RMS</span><input data-path="pipeline.live_vad_end_rms" type="number" /></label>
                   <label><span>Live silence ms</span><input data-path="pipeline.live_vad_end_silence_ms" type="number" /></label>
                   <label><span>Live max utterance ms</span><input data-path="pipeline.live_vad_max_utterance_ms" type="number" /></label>
                   <label class="check-row"><input data-path="pipeline.live_mic_enabled" type="checkbox" /><span>Live mic WS</span></label>
-                  <label class="check-row"><input data-path="pipeline.live_vad_enabled" type="checkbox" /><span>Live energy VAD</span></label>
+                  <label class="check-row"><input data-path="pipeline.live_vad_enabled" type="checkbox" /><span>Live VAD</span></label>
                 </div>
               </section>
 
@@ -312,6 +315,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.32"></script>
+  <script src="/app.js?v=0.1.33"></script>
   </body>
 </html>

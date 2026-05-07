@@ -2,6 +2,8 @@ aiohttp
 faster-whisper
 fastapi
 google-auth
+numpy
+onnxruntime
 psutil
 PyYAML
 requests

@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.32"
+version: "0.1.33"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -36,6 +36,9 @@ options:
     barge_in_enabled: true
     live_mic_enabled: true
     live_vad_enabled: true
+    live_vad_provider: "silero"
+    live_vad_silero_start_prob: 0.50
+    live_vad_silero_end_prob: 0.28
     live_vad_start_rms: 450
     live_vad_end_rms: 260
     live_vad_min_speech_ms: 120
@@ -135,6 +138,9 @@ schema:
     barge_in_enabled: bool
     live_mic_enabled: bool
     live_vad_enabled: bool
+    live_vad_provider: list(silero|energy)
+    live_vad_silero_start_prob: float
+    live_vad_silero_end_prob: float
     live_vad_start_rms: int
     live_vad_end_rms: int
     live_vad_min_speech_ms: int

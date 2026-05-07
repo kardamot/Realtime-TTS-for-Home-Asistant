@@ -25,7 +25,8 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.32` adds `/api/pipeline/mic/ws`, a live PCM WebSocket with lightweight energy endpointing for future continuous voice sessions.
+- Version `0.1.33` makes Silero VAD the default live mic endpointing provider, with energy endpointing kept as fallback.
+- Version `0.1.32` adds `/api/pipeline/mic/ws`, a live PCM WebSocket for future continuous voice sessions.
 - Version `0.1.31` adds voice session controls and a cancellable TTS response path for barge-in groundwork.
 - Version `0.1.30` stores faster-whisper models under `/data/models` and adds mic response modes for assistant, transcript echo, or both.
 - Version `0.1.29` wires captured ESP PCM into faster-whisper STT.

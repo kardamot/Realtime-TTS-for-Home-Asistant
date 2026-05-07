@@ -14,6 +14,7 @@ from app.core.ws_hub import WsHub
 from app.esp.esp_client import EspClient
 from app.pipeline.llm.openai_compatible import OpenAICompatibleLlm
 from app.pipeline.stt.manager import SttManager
+from app.pipeline.stt.vad import SileroVadRuntime
 from app.pipeline.tts.relay import TtsRelay
 
 
@@ -147,7 +148,7 @@ class VoicePipeline:
         channels = 1
         encoding = "pcm_s16le"
         vad_enabled = bool(pipeline_cfg.get("live_vad_enabled", True))
-        endpoint = _EnergyEndpoint(pipeline_cfg, sample_rate)
+        endpoint = await self._create_live_endpoint(pipeline_cfg, sample_rate)
         await self.start_session("live_ws")
         try:
             while True:
@@ -162,7 +163,7 @@ class VoicePipeline:
                         channels = int(doc.get("channels") or channels)
                         encoding = str(doc.get("encoding") or encoding)
                         vad_enabled = bool(doc.get("vad_enabled", vad_enabled))
-                        endpoint = _EnergyEndpoint(pipeline_cfg, sample_rate)
+                        endpoint = await self._create_live_endpoint(pipeline_cfg, sample_rate)
                         self._last_live_mic = {
                             "session_id": session_id,
                             "sample_rate": sample_rate,
@@ -404,9 +405,37 @@ class VoicePipeline:
         status = await self.run_audio_capture(metadata, audio)
         await websocket.send_json({"type": "pipeline_status", "session_id": session_id, "payload": status})
 
+    async def _create_live_endpoint(self, pipeline_cfg: dict[str, Any], sample_rate: int) -> "_EnergyEndpoint":
+        provider = str(pipeline_cfg.get("live_vad_provider") or "silero").strip().lower()
+        if provider == "silero":
+            try:
+                endpoint = _SileroEndpoint(pipeline_cfg, sample_rate)
+                await self._log_bus.emit(
+                    "INFO",
+                    "STT",
+                    "Live mic VAD ready",
+                    {
+                        "provider": "silero",
+                        "sample_rate": sample_rate,
+                        "frame_ms": endpoint.frame_ms,
+                        "start_prob": endpoint.start_probability,
+                        "end_prob": endpoint.end_probability,
+                    },
+                )
+                return endpoint
+            except Exception as exc:
+                await self._log_bus.emit(
+                    "WARN",
+                    "STT",
+                    "Silero VAD unavailable; falling back to energy endpointing",
+                    {"error": str(exc), "sample_rate": sample_rate},
+                )
+        return _EnergyEndpoint(pipeline_cfg, sample_rate)
+
 
 class _EnergyEndpoint:
     def __init__(self, cfg: dict[str, Any], sample_rate: int) -> None:
+        self.provider = "energy"
         self.sample_rate = max(1, int(sample_rate or 16000))
         self.start_rms = max(1, int(cfg.get("live_vad_start_rms") or 450))
         self.end_rms = max(1, int(cfg.get("live_vad_end_rms") or 260))
@@ -476,6 +505,7 @@ class _EnergyEndpoint:
 
     def status(self) -> dict[str, Any]:
         return {
+            "vad_provider": self.provider,
             "state": "speaking" if self._speaking else "listening",
             "rms": self._last_rms,
             "peak": self._last_peak,
@@ -535,3 +565,76 @@ class _EnergyEndpoint:
                 peak = abs_value
             total_sq += value * value
         return int((total_sq / len(samples)) ** 0.5), peak
+
+
+class _SileroEndpoint(_EnergyEndpoint):
+    def __init__(self, cfg: dict[str, Any], sample_rate: int) -> None:
+        super().__init__(cfg, sample_rate)
+        self.provider = "silero"
+        self.start_probability = float(cfg.get("live_vad_silero_start_prob") or 0.50)
+        self.end_probability = float(cfg.get("live_vad_silero_end_prob") or 0.28)
+        self._vad = SileroVadRuntime(self.sample_rate)
+        self.frame_ms = self._vad.frame_ms
+        self._last_probability = 0.0
+
+    def feed(self, chunk: bytes, use_vad: bool = True) -> dict[str, Any]:
+        if not use_vad:
+            return super().feed(chunk, use_vad=False)
+
+        duration_ms = self._duration_ms(chunk)
+        rms, peak = self._levels(chunk)
+        self._last_rms = rms
+        self._last_peak = peak
+        self._chunks += 1
+        self._received_ms += duration_ms
+
+        probabilities = self._vad.push_pcm16le(chunk)
+        speech_started = False
+
+        if not self._speaking:
+            self._append_pre_roll(chunk)
+            for probability in probabilities:
+                self._last_probability = probability
+                if probability >= self.start_probability:
+                    self._voice_ms += self.frame_ms
+                else:
+                    self._voice_ms = 0.0
+                if self._voice_ms >= self.min_speech_ms:
+                    self._start_speech()
+                    self._audio.extend(self._pre_roll)
+                    self._pre_roll.clear()
+                    speech_started = True
+                    break
+            return {"speech_started": speech_started, "final": False}
+
+        self._append_audio(chunk)
+        self._speech_ms += duration_ms
+        for probability in probabilities:
+            self._last_probability = probability
+            if probability >= self.end_probability:
+                self._silence_ms = 0.0
+            else:
+                self._silence_ms += self.frame_ms
+
+        if self._speech_ms >= self.max_utterance_ms:
+            return {"speech_started": False, "final": True, "reason": "max_utterance"}
+        if self._speech_ms >= self.min_speech_ms and self._silence_ms >= self.end_silence_ms:
+            return {"speech_started": False, "final": True, "reason": "silence"}
+        if len(self._audio) >= self.max_buffer_bytes:
+            return {"speech_started": False, "final": True, "reason": "max_buffer"}
+        return {"speech_started": False, "final": False}
+
+    def status(self) -> dict[str, Any]:
+        return {
+            **super().status(),
+            "probability": round(self._last_probability, 4),
+            "start_probability": self.start_probability,
+            "end_probability": self.end_probability,
+            "frame_ms": self.frame_ms,
+        }
+
+    def reset(self, keep_pre_roll: bool = False) -> None:
+        super().reset(keep_pre_roll=keep_pre_roll)
+        self._last_probability = 0.0
+        if not keep_pre_roll:
+            self._vad.reset_state()

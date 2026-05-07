@@ -85,6 +85,9 @@ DEFAULT_CONFIG = {
         "barge_in_enabled": True,
         "live_mic_enabled": True,
         "live_vad_enabled": True,
+        "live_vad_provider": "silero",
+        "live_vad_silero_start_prob": 0.50,
+        "live_vad_silero_end_prob": 0.28,
         "live_vad_start_rms": 450,
         "live_vad_end_rms": 260,
         "live_vad_min_speech_ms": 120,
@@ -283,7 +286,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.32"
+    server_version = "AliceControlPanel/0.1.33"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -444,7 +447,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.32",
+        "version": "0.1.33",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

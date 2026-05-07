@@ -1,11 +1,15 @@
 FROM python:3.12-slim
 
 LABEL \
-      io.hass.version="0.1.32" \
+      io.hass.version="0.1.33" \
   io.hass.type="addon" \
   io.hass.arch="amd64"
 
 WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libgomp1 \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
