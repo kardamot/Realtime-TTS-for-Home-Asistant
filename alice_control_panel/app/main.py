@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import AsyncIterator
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import commands, config, esp, logs, pipeline, prompts, status
+from app.api import commands, config, esp, ha, logs, pipeline, prompts, status
+from app.core.auth import require_websocket_auth
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
 from app.core.paths import FRONTEND_DIST_DIR, STATIC_DIR
@@ -23,6 +24,7 @@ from app.pipeline.llm.openai_compatible import OpenAICompatibleLlm
 from app.pipeline.stt.manager import SttManager
 from app.pipeline.tts.relay import TtsRelay
 from app.pipeline.voice_pipeline import VoicePipeline
+from app.system.ha_bridge import HomeAssistantBridge
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -42,16 +44,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.33", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.34", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
     prompt_store = PromptStore(config_store)
     esp_client = EspClient(config_store, log_bus, ws_hub)
+    ha_bridge = HomeAssistantBridge(config_store, log_bus)
     llm = OpenAICompatibleLlm(config_store, prompt_store, log_bus)
     stt_manager = SttManager(config_store, log_bus)
     tts_relay = TtsRelay(config_store, log_bus)
-    voice_pipeline = VoicePipeline(config_store, log_bus, ws_hub, llm, stt_manager, tts_relay, esp_client)
+    voice_pipeline = VoicePipeline(config_store, log_bus, ws_hub, llm, stt_manager, tts_relay, esp_client, ha_bridge)
     esp_client.set_mic_stream_handler(voice_pipeline.run_audio_capture)
 
     app.state.config_store = config_store
@@ -59,6 +62,7 @@ def create_app() -> FastAPI:
     app.state.ws_hub = ws_hub
     app.state.prompt_store = prompt_store
     app.state.esp_client = esp_client
+    app.state.ha_bridge = ha_bridge
     app.state.stt_manager = stt_manager
     app.state.llm = llm
     app.state.tts_relay = tts_relay
@@ -69,6 +73,7 @@ def create_app() -> FastAPI:
     app.include_router(prompts.router)
     app.include_router(logs.router)
     app.include_router(esp.router)
+    app.include_router(ha.router)
     app.include_router(commands.router)
     app.include_router(pipeline.router)
 
@@ -77,6 +82,31 @@ def create_app() -> FastAPI:
         assets = static_root / "assets"
         if assets.exists():
             app.mount("/assets", StaticFiles(directory=str(assets)), name="assets")
+
+    @app.websocket("/tts/ws")
+    async def direct_tts_ws(websocket: WebSocket) -> None:
+        if not await require_websocket_auth(websocket):
+            await websocket.close(code=1008)
+            return
+        await websocket.app.state.tts_relay.websocket_session(websocket)
+
+    @app.websocket("/voice/ws")
+    async def direct_voice_ws(websocket: WebSocket) -> None:
+        if not await require_websocket_auth(websocket):
+            await websocket.close(code=1008)
+            return
+        await websocket.app.state.voice_pipeline.live_mic_websocket(websocket)
+
+    @app.websocket("/ws")
+    async def legacy_ws(websocket: WebSocket) -> None:
+        if not await require_websocket_auth(websocket):
+            await websocket.close(code=1008)
+            return
+        mode = str(websocket.query_params.get("mode") or "voice").lower()
+        if mode == "tts":
+            await websocket.app.state.tts_relay.websocket_session(websocket)
+            return
+        await websocket.app.state.voice_pipeline.live_mic_websocket(websocket)
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa(full_path: str = ""):

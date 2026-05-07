@@ -29,6 +29,14 @@ After the first panel save, `/data/alice_config.json` is the source of truth. Ho
 
 ## API
 
+Status:
+
+```text
+GET /api/health
+GET /api/status
+GET /health
+```
+
 Config:
 
 ```text
@@ -58,6 +66,17 @@ GET    /api/logs/download
 WS     /api/ws/logs
 ```
 
+Home Assistant bridge:
+
+```text
+GET  /api/ha/health
+GET  /api/ha/states
+GET  /api/ha/states/{entity_id}
+GET  /api/ha/search?q=...
+POST /api/ha/service
+POST /api/ha/conversation
+```
+
 Commands:
 
 ```text
@@ -70,6 +89,10 @@ TTS relay:
 ```text
 WS /api/pipeline/tts/ws
 WS /api/pipeline/mic/ws
+WS /tts/ws
+WS /voice/ws
+WS /ws?mode=voice
+WS /ws?mode=tts
 POST /api/pipeline/tts/text
 ```
 
@@ -80,6 +103,11 @@ The TTS WebSocket accepts JSON commands:
 ```
 
 `POST /api/pipeline/tts/text` accepts `{"text":"Merhaba"}` and sends generated TTS audio directly to the connected ESP WebSocket when `pipeline.stream_to_esp` is enabled.
+
+Legacy compatibility:
+
+- `/voice/ws` and `/ws` send an initial `hello` event compatible with the old voice server, then accept PCM/binary audio plus `start`, `eos`, `cancel_response`, `reset`, and Home Assistant helper messages.
+- `/tts/ws` and `/ws?mode=tts` accept the old TTS relay `start`/`append` JSON flow and stream PCM frames back to the client.
 
 For streaming text providers:
 
@@ -187,6 +215,7 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime code paths are scaffolded for the later live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.34` folds in legacy add-on migration pieces: ElevenLabs TTS, direct `/tts/ws` and `/voice/ws` compatibility endpoints, and Home Assistant bridge APIs.
 - `0.1.33` makes Silero VAD the default live mic endpointing provider, with energy endpointing kept as fallback.
 - `0.1.32` adds `/api/pipeline/mic/ws`, a live PCM WebSocket for future continuous voice sessions.
 - `0.1.31` adds voice session start/stop/cancel controls and a cancellable ESP TTS stream path for barge-in groundwork.

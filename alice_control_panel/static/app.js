@@ -272,6 +272,7 @@ async function loadStatus() {
   text("conn-stt", data.stt?.provider || "faster_whisper");
   text("conn-llm", `${data.llm?.provider || "openai"} / ${data.llm?.model || "n/a"}`);
   text("conn-tts", `${data.tts?.provider || "openai"} / ${data.tts?.pcm_sample_rate || "n/a"}`);
+  text("conn-ha", data.ha_bridge?.connected ? "connected" : data.ha_bridge?.enabled ? "not ready" : "disabled");
   text("conn-reconnects", formatReconnects(esp));
   text("conn-esp-ws", esp.ws_connected ? "connected" : "offline");
   setAutoText("last-error", esp.last_error || esp.last_ws_error || "");

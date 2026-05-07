@@ -1,10 +1,11 @@
 name: "Alice Control Panel"
-version: "0.1.33"
+version: "0.1.34"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
 boot: "auto"
 init: false
+homeassistant_api: true
 arch:
   - amd64
 webui: "http://[HOST]:[PORT:8099]"
@@ -77,10 +78,25 @@ options:
     vad_threshold: 0.5
     prefix_padding_ms: 300
     silence_duration_ms: 420
+    semantic_eagerness: "high"
     transcription_model: "gpt-4o-mini-transcribe"
+    transcript_wait_ms: 800
     response_timeout_ms: 12000
+    ha_tools_enabled: true
+    suppress_empty_transcript_response: true
     noise_reduction: "near_field"
     instructions: ""
+  ha_bridge:
+    enabled: true
+    api_base_url: "http://supervisor/core/api"
+    conversation_agent_id: ""
+    conversation_language: "tr"
+    route_home_control: true
+    expose_all_entities: false
+    exposed_entities: ""
+    exposed_domains: ""
+    blocked_entities: ""
+    allow_conversation_tool: false
   tts:
     enabled: true
     provider: "openai"
@@ -179,10 +195,25 @@ schema:
     vad_threshold: float
     prefix_padding_ms: int
     silence_duration_ms: int
+    semantic_eagerness: list(low|medium|high|auto)
     transcription_model: str
+    transcript_wait_ms: int
     response_timeout_ms: int
+    ha_tools_enabled: bool
+    suppress_empty_transcript_response: bool
     noise_reduction: list(near_field|far_field|none)
     instructions: str
+  ha_bridge:
+    enabled: bool
+    api_base_url: str
+    conversation_agent_id: str
+    conversation_language: str
+    route_home_control: bool
+    expose_all_entities: bool
+    exposed_entities: str
+    exposed_domains: str
+    blocked_entities: str
+    allow_conversation_tool: bool
   tts:
     enabled: bool
     provider: list(openai|cartesia|elevenlabs|google_ai|google_cloud)

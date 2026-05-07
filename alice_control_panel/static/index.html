@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.33" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.33" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.34" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.34" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-            <div class="title-logo"><img src="/alice-logo.png?v=0.1.33" alt="Alice" /></div>
+            <div class="title-logo"><img src="/alice-logo.png?v=0.1.34" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -64,6 +64,7 @@
               <div><span>STT</span><b id="conn-stt">faster_whisper</b></div>
               <div><span>LLM</span><b id="conn-llm">openai</b></div>
               <div><span>TTS</span><b id="conn-tts">openai</b></div>
+              <div><span>HA Bridge</span><b id="conn-ha">offline</b></div>
               <div><span>Reconnects</span><b id="conn-reconnects">0</b></div>
             </div>
             <p id="last-error" class="error" data-autoscroll></p>
@@ -211,6 +212,22 @@
               </section>
 
               <section class="config-group">
+                <h3>Home Assistant</h3>
+                <div class="config-grid compact">
+                  <label><span>HA API base</span><input data-path="ha_bridge.api_base_url" /></label>
+                  <label><span>Conversation agent</span><input data-path="ha_bridge.conversation_agent_id" /></label>
+                  <label><span>Language</span><input data-path="ha_bridge.conversation_language" /></label>
+                  <label><span>Exposed entities</span><input data-path="ha_bridge.exposed_entities" placeholder="weather.home light.salon*" /></label>
+                  <label><span>Exposed domains</span><input data-path="ha_bridge.exposed_domains" placeholder="weather sensor light" /></label>
+                  <label><span>Blocked entities</span><input data-path="ha_bridge.blocked_entities" /></label>
+                  <label class="check-row"><input data-path="ha_bridge.enabled" type="checkbox" /><span>HA bridge</span></label>
+                  <label class="check-row"><input data-path="ha_bridge.route_home_control" type="checkbox" /><span>Route home control</span></label>
+                  <label class="check-row"><input data-path="ha_bridge.expose_all_entities" type="checkbox" /><span>Expose all entities</span></label>
+                  <label class="check-row"><input data-path="ha_bridge.allow_conversation_tool" type="checkbox" /><span>HA conversation tool</span></label>
+                </div>
+              </section>
+
+              <section class="config-group">
                 <header class="config-group-head">
                   <h3>LLM</h3>
                   <div class="provider-switch" data-provider-kind="llm">
@@ -315,6 +332,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.33"></script>
+  <script src="/app.js?v=0.1.34"></script>
   </body>
 </html>

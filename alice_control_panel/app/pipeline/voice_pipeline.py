@@ -28,6 +28,7 @@ class VoicePipeline:
         stt: SttManager,
         tts_relay: TtsRelay,
         esp: EspClient,
+        ha_bridge: Any | None = None,
     ) -> None:
         self._config_store = config_store
         self._log_bus = log_bus
@@ -36,6 +37,7 @@ class VoicePipeline:
         self._stt = stt
         self._tts_relay = tts_relay
         self._esp = esp
+        self._ha_bridge = ha_bridge
         self._state = "IDLE"
         self._last_user_text = ""
         self._stt_result = ""
@@ -134,10 +136,28 @@ class VoicePipeline:
         self._live_clients += 1
         session_id = f"live-{uuid.uuid4().hex[:10]}"
         await self._log_bus.emit("INFO", "STT", "Live mic WebSocket connected", {"session_id": session_id})
-        await websocket.send_json({"type": "ready", "session_id": session_id})
 
         config = await self._config_store.get(include_secrets=False)
         pipeline_cfg = config.get("pipeline", {}) if isinstance(config.get("pipeline"), dict) else {}
+        realtime_cfg = config.get("realtime", {}) if isinstance(config.get("realtime"), dict) else {}
+        ha_bridge_cfg = config.get("ha_bridge", {}) if isinstance(config.get("ha_bridge"), dict) else {}
+        tts_cfg = config.get("tts", {}) if isinstance(config.get("tts"), dict) else {}
+        await websocket.send_json(
+            {
+                "type": "hello",
+                "service": "alice_control_panel",
+                "version": "0.1.34",
+                "session_id": session_id,
+                "endpointing_enabled": True,
+                "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
+                "realtime_enabled": bool(realtime_cfg.get("enabled", False)),
+                "realtime_provider": str(realtime_cfg.get("provider") or "openai"),
+                "ha_bridge_enabled": bool(ha_bridge_cfg.get("enabled", True)),
+                "llm_enabled": True,
+                "tts_enabled": bool(tts_cfg.get("enabled", True)),
+            }
+        )
+        await websocket.send_json({"type": "ready", "session_id": session_id})
         if not bool(pipeline_cfg.get("live_mic_enabled", True)):
             await websocket.send_json({"type": "error", "message": "Live mic is disabled in config."})
             await websocket.close(code=1008)
@@ -180,10 +200,25 @@ class VoicePipeline:
                         await self._finalize_live_mic(websocket, endpoint, session_id, sample_rate, channels, encoding, "manual_end")
                         endpoint.reset()
                         continue
-                    if msg_type == "cancel":
+                    if msg_type in {"cancel", "cancel_response"}:
                         endpoint.reset()
-                        await self.cancel_response("live_mic_cancel")
+                        await self.cancel_response(str(doc.get("reason") or "live_mic_cancel"))
                         await websocket.send_json({"type": "cancelled", "session_id": session_id})
+                        continue
+                    if msg_type == "reset":
+                        endpoint.reset()
+                        await self.cancel_response("live_mic_reset")
+                        self._stt_result = ""
+                        self._llm_response = ""
+                        self._last_audio_capture = {}
+                        await websocket.send_json({"type": "session_reset", "session_id": session_id})
+                        await self._ws_hub.publish("pipeline_status", await self.status())
+                        continue
+                    if msg_type == "conversation_reset":
+                        self._last_audio_capture.pop("ha_conversation", None)
+                        await websocket.send_json({"type": "conversation_reset_done", "session_id": session_id})
+                        continue
+                    if await self._handle_ha_ws_message(websocket, doc):
                         continue
                     await websocket.send_json({"type": "error", "message": f"Unknown message type: {msg_type}"})
                     continue
@@ -245,6 +280,17 @@ class VoicePipeline:
         self._mark("STT", "text input accepted")
         await self._ws_hub.publish("pipeline_status", await self.status())
         try:
+            config = await self._config_store.get(include_secrets=False)
+            ha_response = await self._try_home_assistant_route(text, run_cancel_event)
+            if ha_response is not None:
+                self._llm_response = ha_response
+                self._state = "TTS"
+                self._tts_status = "queued"
+                self._mark("HA", "Home Assistant conversation completed")
+                await self._log_bus.emit("INFO", "PIPELINE", "Home Assistant conversation completed", {"chars": len(ha_response)})
+                await self._stream_tts_to_esp(ha_response, config, run_cancel_event)
+                self._state = "IDLE" if not run_cancel_event.is_set() else "CANCELLED"
+                return await self.status()
             async for chunk in self._llm.stream_chat(text):
                 self._llm_response += chunk
                 await self._ws_hub.publish("llm_delta", {"text": chunk})
@@ -252,7 +298,6 @@ class VoicePipeline:
             self._tts_status = "queued"
             self._mark("LLM", "response completed")
             await self._log_bus.emit("INFO", "PIPELINE", "LLM response completed", {"chars": len(self._llm_response)})
-            config = await self._config_store.get(include_secrets=False)
             await self._stream_tts_to_esp(self._llm_response, config, run_cancel_event)
             self._state = "IDLE" if not run_cancel_event.is_set() else "CANCELLED"
         except Exception as exc:
@@ -366,6 +411,92 @@ class VoicePipeline:
             return
         self._mark("TTS", str(result.get("message") or self._tts_status))
         await self._log_bus.emit("WARN", "TTS", "TTS audio stream skipped", result)
+
+    async def _try_home_assistant_route(self, text: str, cancel_event: asyncio.Event) -> str | None:
+        if self._ha_bridge is None or cancel_event.is_set():
+            return None
+        try:
+            if not await self._ha_bridge.should_route_home_control(text):
+                return None
+            self._mark("HA", "home control route selected")
+            await self._log_bus.emit("INFO", "PIPELINE", "Home Assistant route selected", {"reason": "home_control_keywords"})
+            result = await self._ha_bridge.conversation(text)
+            speech = self._ha_bridge.extract_conversation_speech(result)
+            self._last_audio_capture["ha_conversation"] = {
+                "conversation_id": result.get("conversation_id"),
+                "continue_conversation": result.get("continue_conversation"),
+                "response_type": (result.get("response") or {}).get("response_type") if isinstance(result.get("response"), dict) else "",
+            }
+            return speech or "Home Assistant komutu islendi."
+        except PermissionError as exc:
+            await self._log_bus.emit("WARN", "PIPELINE", "Home Assistant route skipped", {"error": str(exc)})
+            return None
+        except Exception as exc:
+            await self._log_bus.emit("ERROR", "PIPELINE", "Home Assistant route failed", {"error": str(exc)})
+            return None
+
+    async def _handle_ha_ws_message(self, websocket: WebSocket, doc: dict[str, Any]) -> bool:
+        msg_type = str(doc.get("type") or "").strip().lower()
+        if msg_type not in {"ha_get_state", "ha_list_states", "ha_search_entities", "ha_call_service", "ha_conversation"}:
+            return False
+        if self._ha_bridge is None:
+            await websocket.send_json({"type": "ha_error", "ok": False, "error": "ha_bridge is not available"})
+            return True
+        try:
+            if msg_type == "ha_get_state":
+                entity_id = str(doc.get("entity_id") or "").strip()
+                if not entity_id:
+                    await websocket.send_json({"type": "ha_state_result", "ok": False, "error": "entity_id is required"})
+                    return True
+                entity = await self._ha_bridge.get_state(entity_id)
+                await websocket.send_json({"type": "ha_state_result", "ok": entity is not None, "entity": entity, "entity_id": entity_id})
+                return True
+            if msg_type == "ha_list_states":
+                entities = await self._ha_bridge.list_states(
+                    domain=str(doc.get("domain") or ""),
+                    limit=int(doc.get("limit") or 64),
+                )
+                await websocket.send_json({"type": "ha_list_states_result", "ok": True, "count": len(entities), "entities": entities})
+                return True
+            if msg_type == "ha_search_entities":
+                entities = await self._ha_bridge.search_states(
+                    query=str(doc.get("query") or doc.get("q") or ""),
+                    domain=str(doc.get("domain") or ""),
+                    limit=int(doc.get("limit") or 8),
+                )
+                await websocket.send_json({"type": "ha_search_entities_result", "ok": True, "count": len(entities), "entities": entities})
+                return True
+            if msg_type == "ha_call_service":
+                data = doc.get("data") if isinstance(doc.get("data"), dict) else {}
+                domain = str(doc.get("domain") or "").strip().lower()
+                service = str(doc.get("service") or "").strip()
+                if not domain or not service:
+                    await websocket.send_json({"type": "ha_service_result", "ok": False, "error": "domain and service are required"})
+                    return True
+                result = await self._ha_bridge.call_service(
+                    domain=domain,
+                    service=service,
+                    data=data,
+                )
+                await websocket.send_json({"type": "ha_service_result", "ok": True, "result": result})
+                return True
+            result = await self._ha_bridge.conversation(
+                str(doc.get("text") or ""),
+                language=str(doc.get("language") or ""),
+                conversation_id=str(doc.get("conversation_id") or ""),
+            )
+            await websocket.send_json(
+                {
+                    "type": "ha_conversation_result",
+                    "ok": True,
+                    "speech": self._ha_bridge.extract_conversation_speech(result),
+                    "result": result,
+                }
+            )
+            return True
+        except Exception as exc:
+            await websocket.send_json({"type": f"{msg_type}_result", "ok": False, "error": str(exc)})
+            return True
 
     def _mark(self, category: str, message: str) -> None:
         self._timeline.append({"ts": time.time(), "category": category, "message": message})

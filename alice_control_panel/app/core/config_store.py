@@ -75,10 +75,26 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "vad_threshold": 0.5,
         "prefix_padding_ms": 300,
         "silence_duration_ms": 420,
+        "semantic_eagerness": "high",
         "transcription_model": "gpt-4o-mini-transcribe",
+        "transcript_wait_ms": 800,
         "response_timeout_ms": 12000,
+        "ha_tools_enabled": True,
+        "suppress_empty_transcript_response": True,
         "noise_reduction": "near_field",
         "instructions": "",
+    },
+    "ha_bridge": {
+        "enabled": True,
+        "api_base_url": "http://supervisor/core/api",
+        "conversation_agent_id": "",
+        "conversation_language": "tr",
+        "route_home_control": True,
+        "expose_all_entities": False,
+        "exposed_entities": "",
+        "exposed_domains": "",
+        "blocked_entities": "",
+        "allow_conversation_tool": False,
     },
     "tts": {
         "enabled": True,
@@ -192,7 +208,7 @@ def _addon_options_to_config(raw: dict[str, Any]) -> dict[str, Any]:
         esp["audio_ack_timeout_sec"] = raw["esp_audio_ack_timeout_sec"]
     if esp:
         mapped["esp"] = esp
-    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts", "pipeline", "ui"):
+    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "ha_bridge", "tts", "pipeline", "ui"):
         if key in raw:
             mapped[key] = raw[key]
     return mapped

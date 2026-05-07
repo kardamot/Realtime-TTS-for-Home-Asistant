@@ -21,6 +21,7 @@ from app.core.log_bus import LogBus
 
 OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 CARTESIA_WS_URL = "wss://api.cartesia.ai/tts/websocket"
+ELEVENLABS_STREAM_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
 GOOGLE_AI_MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 GOOGLE_CLOUD_SYNTH_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 DEFAULT_PCM_SAMPLE_RATE = 44100
@@ -30,6 +31,7 @@ PCM_PACE_INITIAL_BURST_MS = 700
 PCM_PACE_MAX_SLEEP = 0.05
 RELAY_CHUNK_BYTES = 4096
 API_KEY_QUERY_RE = re.compile(r"((?:api_key|key)=)[^&\s]+")
+PCM_OUTPUT_RE = re.compile(r"^pcm_(\d+)$")
 
 
 @dataclass(slots=True)
@@ -275,6 +277,16 @@ def strip_wav_header_if_present(audio: bytes) -> tuple[bytes, int | None, int | 
     return (data if data is not None else audio), sample_rate, channels
 
 
+def parse_pcm_output_format(output_format: str) -> int | None:
+    match = PCM_OUTPUT_RE.match(output_format.strip().lower())
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
 def parse_stream_command(doc: dict[str, Any], expect_start: bool) -> StreamCommand:
     msg_type = str(doc.get("type", "")).strip().lower()
     if expect_start and msg_type != "start":
@@ -339,6 +351,7 @@ def relay_config_from_panel(config: dict[str, Any], provider_override: str = "")
     tts = config.get("tts", {}) if isinstance(config, dict) else {}
     openai = tts.get("openai", {}) if isinstance(tts.get("openai"), dict) else {}
     cartesia = tts.get("cartesia", {}) if isinstance(tts.get("cartesia"), dict) else {}
+    elevenlabs = tts.get("elevenlabs", {}) if isinstance(tts.get("elevenlabs"), dict) else {}
     google_ai = tts.get("google_ai", {}) if isinstance(tts.get("google_ai"), dict) else {}
     google_cloud = tts.get("google_cloud", {}) if isinstance(tts.get("google_cloud"), dict) else {}
     return TtsRelayConfig(
@@ -356,6 +369,11 @@ def relay_config_from_panel(config: dict[str, Any], provider_override: str = "")
         cartesia_voice_id=str(cartesia.get("voice_id") or tts.get("cartesia_voice_id") or ""),
         cartesia_language=str(cartesia.get("language") or tts.get("cartesia_language") or "tr"),
         cartesia_version=str(cartesia.get("version") or tts.get("cartesia_version") or "2026-03-01"),
+        elevenlabs_api_key=str(elevenlabs.get("api_key") or tts.get("elevenlabs_api_key") or ""),
+        elevenlabs_model_id=str(elevenlabs.get("model_id") or tts.get("elevenlabs_model_id") or "eleven_flash_v2_5"),
+        elevenlabs_voice_id=str(elevenlabs.get("voice_id") or tts.get("elevenlabs_voice_id") or ""),
+        elevenlabs_output_format=str(elevenlabs.get("output_format") or tts.get("elevenlabs_output_format") or "pcm_16000"),
+        elevenlabs_latency_mode=int(elevenlabs.get("latency_mode") or tts.get("elevenlabs_latency_mode") or 3),
         google_ai_api_key=str(google_ai.get("api_key") or tts.get("google_ai_api_key") or ""),
         google_ai_model=str(google_ai.get("model") or tts.get("google_ai_model") or "gemini-2.5-flash-preview-tts"),
         google_ai_voice_name=str(google_ai.get("voice_name") or tts.get("google_ai_voice_name") or "Kore"),
@@ -493,6 +511,8 @@ class TtsRelay:
             "openai_api_key_configured": bool(cfg.openai_api_key),
             "cartesia_api_key_configured": bool(cfg.cartesia_api_key),
             "cartesia_voice_configured": bool(cfg.cartesia_voice_id),
+            "elevenlabs_api_key_configured": bool(cfg.elevenlabs_api_key),
+            "elevenlabs_voice_configured": bool(cfg.elevenlabs_voice_id),
             "google_ai_api_key_configured": bool(cfg.google_ai_api_key),
             "google_cloud_credentials_configured": bool(cfg.google_cloud_credentials_json),
         }
@@ -511,6 +531,9 @@ class TtsRelay:
                 elif cfg.provider == "openai":
                     text = first_cmd.text if first_cmd.final else await self._collect_buffered_stream_text(ws, first_cmd)
                     await self._relay_openai_stream(session, output, cfg, text)
+                elif cfg.provider == "elevenlabs":
+                    text = first_cmd.text if first_cmd.final else await self._collect_buffered_stream_text(ws, first_cmd)
+                    await self._relay_elevenlabs_stream(session, output, cfg, text)
                 elif cfg.provider == "google_ai":
                     text = first_cmd.text if first_cmd.final else await self._collect_buffered_stream_text(ws, first_cmd)
                     await self._relay_google_ai(session, output, cfg, text)
@@ -562,6 +585,8 @@ class TtsRelay:
                 elif cfg.provider == "cartesia":
                     first_cmd = StreamCommand(msg_type="start", text=text, final=True, provider=cfg.provider)
                     await self._relay_cartesia_continuation(session, output, cfg, first_cmd)
+                elif cfg.provider == "elevenlabs":
+                    await self._relay_elevenlabs_stream(session, output, cfg, text)
                 elif cfg.provider == "google_ai":
                     await self._relay_google_ai(session, output, cfg, text)
                 elif cfg.provider == "google_cloud":
@@ -653,6 +678,63 @@ class TtsRelay:
         except Exception as exc:
             await self._log_bus.emit("ERROR", "TTS", "OpenAI TTS stream failed", {"error": safe_exc_message(exc)})
             await output.error(f"OpenAI stream error: {safe_exc_message(exc)}", 502)
+
+    async def _relay_elevenlabs_stream(
+        self,
+        session: aiohttp.ClientSession,
+        output: PcmOutput,
+        cfg: TtsRelayConfig,
+        text: str,
+    ) -> None:
+        if not cfg.elevenlabs_api_key:
+            await output.error("ElevenLabs API key is not configured.", 500)
+            return
+        if not cfg.elevenlabs_voice_id:
+            await output.error("ElevenLabs voice_id is not configured.", 500)
+            return
+        sample_rate = parse_pcm_output_format(cfg.elevenlabs_output_format)
+        if sample_rate is None:
+            await output.error("ElevenLabs output_format must be pcm_16000, pcm_22050, pcm_24000, or pcm_44100.", 400)
+            return
+
+        headers = {
+            "xi-api-key": cfg.elevenlabs_api_key,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "text": text,
+            "model_id": cfg.elevenlabs_model_id,
+        }
+        params = {"output_format": cfg.elevenlabs_output_format}
+        if 0 <= cfg.elevenlabs_latency_mode <= 4:
+            params["optimize_streaming_latency"] = str(cfg.elevenlabs_latency_mode)
+
+        timeout = aiohttp.ClientTimeout(total=None, connect=15, sock_read=120)
+        url = ELEVENLABS_STREAM_URL.format(voice_id=cfg.elevenlabs_voice_id)
+        try:
+            async with session.post(url, headers=headers, json=payload, params=params, timeout=timeout) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    await self._log_bus.emit("ERROR", "TTS", "ElevenLabs TTS failed", {"status": resp.status, "body": body[:500]})
+                    await output.error(f"ElevenLabs TTS error: {body[:300]}", resp.status)
+                    return
+                await output.start(sample_rate, DEFAULT_PCM_CHANNELS)
+                pacer = PcmPacer(sample_rate, DEFAULT_PCM_CHANNELS) if output.pace_pcm else None
+                pending = b""
+                async for chunk in resp.content.iter_chunked(RELAY_CHUNK_BYTES):
+                    if not chunk:
+                        continue
+                    pending += chunk
+                    even_len = len(pending) & ~1
+                    if even_len:
+                        await send_pcm_bytes_to_output(output, pending[:even_len], pacer)
+                        pending = pending[even_len:]
+                if pending:
+                    await self._log_bus.emit("WARN", "TTS", "ElevenLabs stream ended with a dangling PCM byte; trimmed")
+                await output.done()
+        except Exception as exc:
+            await self._log_bus.emit("ERROR", "TTS", "ElevenLabs stream failed", {"error": safe_exc_message(exc)})
+            await output.error(f"ElevenLabs stream error: {safe_exc_message(exc)}", 502)
 
     async def _relay_google_ai(
         self,

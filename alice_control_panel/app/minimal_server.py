@@ -60,10 +60,26 @@ DEFAULT_CONFIG = {
         "vad_threshold": 0.5,
         "prefix_padding_ms": 300,
         "silence_duration_ms": 420,
+        "semantic_eagerness": "high",
         "transcription_model": "gpt-4o-mini-transcribe",
+        "transcript_wait_ms": 800,
         "response_timeout_ms": 12000,
+        "ha_tools_enabled": True,
+        "suppress_empty_transcript_response": True,
         "noise_reduction": "near_field",
         "instructions": "",
+    },
+    "ha_bridge": {
+        "enabled": True,
+        "api_base_url": "http://supervisor/core/api",
+        "conversation_agent_id": "",
+        "conversation_language": "tr",
+        "route_home_control": True,
+        "expose_all_entities": False,
+        "exposed_entities": "",
+        "exposed_domains": "",
+        "blocked_entities": "",
+        "allow_conversation_tool": False,
     },
     "tts": {
         "enabled": True,
@@ -172,7 +188,7 @@ def options_to_config(raw: dict) -> dict:
         esp["audio_ack_timeout_sec"] = raw["esp_audio_ack_timeout_sec"]
     if esp:
         mapped["esp"] = esp
-    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts", "pipeline"):
+    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "ha_bridge", "tts", "pipeline"):
         if key in raw:
             mapped[key] = raw[key]
     return mapped
@@ -286,7 +302,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.33"
+    server_version = "AliceControlPanel/0.1.34"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -447,7 +463,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.33",
+        "version": "0.1.34",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
