@@ -78,7 +78,21 @@ DEFAULT_CONFIG = {
         "google_cloud": {"credentials_json": "", "voice_name": "tr-TR-Chirp3-HD-Kore", "language_code": "tr-TR", "ssml_gender": "FEMALE"},
     },
     "prompts": {"active_profile": "alice"},
-    "pipeline": {"stream_to_esp": True, "max_log_events_per_sec": 10, "mic_response_mode": "assistant"},
+    "pipeline": {
+        "stream_to_esp": True,
+        "max_log_events_per_sec": 10,
+        "mic_response_mode": "assistant",
+        "barge_in_enabled": True,
+        "live_mic_enabled": True,
+        "live_vad_enabled": True,
+        "live_vad_start_rms": 450,
+        "live_vad_end_rms": 260,
+        "live_vad_min_speech_ms": 120,
+        "live_vad_end_silence_ms": 650,
+        "live_vad_pre_roll_ms": 300,
+        "live_vad_max_utterance_ms": 12000,
+        "live_vad_max_buffer_sec": 20,
+    },
     "debug_logs": True,
     "safe_mode": False,
 }
@@ -269,7 +283,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.30"
+    server_version = "AliceControlPanel/0.1.32"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -360,6 +374,15 @@ class Handler(SimpleHTTPRequestHandler):
                 text_value = str(payload.get("text", ""))
                 log("INFO", "PIPELINE", "Text pipeline test accepted", {"text": text_value})
                 self.json({"ok": True, "pipeline": pipeline_status(text_value)})
+            elif path == "/api/pipeline/session/start":
+                log("INFO", "PIPELINE", "Voice session start accepted in fallback mode")
+                self.json({"ok": True, "pipeline": pipeline_status(), "session": {"active": False, "mode": "fallback"}})
+            elif path == "/api/pipeline/session/stop":
+                log("INFO", "PIPELINE", "Voice session stop accepted in fallback mode")
+                self.json({"ok": True, "pipeline": pipeline_status(), "session": {"active": False, "mode": "fallback"}})
+            elif path == "/api/pipeline/cancel":
+                log("WARN", "PIPELINE", "Response cancel accepted in fallback mode")
+                self.json({"ok": True, "pipeline": pipeline_status()})
             elif path.startswith("/api/prompts/") and path.endswith("/activate"):
                 slug = path.split("/")[-2]
                 cfg = load_config()
@@ -421,7 +444,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-            "version": "0.1.30",
+        "version": "0.1.32",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
@@ -474,6 +497,7 @@ def pipeline_status(text_value: str = "") -> dict:
         "llm_response": "Stdlib fallback mode: pipeline backend is not active yet.",
         "tts_status": "disabled_minimal_mode",
         "stream_active": False,
+        "session": {"active": False, "mode": "minimal", "turns": 0, "last_event": "fallback"},
         "timeline": [{"ts": time.time(), "category": "SYSTEM", "message": "Stdlib fallback mode"}],
     }
 

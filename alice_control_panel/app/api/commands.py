@@ -16,6 +16,9 @@ SERVER_COMMANDS = {
     "clear_logs",
     "safe_mode_on",
     "safe_mode_off",
+    "start_voice_session",
+    "stop_voice_session",
+    "cancel_response",
 }
 
 
@@ -48,5 +51,10 @@ async def _run_server_command(name: str, _: dict[str, Any], request: Request) ->
         cfg = await app.state.config_store.update({"safe_mode": False})
         await app.state.log_bus.emit("INFO", "SYSTEM", "Safe mode disabled")
         return {"ok": True, "command": name, "safe_mode": cfg["safe_mode"]}
+    if name == "start_voice_session":
+        return {"ok": True, "command": name, "status": await app.state.voice_pipeline.start_session("manual")}
+    if name == "stop_voice_session":
+        return {"ok": True, "command": name, "status": await app.state.voice_pipeline.stop_session("command")}
+    if name == "cancel_response":
+        return {"ok": True, "command": name, "status": await app.state.voice_pipeline.cancel_response("command")}
     return {"ok": False, "command": name, "message": "Unknown server command"}
-

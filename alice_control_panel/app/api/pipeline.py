@@ -33,6 +33,33 @@ async def pipeline_tts_text(payload: dict[str, Any], request: Request, _: None =
     return {"ok": True, "pipeline": status}
 
 
+@router.get("/session")
+async def pipeline_session(request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
+    status = await request.app.state.voice_pipeline.status()
+    return {"ok": True, "session": status.get("session", {}), "pipeline": status}
+
+
+@router.post("/session/start")
+async def pipeline_session_start(payload: dict[str, Any], request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
+    mode = str(payload.get("mode") or "manual")
+    status = await request.app.state.voice_pipeline.start_session(mode)
+    return {"ok": True, "session": status.get("session", {}), "pipeline": status}
+
+
+@router.post("/session/stop")
+async def pipeline_session_stop(payload: dict[str, Any], request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
+    reason = str(payload.get("reason") or "manual_stop")
+    status = await request.app.state.voice_pipeline.stop_session(reason)
+    return {"ok": True, "session": status.get("session", {}), "pipeline": status}
+
+
+@router.post("/cancel")
+async def pipeline_cancel(payload: dict[str, Any], request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
+    reason = str(payload.get("reason") or "manual_cancel")
+    status = await request.app.state.voice_pipeline.cancel_response(reason)
+    return {"ok": True, "pipeline": status}
+
+
 @router.get("/stt")
 async def stt_status(request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
     return await request.app.state.stt_manager.status()
@@ -54,3 +81,11 @@ async def tts_websocket(websocket: WebSocket) -> None:
         await websocket.close(code=1008)
         return
     await websocket.app.state.tts_relay.websocket_session(websocket)
+
+
+@router.websocket("/mic/ws")
+async def mic_websocket(websocket: WebSocket) -> None:
+    if not await require_websocket_auth(websocket):
+        await websocket.close(code=1008)
+        return
+    await websocket.app.state.voice_pipeline.live_mic_websocket(websocket)

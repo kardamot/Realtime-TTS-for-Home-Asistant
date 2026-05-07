@@ -102,7 +102,14 @@ class WebSocketPcmOutput(PcmOutput):
 class EspPcmOutput(PcmOutput):
     pace_pcm = True
 
-    def __init__(self, esp_client: Any, log_bus: LogBus, initial_buffer_ms: int = 1500, silence_prefix_ms: int = 450) -> None:
+    def __init__(
+        self,
+        esp_client: Any,
+        log_bus: LogBus,
+        initial_buffer_ms: int = 1500,
+        silence_prefix_ms: int = 450,
+        cancel_event: asyncio.Event | None = None,
+    ) -> None:
         self._esp_client = esp_client
         self._log_bus = log_bus
         self._sample_rate = DEFAULT_PCM_SAMPLE_RATE
@@ -112,15 +119,18 @@ class EspPcmOutput(PcmOutput):
         self._buffer = bytearray()
         self._initial_buffer_ms = max(0, int(initial_buffer_ms))
         self._silence_prefix_ms = max(0, int(silence_prefix_ms))
+        self._cancel_event = cancel_event
         self.bytes_sent = 0
         self.failed = False
         self.error_message = ""
 
     async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
+        self._raise_if_cancelled()
         self._sample_rate = sample_rate
         self._channels = channels
 
     async def write(self, pcm: bytes) -> None:
+        self._raise_if_cancelled()
         if not pcm:
             return
         if not self._started:
@@ -132,6 +142,7 @@ class EspPcmOutput(PcmOutput):
         await self._send_chunk(pcm)
 
     async def done(self) -> None:
+        self._raise_if_cancelled()
         if not self._started:
             await self._flush_start()
         await self._esp_client.send_audio_end(ok=True, stream_id=self._stream_id)
@@ -155,6 +166,7 @@ class EspPcmOutput(PcmOutput):
         return int(bytes_per_second * self._initial_buffer_ms / 1000)
 
     async def _flush_start(self) -> None:
+        self._raise_if_cancelled()
         if self._started:
             return
         self._stream_id = await self._esp_client.send_audio_start(sample_rate=self._sample_rate, channels=self._channels)
@@ -177,11 +189,16 @@ class EspPcmOutput(PcmOutput):
         return b"\x00" * (length & ~1)
 
     async def _send_chunk(self, pcm: bytes, count_bytes: bool = True) -> None:
+        self._raise_if_cancelled()
         if not pcm:
             return
         await self._esp_client.send_audio_chunk(pcm, stream_id=self._stream_id)
         if count_bytes:
             self.bytes_sent += len(pcm)
+
+    def _raise_if_cancelled(self) -> None:
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            raise asyncio.CancelledError
 
 
 class PcmPacer:
@@ -516,7 +533,12 @@ class TtsRelay:
             except Exception:
                 pass
 
-    async def synthesize_to_esp(self, text: str, esp_client: Any) -> dict[str, Any]:
+    async def synthesize_to_esp(
+        self,
+        text: str,
+        esp_client: Any,
+        cancel_event: asyncio.Event | None = None,
+    ) -> dict[str, Any]:
         cfg = relay_config_from_panel(await self._config_store.get(include_secrets=True))
         if not cfg.enabled:
             return {"ok": False, "status": "disabled", "message": "TTS is disabled."}
@@ -525,21 +547,39 @@ class TtsRelay:
         if not await esp_client.audio_stream_ready():
             return {"ok": False, "status": "esp_ws_offline", "message": "ESP WebSocket is not connected."}
 
-        output = EspPcmOutput(esp_client, self._log_bus, cfg.esp_initial_buffer_ms, cfg.esp_silence_prefix_ms)
+        output = EspPcmOutput(
+            esp_client,
+            self._log_bus,
+            cfg.esp_initial_buffer_ms,
+            cfg.esp_silence_prefix_ms,
+            cancel_event,
+        )
         await self._log_bus.emit("INFO", "TTS", "ESP TTS stream starting", {"provider": cfg.provider})
-        async with aiohttp.ClientSession() as session:
-            if cfg.provider == "openai":
-                await self._relay_openai_stream(session, output, cfg, text)
-            elif cfg.provider == "cartesia":
-                first_cmd = StreamCommand(msg_type="start", text=text, final=True, provider=cfg.provider)
-                await self._relay_cartesia_continuation(session, output, cfg, first_cmd)
-            elif cfg.provider == "google_ai":
-                await self._relay_google_ai(session, output, cfg, text)
-            elif cfg.provider == "google_cloud":
-                await self._relay_google_cloud(session, output, cfg, text)
-            else:
-                await output.error(f"TTS provider '{cfg.provider}' is configured but not implemented in this preview.", 501)
-                return {"ok": False, "status": "provider_not_implemented", "provider": cfg.provider}
+        try:
+            async with aiohttp.ClientSession() as session:
+                if cfg.provider == "openai":
+                    await self._relay_openai_stream(session, output, cfg, text)
+                elif cfg.provider == "cartesia":
+                    first_cmd = StreamCommand(msg_type="start", text=text, final=True, provider=cfg.provider)
+                    await self._relay_cartesia_continuation(session, output, cfg, first_cmd)
+                elif cfg.provider == "google_ai":
+                    await self._relay_google_ai(session, output, cfg, text)
+                elif cfg.provider == "google_cloud":
+                    await self._relay_google_cloud(session, output, cfg, text)
+                else:
+                    await output.error(f"TTS provider '{cfg.provider}' is configured but not implemented in this preview.", 501)
+                    return {"ok": False, "status": "provider_not_implemented", "provider": cfg.provider}
+        except asyncio.CancelledError:
+            await output.error("TTS stream cancelled.", 499)
+            await self._log_bus.emit("WARN", "TTS", "ESP TTS stream cancelled", {"bytes": output.bytes_sent})
+            return {
+                "ok": False,
+                "status": "cancelled",
+                "provider": cfg.provider,
+                "message": "TTS stream cancelled.",
+                "bytes": output.bytes_sent,
+                "stream_id": output.stream_id,
+            }
         if output.failed:
             return {
                 "ok": False,

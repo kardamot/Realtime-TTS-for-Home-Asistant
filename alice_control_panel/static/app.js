@@ -2,7 +2,11 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off", "servo_left", "servo_center",
   "servo_right", "amp_mute_on", "amp_mute_off", "reconnect", "reboot"
 ];
-const serverCommands = ["restart_stt", "restart_tts", "reload_prompt", "clear_logs", "safe_mode_on", "safe_mode_off"];
+const serverCommands = [
+  "restart_stt", "restart_tts", "reload_prompt", "clear_logs",
+  "start_voice_session", "stop_voice_session", "cancel_response",
+  "safe_mode_on", "safe_mode_off"
+];
 let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
@@ -160,6 +164,9 @@ async function boot() {
   $("unlock-btn").onclick = () => guard("Unlock failed", unlock);
   $("pipeline-send").onclick = () => guard("Pipeline failed", runPipeline);
   $("pipeline-tts-send").onclick = () => guard("TTS test failed", runTtsTest);
+  $("session-start").onclick = () => guard("Session start failed", startVoiceSession);
+  $("session-stop").onclick = () => guard("Session stop failed", stopVoiceSession);
+  $("response-cancel").onclick = () => guard("Response cancel failed", cancelResponse);
   $("config-save").onclick = () => guard("Config save failed", saveConfig);
   $("config-export").onclick = () => guard("Config export failed", exportConfig);
   $("config-import").onclick = () => $("config-import-file").click();
@@ -240,8 +247,17 @@ async function loadStatus() {
   $("summary").textContent = esp.online ? "Robot linked" : reconnectPaused ? "ESP offline, auto reconnect paused" : esp.mock_mode ? "ESP offline, mock mode active" : "Waiting for robot status";
   text("backend-version", `${backend.service || "alice_control_panel"} ${backend.version || ""} - FastAPI backend online`);
   setPill("state-pill", pipe.state || "IDLE");
+  const session = pipe.session || {};
+  const liveMic = pipe.live_mic || {};
+  setPill("session-pill", session.active ? "SESSION ON" : "SESSION OFF", session.active ? "good" : "info");
   setPill("esp-pill", esp.online ? "ONLINE" : reconnectPaused ? "PAUSED" : esp.mock_mode ? "MOCK" : "OFFLINE");
   setPill("stream-pill", pipe.stream_active ? "STREAM ON" : "STREAM OFF", pipe.stream_active ? "good" : "info");
+  text(
+    "session-meta",
+    session.active
+      ? `${session.mode || "manual"} - ${fmtSeconds(session.uptime_sec)} - ${session.turns || 0} turns - ${session.last_event || "active"}`
+      : `session idle - ${session.last_event || "ready"} - live ws ${liveMic.clients || 0}`
+  );
   text("robot-status", esp.online ? "ONLINE" : esp.mock_mode ? "MOCK" : "OFFLINE");
   text("robot-ip", esp.ip || "no ESP base URL");
   text("wifi-status", esp.wifi?.connected ? "connected" : "unknown");
@@ -507,6 +523,24 @@ async function runTtsTest() {
   if (!input.value.trim()) return;
   await api("/api/pipeline/tts/text", { method: "POST", body: JSON.stringify({ text: input.value }) });
   input.value = "";
+  await loadStatus();
+}
+
+async function startVoiceSession() {
+  await api("/api/pipeline/session/start", { method: "POST", body: JSON.stringify({ mode: "manual" }) });
+  notice("Voice session started");
+  await loadStatus();
+}
+
+async function stopVoiceSession() {
+  await api("/api/pipeline/session/stop", { method: "POST", body: JSON.stringify({ reason: "ui_stop" }) });
+  notice("Voice session stopped");
+  await loadStatus();
+}
+
+async function cancelResponse() {
+  await api("/api/pipeline/cancel", { method: "POST", body: JSON.stringify({ reason: "ui_cancel" }) });
+  notice("Response cancel requested");
   await loadStatus();
 }
 

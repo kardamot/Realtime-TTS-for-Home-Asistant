@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.30" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.30" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.32" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.32" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-            <div class="title-logo"><img src="/alice-logo.png?v=0.1.30" alt="Alice" /></div>
+            <div class="title-logo"><img src="/alice-logo.png?v=0.1.32" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -99,7 +99,13 @@
           </section>
 
           <section id="pipeline" class="panel span-6">
-            <header><h2>Voice Pipeline</h2><span id="stream-pill" class="pill info">STREAM OFF</span></header>
+            <header>
+              <h2>Voice Pipeline</h2>
+              <div class="pipeline-actions">
+                <span id="session-pill" class="pill info">SESSION OFF</span>
+                <span id="stream-pill" class="pill info">STREAM OFF</span>
+              </div>
+            </header>
             <div class="pipeline">
               <div class="pipeline-main">
                 <label>Text test</label>
@@ -107,6 +113,12 @@
                   <input id="pipeline-input" placeholder="Pipeline'a test metni gonder" />
                   <button id="pipeline-send">LLM + TTS</button>
                   <button id="pipeline-tts-send">TTS only</button>
+                </div>
+                <div class="session-controls">
+                  <button id="session-start">Start session</button>
+                  <button id="session-stop">Stop session</button>
+                  <button id="response-cancel">Cancel response</button>
+                  <span id="session-meta">manual session idle</span>
                 </div>
                 <div class="transcript">
                   <span>User/STT</span>
@@ -186,6 +198,12 @@
                   <label><span>Prefix padding ms</span><input data-path="realtime.prefix_padding_ms" type="number" /></label>
                   <label><span>Silence ms</span><input data-path="realtime.silence_duration_ms" type="number" /></label>
                   <label><span>Noise reduction</span><select data-path="realtime.noise_reduction"><option>near_field</option><option>far_field</option><option>none</option></select></label>
+                  <label><span>Live start RMS</span><input data-path="pipeline.live_vad_start_rms" type="number" /></label>
+                  <label><span>Live end RMS</span><input data-path="pipeline.live_vad_end_rms" type="number" /></label>
+                  <label><span>Live silence ms</span><input data-path="pipeline.live_vad_end_silence_ms" type="number" /></label>
+                  <label><span>Live max utterance ms</span><input data-path="pipeline.live_vad_max_utterance_ms" type="number" /></label>
+                  <label class="check-row"><input data-path="pipeline.live_mic_enabled" type="checkbox" /><span>Live mic WS</span></label>
+                  <label class="check-row"><input data-path="pipeline.live_vad_enabled" type="checkbox" /><span>Live energy VAD</span></label>
                 </div>
               </section>
 
@@ -247,6 +265,7 @@
                   <label><span>Mic response</span><select data-path="pipeline.mic_response_mode"><option value="assistant">Assistant</option><option value="echo">Echo transcript</option><option value="echo_then_assistant">Echo + assistant</option></select></label>
                   <label class="check-row"><input data-path="tts.enabled" type="checkbox" /><span>TTS enabled</span></label>
                   <label class="check-row"><input data-path="pipeline.stream_to_esp" type="checkbox" /><span>Stream TTS to ESP</span></label>
+                  <label class="check-row"><input data-path="pipeline.barge_in_enabled" type="checkbox" /><span>Barge-in cancel</span></label>
                 </div>
                 <div class="provider-grid">
                   <section class="provider-card" data-provider-kind="tts" data-provider-card="openai">
@@ -293,6 +312,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.30"></script>
+  <script src="/app.js?v=0.1.32"></script>
   </body>
 </html>

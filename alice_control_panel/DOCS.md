@@ -69,6 +69,7 @@ TTS relay:
 
 ```text
 WS /api/pipeline/tts/ws
+WS /api/pipeline/mic/ws
 POST /api/pipeline/tts/text
 ```
 
@@ -104,6 +105,14 @@ then binary PCM chunks, then:
 ```json
 {"type":"done"}
 ```
+
+The live mic WebSocket accepts:
+
+```json
+{"type":"start","sample_rate":16000,"channels":1,"encoding":"pcm_s16le","vad_enabled":true}
+```
+
+Then send binary `pcm_s16le` chunks. The server emits `vad_start`, `vad_end`, `utterance_finalized`, and `pipeline_status`. Send `{"type":"end"}` for manual finalize or `{"type":"cancel"}` to discard the current utterance.
 
 ## ESP Contract
 
@@ -178,6 +187,8 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime code paths are scaffolded for the later live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.32` adds `/api/pipeline/mic/ws`, a live PCM WebSocket with lightweight energy endpointing for future continuous voice sessions.
+- `0.1.31` adds voice session start/stop/cancel controls and a cancellable ESP TTS stream path for barge-in groundwork.
 - `0.1.30` persists faster-whisper models under `/data/models` and adds selectable mic response modes.
 - `0.1.29` wires captured ESP PCM into faster-whisper STT for one-shot mic pipeline tests.
 - `0.1.28` enlarges the header logo, tightens connection errors, and logs reconnect pause once.
