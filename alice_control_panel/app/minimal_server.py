@@ -26,6 +26,7 @@ DEFAULT_CONFIG = {
         "poll_interval_sec": 3,
         "reconnect_sec": 5,
         "max_auto_reconnects": 40,
+        "audio_ack_timeout_sec": 3,
         "mock_mode": True,
     },
     "stt": {"provider": "faster_whisper", "model": "small", "language": "tr", "compute_type": "int8"},
@@ -143,6 +144,8 @@ def options_to_config(raw: dict) -> dict:
         esp["base_url"] = raw["esp_base_url"]
     if "esp_max_auto_reconnects" in raw:
         esp["max_auto_reconnects"] = raw["esp_max_auto_reconnects"]
+    if "esp_audio_ack_timeout_sec" in raw:
+        esp["audio_ack_timeout_sec"] = raw["esp_audio_ack_timeout_sec"]
     if esp:
         mapped["esp"] = esp
     for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts"):
@@ -251,7 +254,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.19"
+    server_version = "AliceControlPanel/0.1.20"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -403,7 +406,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-            "version": "0.1.19",
+            "version": "0.1.20",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

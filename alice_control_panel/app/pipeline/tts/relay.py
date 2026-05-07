@@ -93,6 +93,7 @@ class EspPcmOutput(PcmOutput):
         self._sample_rate = DEFAULT_PCM_SAMPLE_RATE
         self._channels = DEFAULT_PCM_CHANNELS
         self._started = False
+        self._stream_id = ""
         self._buffer = bytearray()
         self._initial_buffer_ms = max(0, int(initial_buffer_ms))
         self.bytes_sent = 0
@@ -117,16 +118,20 @@ class EspPcmOutput(PcmOutput):
     async def done(self) -> None:
         if not self._started:
             await self._flush_start()
-        await self._esp_client.send_audio_end(ok=True)
+        await self._esp_client.send_audio_end(ok=True, stream_id=self._stream_id)
 
     async def error(self, message: str, status: int = 500) -> None:
         self.failed = True
         self.error_message = message
         await self._log_bus.emit("ERROR", "TTS", "ESP audio stream error", {"status": status, "message": message})
         try:
-            await self._esp_client.send_audio_error(message)
+            await self._esp_client.send_audio_error(message, stream_id=self._stream_id)
         except Exception as exc:
             await self._log_bus.emit("WARN", "TTS", "ESP audio error notification failed", {"error": safe_exc_message(exc)})
+
+    @property
+    def stream_id(self) -> str:
+        return self._stream_id
 
     @property
     def _initial_buffer_bytes(self) -> int:
@@ -136,15 +141,16 @@ class EspPcmOutput(PcmOutput):
     async def _flush_start(self) -> None:
         if self._started:
             return
+        self._stream_id = await self._esp_client.send_audio_start(sample_rate=self._sample_rate, channels=self._channels)
         self._started = True
-        await self._esp_client.send_audio_start(sample_rate=self._sample_rate, channels=self._channels)
+        await self._log_bus.emit("INFO", "TTS", "ESP audio stream acknowledged", {"stream_id": self._stream_id})
         buffered = bytes(self._buffer)
         self._buffer.clear()
         for offset in range(0, len(buffered), RELAY_CHUNK_BYTES):
             await self._send_chunk(buffered[offset : offset + RELAY_CHUNK_BYTES])
 
     async def _send_chunk(self, pcm: bytes) -> None:
-        await self._esp_client.send_audio_chunk(pcm)
+        await self._esp_client.send_audio_chunk(pcm, stream_id=self._stream_id)
         self.bytes_sent += len(pcm)
 
 
@@ -444,9 +450,21 @@ class TtsRelay:
                 "provider": cfg.provider,
                 "message": output.error_message,
                 "bytes": output.bytes_sent,
+                "stream_id": output.stream_id,
             }
-        await self._log_bus.emit("INFO", "TTS", "ESP TTS stream finished", {"bytes": output.bytes_sent})
-        return {"ok": True, "status": "streamed_to_esp", "provider": cfg.provider, "bytes": output.bytes_sent}
+        await self._log_bus.emit(
+            "INFO",
+            "TTS",
+            "ESP TTS stream finished",
+            {"bytes": output.bytes_sent, "stream_id": output.stream_id},
+        )
+        return {
+            "ok": True,
+            "status": "streamed_to_esp",
+            "provider": cfg.provider,
+            "bytes": output.bytes_sent,
+            "stream_id": output.stream_id,
+        }
 
     async def _collect_buffered_stream_text(self, ws: WebSocket, first_cmd: StreamCommand) -> str:
         chunks = [first_cmd.text]

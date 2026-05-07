@@ -27,6 +27,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "reconnect_sec": 5,
         "max_auto_reconnects": 40,
         "command_timeout_sec": 4,
+        "audio_ack_timeout_sec": 3,
         "mock_mode": True,
     },
     "stt": {
@@ -171,6 +172,8 @@ def _addon_options_to_config(raw: dict[str, Any]) -> dict[str, Any]:
         esp["base_url"] = raw["esp_base_url"]
     if "esp_max_auto_reconnects" in raw:
         esp["max_auto_reconnects"] = raw["esp_max_auto_reconnects"]
+    if "esp_audio_ack_timeout_sec" in raw:
+        esp["audio_ack_timeout_sec"] = raw["esp_audio_ack_timeout_sec"]
     if esp:
         mapped["esp"] = esp
     for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts", "ui"):

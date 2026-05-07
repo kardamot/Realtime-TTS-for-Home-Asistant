@@ -143,11 +143,14 @@ The server reconnects to this socket automatically. If `esp.ws_url` is empty, it
 When TTS stream-to-ESP is enabled, the server sends audio over the same ESP WebSocket:
 
 ```text
-TEXT   {"type":"audio_start","payload":{"encoding":"pcm_s16le","sample_rate":44100,"channels":1}}
+TEXT   {"type":"audio_start","stream_id":"tts-...","payload":{"stream_id":"tts-...","encoding":"pcm_s16le","sample_rate":44100,"channels":1}}
+TEXT   ESP replies {"type":"audio_ready","stream_id":"tts-...","payload":{"stream_id":"tts-...","message":"ready"}}
 BINARY raw little-endian signed 16-bit PCM chunks
-TEXT   {"type":"audio_end","payload":{"ok":true,"message":""}}
-TEXT   {"type":"audio_error","payload":{"message":"..."}}
+TEXT   {"type":"audio_end","stream_id":"tts-...","payload":{"stream_id":"tts-...","ok":true,"message":""}}
+TEXT   {"type":"audio_error","stream_id":"tts-...","payload":{"stream_id":"tts-...","message":"..."}}
 ```
+
+If ESP cannot prepare playback, it should reply with `audio_rejected` and a short reason. The backend waits for this ACK before sending PCM chunks.
 
 If ESP audio playback support is not implemented yet, the backend logs the failure and the rest of the panel remains usable.
 
@@ -169,5 +172,5 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.19` aligns the Voice Pipeline panel with commands, keeps transcript/timeline text in fixed scrollable regions, and paces ESP PCM streaming.
+- `0.1.20` adds ESP audio-start ACK handling with stream IDs before PCM chunks are sent.
 - ESP-side audio playback for this protocol can be implemented independently after this backend path is installed.

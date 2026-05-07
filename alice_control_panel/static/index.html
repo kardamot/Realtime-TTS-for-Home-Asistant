@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.19" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.19" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.20" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.20" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="mark"><img src="/alice-logo.png?v=0.1.19" alt="Alice" /></div>
+          <div class="mark"><img src="/alice-logo.png?v=0.1.20" alt="Alice" /></div>
           <div>
             <strong>Alice</strong>
             <span>Control Panel</span>
@@ -169,6 +169,7 @@
                   <label><span>ESP base URL</span><input data-path="esp.base_url" placeholder="http://192.168.1.50" /></label>
                   <label><span>ESP WebSocket URL</span><input data-path="esp.ws_url" placeholder="ws://192.168.1.50/ws" /></label>
                   <label><span>ESP max auto reconnects</span><input data-path="esp.max_auto_reconnects" type="number" /></label>
+                  <label><span>ESP audio ACK timeout sec</span><input data-path="esp.audio_ack_timeout_sec" type="number" step="0.5" /></label>
                   <label class="check-row"><input data-path="debug_logs" type="checkbox" /><span>Debug logs</span></label>
                   <label class="check-row"><input data-path="safe_mode" type="checkbox" /><span>Safe mode</span></label>
                 </div>
@@ -293,6 +294,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.19"></script>
+  <script src="/app.js?v=0.1.20"></script>
   </body>
 </html>

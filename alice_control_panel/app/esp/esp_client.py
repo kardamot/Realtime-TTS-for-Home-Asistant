@@ -4,6 +4,7 @@ import asyncio
 import copy
 import json
 import time
+import uuid
 from typing import Any
 
 import aiohttp
@@ -72,6 +73,8 @@ class EspClient:
         self._last_poll_log_at = 0.0
         self._last_ws_log_at = 0.0
         self._last_pause_log_at = 0.0
+        self._audio_ack_waiters: dict[str, asyncio.Future[dict[str, Any]]] = {}
+        self._active_audio_stream_id = ""
 
     async def start(self) -> None:
         if self._poll_task and not self._poll_task.done():
@@ -110,19 +113,48 @@ class EspClient:
         sample_rate: int,
         channels: int = 1,
         encoding: str = "pcm_s16le",
-    ) -> None:
-        await self._send_ws_json(
-            {
-                "type": "audio_start",
-                "payload": {
-                    "encoding": encoding,
-                    "sample_rate": sample_rate,
-                    "channels": channels,
-                },
-            }
+        stream_id: str = "",
+    ) -> str:
+        config = await self._config_store.get(include_secrets=True)
+        timeout_sec = max(0.5, float(config.get("esp", {}).get("audio_ack_timeout_sec") or 3))
+        stream_id = stream_id or f"tts-{uuid.uuid4().hex}"
+        loop = asyncio.get_running_loop()
+        ack_waiter: asyncio.Future[dict[str, Any]] = loop.create_future()
+        self._audio_ack_waiters[stream_id] = ack_waiter
+        try:
+            await self._send_ws_json(
+                {
+                    "type": "audio_start",
+                    "stream_id": stream_id,
+                    "payload": {
+                        "stream_id": stream_id,
+                        "encoding": encoding,
+                        "sample_rate": sample_rate,
+                        "channels": channels,
+                    },
+                }
+            )
+        except Exception:
+            self._audio_ack_waiters.pop(stream_id, None)
+            raise
+        await self._log_bus.emit(
+            "INFO",
+            "ESP",
+            "ESP audio start sent",
+            {"stream_id": stream_id, "sample_rate": sample_rate, "channels": channels},
         )
+        try:
+            ack = await asyncio.wait_for(ack_waiter, timeout=timeout_sec)
+        except asyncio.TimeoutError as exc:
+            self._audio_ack_waiters.pop(stream_id, None)
+            raise RuntimeError(f"ESP audio start ACK timed out for {stream_id}.") from exc
+        if not ack.get("ok"):
+            message = str(ack.get("message") or "ESP rejected audio start.")
+            raise RuntimeError(message)
+        self._active_audio_stream_id = stream_id
+        return stream_id
 
-    async def send_audio_chunk(self, chunk: bytes) -> None:
+    async def send_audio_chunk(self, chunk: bytes, stream_id: str = "") -> None:
         if not chunk:
             return
         async with self._ws_send_lock:
@@ -131,11 +163,29 @@ class EspClient:
                 raise RuntimeError("ESP WebSocket is not connected.")
             await ws.send_bytes(chunk)
 
-    async def send_audio_end(self, ok: bool = True, message: str = "") -> None:
-        await self._send_ws_json({"type": "audio_end", "payload": {"ok": ok, "message": message}})
+    async def send_audio_end(self, ok: bool = True, message: str = "", stream_id: str = "") -> None:
+        stream_id = stream_id or self._active_audio_stream_id
+        await self._send_ws_json(
+            {
+                "type": "audio_end",
+                "stream_id": stream_id,
+                "payload": {"stream_id": stream_id, "ok": ok, "message": message},
+            }
+        )
+        if stream_id and stream_id == self._active_audio_stream_id:
+            self._active_audio_stream_id = ""
 
-    async def send_audio_error(self, message: str) -> None:
-        await self._send_ws_json({"type": "audio_error", "payload": {"message": message}})
+    async def send_audio_error(self, message: str, stream_id: str = "") -> None:
+        stream_id = stream_id or self._active_audio_stream_id
+        await self._send_ws_json(
+            {
+                "type": "audio_error",
+                "stream_id": stream_id,
+                "payload": {"stream_id": stream_id, "message": message},
+            }
+        )
+        if stream_id and stream_id == self._active_audio_stream_id:
+            self._active_audio_stream_id = ""
 
     async def poll_once(self, force: bool = False) -> dict[str, Any]:
         config = await self._config_store.get(include_secrets=True)
@@ -300,6 +350,8 @@ class EspClient:
             finally:
                 if self._ws is active_ws:
                     self._ws = None
+                self._active_audio_stream_id = ""
+                self._fail_audio_ack_waiters("ESP websocket disconnected")
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=reconnect_sec)
             except asyncio.TimeoutError:
@@ -328,6 +380,24 @@ class EspClient:
             message = str(payload.get("message") or payload.get("msg") or "")
             details = payload.get("details") if isinstance(payload.get("details"), dict) else {}
             await self._log_bus.emit(level, category, message or "ESP log event", details)
+            return
+        if msg_type in {"audio_ready", "audio_rejected"}:
+            stream_id = str(doc.get("stream_id") or payload.get("stream_id") or "")
+            ok = msg_type == "audio_ready"
+            message = str(payload.get("message") or ("ESP audio stream ready" if ok else "ESP audio stream rejected"))
+            event = {"ok": ok, "stream_id": stream_id, "message": message, "payload": payload}
+            waiter = self._audio_ack_waiters.pop(stream_id, None) if stream_id else None
+            if waiter is None and len(self._audio_ack_waiters) == 1:
+                _, waiter = self._audio_ack_waiters.popitem()
+            if waiter is not None and not waiter.done():
+                waiter.set_result(event)
+            await self._log_bus.emit(
+                "INFO" if ok else "WARN",
+                "ESP",
+                "ESP audio start accepted" if ok else "ESP audio start rejected",
+                {"stream_id": stream_id, "message": message},
+            )
+            await self._ws_hub.publish("esp_event", {"type": msg_type, "payload": payload})
             return
         event_payload = {"type": msg_type or "event", "payload": payload}
         await self._ws_hub.publish("esp_event", event_payload)
@@ -382,6 +452,13 @@ class EspClient:
             if ws is None or ws.closed:
                 raise RuntimeError("ESP WebSocket is not connected.")
             await ws.send_json(payload)
+
+    def _fail_audio_ack_waiters(self, message: str) -> None:
+        waiters = self._audio_ack_waiters
+        self._audio_ack_waiters = {}
+        for waiter in waiters.values():
+            if not waiter.done():
+                waiter.set_result({"ok": False, "message": message})
 
     def _max_auto_reconnects(self, esp_cfg: dict[str, Any]) -> int:
         try:

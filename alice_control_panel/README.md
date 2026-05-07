@@ -24,7 +24,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - ESP command stubs for the future lightweight ESP HTTP/WebSocket API.
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.19` aligns the Voice Pipeline panel with commands, keeps transcript/timeline text in fixed scrollable regions, and paces ESP PCM streaming.
+- Version `0.1.20` adds ESP audio-start ACK handling with stream IDs before PCM chunks are sent.
 
 The old add-ons remain untouched:
 

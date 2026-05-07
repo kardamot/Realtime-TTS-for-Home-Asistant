@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.19"
+version: "0.1.20"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -18,6 +18,7 @@ options:
   panel_password: ""
   esp_base_url: ""
   esp_max_auto_reconnects: 40
+  esp_audio_ack_timeout_sec: 3
   debug_logs: true
   safe_mode: false
   stt:
@@ -100,6 +101,7 @@ schema:
   panel_password: password
   esp_base_url: str
   esp_max_auto_reconnects: int
+  esp_audio_ack_timeout_sec: int
   debug_logs: bool
   safe_mode: bool
   stt:
