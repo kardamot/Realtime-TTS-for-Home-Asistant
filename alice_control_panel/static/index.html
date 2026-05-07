@@ -4,19 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.26" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.26" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.27" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.27" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="brand">
-          <div class="mark"><img src="/alice-logo.png?v=0.1.26" alt="Alice" /></div>
-          <div>
-            <strong>Alice</strong>
-            <span>Control Panel</span>
-          </div>
-        </div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -29,10 +22,13 @@
 
       <section class="workspace">
         <header class="topbar">
-          <div>
-            <h1>Alice Control Panel</h1>
-            <p id="summary">Backend status bekleniyor</p>
-            <small id="backend-version">backend pending</small>
+          <div class="title-group">
+            <div class="title-logo"><img src="/alice-logo.png?v=0.1.27" alt="Alice" /></div>
+            <div>
+              <h1>Alice Control Panel</h1>
+              <p id="summary">Backend status bekleniyor</p>
+              <small id="backend-version">backend pending</small>
+            </div>
           </div>
           <div class="top-actions">
             <span id="state-pill" class="pill info">IDLE</span>
@@ -295,6 +291,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.26"></script>
+  <script src="/app.js?v=0.1.27"></script>
   </body>
 </html>
