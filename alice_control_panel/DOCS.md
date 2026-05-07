@@ -77,11 +77,16 @@ POST /api/ha/service
 POST /api/ha/conversation
 ```
 
-Home Assistant access is allowlist-only. Add entity IDs or wildcard patterns in
+Home Assistant access is allowlist-only. Add entity IDs in
 `ha_bridge.exposed_entities`, one per line or separated by spaces/commas. The
-runtime ignores legacy `expose_all_entities`, domain allow, and blacklist fields
-even if they remain in Home Assistant options for Supervisor compatibility.
-Service calls without an allowlisted `entity_id` are rejected.
+backend reads those exact entity IDs one by one instead of fetching the full Home
+Assistant entity list. The runtime ignores legacy `expose_all_entities`, domain
+allow, and blacklist fields even if they remain in Home Assistant options for
+Supervisor compatibility. Service calls without an allowlisted `entity_id` are rejected.
+`ha_bridge.api_base_url` defaults to `http://supervisor/core/api` inside the
+add-on and normally does not need editing. Home Assistant Assist/conversation
+agents are not used for Alice home control because that endpoint cannot be
+constrained to the panel allowlist.
 
 Commands:
 
@@ -221,7 +226,8 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.37` makes Home Assistant access allowlist-only: only entity IDs/patterns in the panel list can be read or controlled, and legacy broad access fields are ignored.
+- `0.1.38` adds the first safe Home Assistant command resolver, using only allowlisted entities instead of HA Assist/conversation.
+- `0.1.37` makes Home Assistant access allowlist-only: only entity IDs in the panel list can be read or controlled, and legacy broad access fields are ignored.
 - `0.1.36` adds the first integrated OpenAI Realtime `/voice/ws` bridge path so the old realtime voice add-on can be bypassed when an OpenAI key is configured.
 - `0.1.35` fixes the integrated ElevenLabs relay config shape after the `0.1.34` legacy migration.
 - `0.1.34` folds in legacy add-on migration pieces: ElevenLabs TTS, direct `/tts/ws` and `/voice/ws` compatibility endpoints, and Home Assistant bridge APIs.

@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
         "transcription_model": "gpt-4o-mini-transcribe",
         "transcript_wait_ms": 800,
         "response_timeout_ms": 12000,
-        "ha_tools_enabled": True,
+        "ha_tools_enabled": False,
         "suppress_empty_transcript_response": True,
         "noise_reduction": "near_field",
         "instructions": "",
@@ -195,7 +195,14 @@ def hydrate_provider_profiles(config: dict) -> dict:
     ha_bridge = config.get("ha_bridge")
     if isinstance(ha_bridge, dict):
         ha_bridge["strict_allowlist"] = True
-        for key in ("expose_all_entities", "exposed_domains", "blocked_entities", "allow_conversation_tool"):
+        for key in (
+            "expose_all_entities",
+            "exposed_domains",
+            "blocked_entities",
+            "allow_conversation_tool",
+            "conversation_agent_id",
+            "conversation_language",
+        ):
             ha_bridge.pop(key, None)
 
     llm = config.get("llm")
@@ -305,7 +312,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.37"
+    server_version = "AliceControlPanel/0.1.38"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -466,7 +473,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.37",
+        "version": "0.1.38",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

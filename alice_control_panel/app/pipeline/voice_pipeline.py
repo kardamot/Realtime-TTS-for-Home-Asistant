@@ -155,7 +155,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.37",
+                "version": "0.1.38",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -295,8 +295,8 @@ class VoicePipeline:
                 self._llm_response = ha_response
                 self._state = "TTS"
                 self._tts_status = "queued"
-                self._mark("HA", "Home Assistant conversation completed")
-                await self._log_bus.emit("INFO", "PIPELINE", "Home Assistant conversation completed", {"chars": len(ha_response)})
+                self._mark("HA", "Home Assistant command completed")
+                await self._log_bus.emit("INFO", "PIPELINE", "Home Assistant command completed", {"chars": len(ha_response)})
                 await self._stream_tts_to_esp(ha_response, config, run_cancel_event)
                 self._state = "IDLE" if not run_cancel_event.is_set() else "CANCELLED"
                 return await self.status()
@@ -429,14 +429,17 @@ class VoicePipeline:
                 return None
             self._mark("HA", "home control route selected")
             await self._log_bus.emit("INFO", "PIPELINE", "Home Assistant route selected", {"reason": "home_control_keywords"})
-            result = await self._ha_bridge.conversation(text)
-            speech = self._ha_bridge.extract_conversation_speech(result)
-            self._last_audio_capture["ha_conversation"] = {
-                "conversation_id": result.get("conversation_id"),
-                "continue_conversation": result.get("continue_conversation"),
-                "response_type": (result.get("response") or {}).get("response_type") if isinstance(result.get("response"), dict) else "",
+            result = await self._ha_bridge.handle_text_command(text)
+            if not result.get("handled"):
+                return None
+            self._last_audio_capture["ha_command"] = {
+                "ok": bool(result.get("ok")),
+                "action": result.get("action"),
+                "entity_id": result.get("entity_id"),
+                "domain": result.get("domain"),
+                "service": result.get("service"),
             }
-            return speech or "Home Assistant komutu islendi."
+            return str(result.get("speech") or "Home Assistant komutu islendi.")
         except PermissionError as exc:
             await self._log_bus.emit("WARN", "PIPELINE", "Home Assistant route skipped", {"error": str(exc)})
             return None
@@ -446,7 +449,7 @@ class VoicePipeline:
 
     async def _handle_ha_ws_message(self, websocket: WebSocket, doc: dict[str, Any]) -> bool:
         msg_type = str(doc.get("type") or "").strip().lower()
-        if msg_type not in {"ha_get_state", "ha_list_states", "ha_search_entities", "ha_call_service", "ha_conversation"}:
+        if msg_type not in {"ha_get_state", "ha_list_states", "ha_search_entities", "ha_call_service", "ha_text_command", "ha_conversation"}:
             return False
         if self._ha_bridge is None:
             await websocket.send_json({"type": "ha_error", "ok": False, "error": "ha_bridge is not available"})
@@ -488,6 +491,10 @@ class VoicePipeline:
                     data=data,
                 )
                 await websocket.send_json({"type": "ha_service_result", "ok": True, "result": result})
+                return True
+            if msg_type == "ha_text_command":
+                result = await self._ha_bridge.handle_text_command(str(doc.get("text") or ""))
+                await websocket.send_json({"type": "ha_text_command_result", **result})
                 return True
             result = await self._ha_bridge.conversation(
                 str(doc.get("text") or ""),

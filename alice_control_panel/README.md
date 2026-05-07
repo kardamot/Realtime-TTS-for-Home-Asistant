@@ -25,7 +25,8 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.37` makes Home Assistant access allowlist-only: only entity IDs/patterns in the panel list can be read or controlled, and legacy broad access fields are ignored.
+- Version `0.1.38` adds the first safe Home Assistant command resolver, using only allowlisted entities instead of HA Assist/conversation.
+- Version `0.1.37` makes Home Assistant access allowlist-only: only entity IDs in the panel list can be read or controlled, and legacy broad access fields are ignored.
 - Version `0.1.36` adds the first integrated OpenAI Realtime `/voice/ws` bridge path so the old realtime voice add-on can be bypassed when an OpenAI key is configured.
 - Version `0.1.35` fixes the integrated ElevenLabs relay config shape after the `0.1.34` legacy migration.
 - Version `0.1.34` folds in the missing legacy pieces: ElevenLabs TTS, direct `/tts/ws` and `/voice/ws` compatibility endpoints, and Home Assistant bridge APIs.
@@ -61,8 +62,11 @@ Until firmware support exists, commands are logged and the UI shows mock/offline
 
 ## Home Assistant Entity Scope
 
-Home Assistant access is allowlist-only. Put only the entity IDs or wildcard
-patterns Alice may read/control in `ha_bridge.exposed_entities`, one per line or
-separated by spaces/commas. Legacy broad-access settings such as exposing all
+Home Assistant access is allowlist-only. Put only the entity IDs Alice may
+read/control in `ha_bridge.exposed_entities`, one per line or separated by
+spaces/commas. The backend reads those exact entity IDs one by one instead of
+fetching the full Home Assistant entity list. Legacy broad-access settings such as exposing all
 entities, allowing whole domains, or blacklist-style filtering are ignored by the
 runtime even if those old option keys remain for Supervisor compatibility.
+
+`ha_bridge.api_base_url` defaults to `http://supervisor/core/api` inside the add-on and normally does not need editing. Home Assistant Assist/conversation agents are not used for Alice home control because that endpoint cannot be constrained to the panel allowlist.

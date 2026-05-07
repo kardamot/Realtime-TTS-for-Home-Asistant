@@ -279,7 +279,7 @@ async function loadStatus() {
     "conn-ha",
     data.ha_bridge?.connected
       ? data.ha_bridge?.entity_scope
-        ? `allowlist ${data.ha_bridge?.allowlist_count || 0}`
+        ? `allowlist ${data.ha_bridge?.explicit_entity_count || data.ha_bridge?.allowlist_count || 0}`
         : "no allowlist"
       : data.ha_bridge?.enabled
         ? "not ready"

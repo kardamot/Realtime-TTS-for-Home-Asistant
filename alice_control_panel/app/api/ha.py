@@ -26,6 +26,17 @@ async def ha_list_states(
     return {"ok": True, "count": len(entities), "entities": entities}
 
 
+@router.get("/allowed")
+async def ha_allowed_entities(
+    request: Request,
+    domain: str = "",
+    limit: int = 256,
+    _: None = Depends(require_request_auth),
+) -> dict[str, Any]:
+    entities = await request.app.state.ha_bridge.list_states(domain=domain, limit=limit)
+    return {"ok": True, "count": len(entities), "entities": entities}
+
+
 @router.get("/states/{entity_id:path}")
 async def ha_get_state(entity_id: str, request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
     try:
@@ -59,6 +70,15 @@ async def ha_call_service(payload: dict[str, Any], request: Request, _: None = D
     except PermissionError as exc:
         return {"ok": False, "message": str(exc)}
     return {"ok": True, "result": result}
+
+
+@router.post("/command")
+async def ha_text_command(payload: dict[str, Any], request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        return {"handled": False, "ok": False, "message": "text is required"}
+    result = await request.app.state.ha_bridge.handle_text_command(text)
+    return result
 
 
 @router.post("/conversation")
