@@ -15,9 +15,48 @@ let eventSocket = null;
 let eventSocketSeq = 0;
 let statusTimer = null;
 let statusRefreshTimer = null;
+const autoScrollState = new WeakMap();
 
 const $ = (id) => document.getElementById(id);
 const text = (id, value) => { const el = $(id); if (el) el.textContent = value ?? "-"; };
+
+function isNearBottom(el, threshold = 28) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+}
+
+function initAutoScrollContainers() {
+  document.querySelectorAll("[data-autoscroll]").forEach((el) => {
+    if (autoScrollState.has(el)) return;
+    const state = { pinned: true };
+    autoScrollState.set(el, state);
+    el.addEventListener("scroll", () => {
+      state.pinned = isNearBottom(el);
+    }, { passive: true });
+  });
+}
+
+function keepAutoScrolled(el, mutate, force = false) {
+  if (!el) return;
+  const state = autoScrollState.get(el);
+  const shouldStick = force || !state || state.pinned || isNearBottom(el);
+  const distanceFromBottom = el.scrollHeight - el.scrollTop;
+  mutate();
+  if (!shouldStick) {
+    window.requestAnimationFrame(() => {
+      el.scrollTop = Math.max(0, el.scrollHeight - distanceFromBottom);
+    });
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight;
+    if (state) state.pinned = true;
+  });
+}
+
+function setAutoText(id, value) {
+  const el = $(id);
+  keepAutoScrolled(el, () => { el.textContent = value ?? "-"; });
+}
 
 function notice(value) {
   const el = $("notice");
@@ -114,6 +153,7 @@ function stripMasked(value) {
 }
 
 async function boot() {
+  initAutoScrollContainers();
   renderButtons();
   initProviderSwitches();
   $("refresh-btn").onclick = () => guard("Refresh failed", loadStatus);
@@ -139,9 +179,9 @@ async function boot() {
       if (!logSocket || logSocket.readyState === WebSocket.CLOSED) connectLogs();
     }
   };
-  $("log-search").oninput = renderLogs;
-  $("log-level").onchange = renderLogs;
-  $("log-category").onchange = renderLogs;
+  $("log-search").oninput = () => renderLogs({ forceScroll: true });
+  $("log-level").onchange = () => renderLogs({ forceScroll: true });
+  $("log-category").onchange = () => renderLogs({ forceScroll: true });
 
   try {
     const auth = await api("/api/auth/check", {}, "");
@@ -218,15 +258,15 @@ async function loadStatus() {
   text("conn-tts", `${data.tts?.provider || "openai"} / ${data.tts?.pcm_sample_rate || "n/a"}`);
   text("conn-reconnects", formatReconnects(esp));
   text("conn-esp-ws", esp.ws_connected ? "connected" : "offline");
-  text("last-error", esp.last_error || esp.last_ws_error || "");
+  setAutoText("last-error", esp.last_error || esp.last_ws_error || "");
   text("hw-mic", esp.hardware?.mic || "unknown");
   text("hw-speaker", esp.hardware?.speaker || "unknown");
   text("hw-servo", esp.hardware?.servo_position || "center");
   text("hw-amp", esp.hardware?.amp_muted == null ? "unknown" : esp.hardware.amp_muted ? "muted" : "active");
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");
   text("hw-state", esp.state || "OFFLINE");
-  text("stt-text", pipe.stt_result || pipe.last_user_text || "No utterance yet");
-  text("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
+  setAutoText("stt-text", pipe.stt_result || pipe.last_user_text || "No utterance yet");
+  setAutoText("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
   renderTimeline(pipe.timeline || []);
   if (!configDirty) fillConfig();
 }
@@ -295,11 +335,13 @@ async function selectProvider(kind, provider) {
 function renderTimeline(items) {
   const box = $("timeline");
   const list = items.slice(-6);
-  box.innerHTML = list.length ? "" : "<div><b>IDLE</b><span>Waiting for audio/text</span></div>";
-  list.forEach((item) => {
-    const row = document.createElement("div");
-    row.innerHTML = `<b>${item.category || "STEP"}</b><span>${item.message || ""}</span>`;
-    box.appendChild(row);
+  keepAutoScrolled(box, () => {
+    box.innerHTML = list.length ? "" : "<div><b>IDLE</b><span>Waiting for audio/text</span></div>";
+    list.forEach((item) => {
+      const row = document.createElement("div");
+      row.innerHTML = `<b>${item.category || "STEP"}</b><span>${item.message || ""}</span>`;
+      box.appendChild(row);
+    });
   });
 }
 
@@ -324,7 +366,7 @@ async function sendCommand(command) {
   const result = await api("/api/command", { method: "POST", body: JSON.stringify({ command, payload: {} }) });
   if (command === "clear_logs") logs = [];
   notice(result.message || `${command} sent`);
-  renderLogs();
+  renderLogs({ forceScroll: command === "clear_logs" });
   await loadStatus();
 }
 
@@ -542,7 +584,7 @@ function renderLogCategories() {
   select.value = cats.includes(old) ? old : "ALL";
 }
 
-function renderLogs() {
+function renderLogs(options = {}) {
   const q = $("log-search").value.toLowerCase().trim();
   const level = $("log-level").value;
   const cat = $("log-category").value;
@@ -552,14 +594,17 @@ function renderLogs() {
     if (!q) return true;
     return `${entry.level} ${entry.category} ${entry.message} ${JSON.stringify(entry.details || {})}`.toLowerCase().includes(q);
   }).slice(-220);
-  $("log-list").innerHTML = "";
-  rows.forEach((entry) => {
-    const row = document.createElement("div");
-    row.className = `log-row ${String(entry.level || "").toLowerCase()}`;
-    row.innerHTML = `<time>${new Date(entry.ts * 1000).toLocaleTimeString()}</time><b>${entry.level}</b><span>${entry.category}</span><p></p>`;
-    row.querySelector("p").textContent = entry.message || "";
-    $("log-list").appendChild(row);
-  });
+  const list = $("log-list");
+  keepAutoScrolled(list, () => {
+    list.innerHTML = "";
+    rows.forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = `log-row ${String(entry.level || "").toLowerCase()}`;
+      row.innerHTML = `<time>${new Date(entry.ts * 1000).toLocaleTimeString()}</time><b>${entry.level}</b><span>${entry.category}</span><p></p>`;
+      row.querySelector("p").textContent = entry.message || "";
+      list.appendChild(row);
+    });
+  }, Boolean(options.forceScroll));
 }
 
 window.addEventListener("load", boot);

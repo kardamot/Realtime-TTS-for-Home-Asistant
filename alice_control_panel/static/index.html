@@ -4,14 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.20" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.20" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.21" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.21" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="mark"><img src="/alice-logo.png?v=0.1.20" alt="Alice" /></div>
+          <div class="mark"><img src="/alice-logo.png?v=0.1.21" alt="Alice" /></div>
           <div>
             <strong>Alice</strong>
             <span>Control Panel</span>
@@ -70,7 +70,7 @@
               <div><span>TTS</span><b id="conn-tts">openai</b></div>
               <div><span>Reconnects</span><b id="conn-reconnects">0</b></div>
             </div>
-            <p id="last-error" class="error"></p>
+            <p id="last-error" class="error" data-autoscroll></p>
           </section>
 
           <section id="logs" class="panel span-8 log-panel row-span-2">
@@ -87,7 +87,7 @@
               <select id="log-level"><option>ALL</option><option>DEBUG</option><option>INFO</option><option>WARN</option><option>ERROR</option></select>
               <select id="log-category"><option>ALL</option></select>
             </div>
-            <div id="log-list" class="log-list"></div>
+            <div id="log-list" class="log-list" data-autoscroll></div>
           </section>
 
           <section class="panel span-4 hardware-panel">
@@ -114,12 +114,12 @@
                 </div>
                 <div class="transcript">
                   <span>User/STT</span>
-                  <p id="stt-text">No utterance yet</p>
+                  <p id="stt-text" data-autoscroll>No utterance yet</p>
                   <span>LLM</span>
-                  <p id="llm-text">No response yet</p>
+                  <p id="llm-text" data-autoscroll>No response yet</p>
                 </div>
               </div>
-              <div id="timeline" class="timeline"></div>
+              <div id="timeline" class="timeline" data-autoscroll></div>
             </div>
           </section>
 
@@ -294,6 +294,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.20"></script>
+  <script src="/app.js?v=0.1.21"></script>
   </body>
 </html>
