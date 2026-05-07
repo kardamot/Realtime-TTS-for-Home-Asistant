@@ -194,10 +194,11 @@ async function loadStatus() {
   const backend = data.health || {};
   if (!configDirty) currentConfig = data.config || {};
 
-  $("summary").textContent = esp.online ? "Robot linked" : esp.mock_mode ? "ESP offline, mock mode active" : "Waiting for robot status";
+  const reconnectPaused = Boolean(esp.auto_reconnect_paused);
+  $("summary").textContent = esp.online ? "Robot linked" : reconnectPaused ? "ESP offline, auto reconnect paused" : esp.mock_mode ? "ESP offline, mock mode active" : "Waiting for robot status";
   text("backend-version", `${backend.service || "alice_control_panel"} ${backend.version || ""} - FastAPI backend online`);
   setPill("state-pill", pipe.state || "IDLE");
-  setPill("esp-pill", esp.online ? "ONLINE" : esp.mock_mode ? "MOCK" : "OFFLINE");
+  setPill("esp-pill", esp.online ? "ONLINE" : reconnectPaused ? "PAUSED" : esp.mock_mode ? "MOCK" : "OFFLINE");
   setPill("stream-pill", pipe.stream_active ? "STREAM ON" : "STREAM OFF", pipe.stream_active ? "good" : "info");
   text("robot-status", esp.online ? "ONLINE" : esp.mock_mode ? "MOCK" : "OFFLINE");
   text("robot-ip", esp.ip || "no ESP base URL");
@@ -213,7 +214,7 @@ async function loadStatus() {
   text("conn-stt", data.stt?.provider || "faster_whisper");
   text("conn-llm", `${data.llm?.provider || "openai"} / ${data.llm?.model || "n/a"}`);
   text("conn-tts", `${data.tts?.provider || "openai"} / ${data.tts?.pcm_sample_rate || "n/a"}`);
-  text("conn-reconnects", esp.reconnects || 0);
+  text("conn-reconnects", formatReconnects(esp));
   text("conn-esp-ws", esp.ws_connected ? "connected" : "offline");
   text("last-error", esp.last_error || esp.last_ws_error || "");
   text("hw-mic", esp.hardware?.mic || "unknown");
@@ -226,6 +227,13 @@ async function loadStatus() {
   text("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
   renderTimeline(pipe.timeline || []);
   if (!configDirty) fillConfig();
+}
+
+function formatReconnects(esp) {
+  const count = Number(esp.reconnects || 0);
+  const max = Number(esp.max_auto_reconnects || 0);
+  const base = max ? `${count} / ${max}` : `${count}`;
+  return esp.auto_reconnect_paused ? `${base} paused` : base;
 }
 
 function fillConfig() {

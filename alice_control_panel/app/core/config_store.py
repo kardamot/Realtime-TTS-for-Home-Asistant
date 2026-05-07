@@ -25,6 +25,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "ws_url": "",
         "poll_interval_sec": 3,
         "reconnect_sec": 5,
+        "max_auto_reconnects": 40,
         "command_timeout_sec": 4,
         "mock_mode": True,
     },
@@ -150,6 +151,8 @@ def _addon_options_to_config(raw: dict[str, Any]) -> dict[str, Any]:
         mapped["panel"] = panel
     if "esp_base_url" in raw:
         esp["base_url"] = raw["esp_base_url"]
+    if "esp_max_auto_reconnects" in raw:
+        esp["max_auto_reconnects"] = raw["esp_max_auto_reconnects"]
     if esp:
         mapped["esp"] = esp
     for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "tts", "ui"):

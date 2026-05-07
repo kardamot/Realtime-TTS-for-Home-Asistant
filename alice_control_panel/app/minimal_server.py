@@ -20,7 +20,14 @@ LOGS: list[dict] = []
 
 DEFAULT_CONFIG = {
     "panel": {"port": 8099, "token": "", "password": "", "title": "Alice Control Panel"},
-    "esp": {"base_url": "", "ws_url": "", "poll_interval_sec": 3, "reconnect_sec": 5, "mock_mode": True},
+    "esp": {
+        "base_url": "",
+        "ws_url": "",
+        "poll_interval_sec": 3,
+        "reconnect_sec": 5,
+        "max_auto_reconnects": 40,
+        "mock_mode": True,
+    },
     "stt": {"provider": "faster_whisper", "model": "small", "language": "tr", "compute_type": "int8"},
     "llm": {"provider": "openai", "model": "gpt-5-mini", "api_key": "", "base_url": "https://api.openai.com/v1", "system_prompt": ""},
     "tts": {
@@ -101,6 +108,8 @@ def options_to_config(raw: dict) -> dict:
         mapped["panel"] = panel
     if "esp_base_url" in raw:
         esp["base_url"] = raw["esp_base_url"]
+    if "esp_max_auto_reconnects" in raw:
+        esp["max_auto_reconnects"] = raw["esp_max_auto_reconnects"]
     if esp:
         mapped["esp"] = esp
     for key in ("debug_logs", "safe_mode", "stt", "llm", "tts"):
@@ -175,7 +184,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.12"
+    server_version = "AliceControlPanel/0.1.13"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -327,7 +336,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.12",
+        "version": "0.1.13",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
@@ -367,6 +376,8 @@ def esp_status() -> dict:
         "ws_url": "",
         "last_ws_error": "",
         "reconnects": 0,
+        "max_auto_reconnects": int(cfg.get("esp", {}).get("max_auto_reconnects") or 40),
+        "auto_reconnect_paused": False,
     }
 
 

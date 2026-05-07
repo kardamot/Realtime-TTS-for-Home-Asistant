@@ -8,6 +8,7 @@
    - `port`: default `8099`
    - `panel_token` or `panel_password`: optional local auth
    - `esp_base_url`: empty until ESP firmware exposes the target API
+   - `esp_max_auto_reconnects`: default `40`; set `0` for unlimited automatic reconnects
    - provider API keys under `llm` and `tts`
 4. Start the add-on.
 5. Open `http://HOME_ASSISTANT_IP:8099`.
@@ -153,5 +154,5 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.12` keeps the logs and connection stack height stable while new live entries arrive.
+- `0.1.13` pauses automatic ESP reconnect attempts after the configured limit; press reconnect to try again.
 - ESP WebSocket audio playback integration is intentionally left as a clear next step because the ESP API does not exist yet.

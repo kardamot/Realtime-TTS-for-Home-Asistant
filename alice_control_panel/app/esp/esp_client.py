@@ -36,6 +36,8 @@ DEFAULT_STATUS: dict[str, Any] = {
     "ws_url": "",
     "last_ws_error": "",
     "reconnects": 0,
+    "max_auto_reconnects": 40,
+    "auto_reconnect_paused": False,
 }
 
 
@@ -65,7 +67,9 @@ class EspClient:
         self._ws_task: asyncio.Task[None] | None = None
         self._session: aiohttp.ClientSession | None = None
         self._stop = asyncio.Event()
+        self._last_poll_log_at = 0.0
         self._last_ws_log_at = 0.0
+        self._last_pause_log_at = 0.0
 
     async def start(self) -> None:
         if self._poll_task and not self._poll_task.done():
@@ -95,13 +99,16 @@ class EspClient:
     async def status(self) -> dict[str, Any]:
         return dict(self._status)
 
-    async def poll_once(self) -> dict[str, Any]:
+    async def poll_once(self, force: bool = False) -> dict[str, Any]:
         config = await self._config_store.get(include_secrets=True)
         esp_cfg = config.get("esp", {})
         base_url = str(esp_cfg.get("base_url") or "").strip().rstrip("/")
         timeout_sec = float(esp_cfg.get("command_timeout_sec") or 4)
+        self._status["max_auto_reconnects"] = self._max_auto_reconnects(esp_cfg)
         if not base_url:
             self._status = self._offline_status("ESP base URL is not configured")
+            return await self.status()
+        if not force and await self._pause_if_reconnect_limit_reached(esp_cfg):
             return await self.status()
         session = self._session or aiohttp.ClientSession()
         self._session = session
@@ -113,9 +120,12 @@ class EspClient:
             self._status = self._normalize_status(doc, base_url)
             await self._ws_hub.publish("esp_status", self._status)
         except Exception as exc:
-            old_reconnects = int(self._status.get("reconnects") or 0)
-            self._status = self._offline_status(str(exc), reconnects=old_reconnects + 1)
-            await self._log_bus.emit("WARN", "ESP", "ESP status poll failed", {"error": str(exc)})
+            reconnects = self._record_reconnect_failure(esp_cfg)
+            self._status = self._offline_status(str(exc), reconnects=reconnects)
+            now = time.time()
+            if now - self._last_poll_log_at > 15:
+                self._last_poll_log_at = now
+                await self._log_bus.emit("WARN", "ESP", "ESP status poll failed", {"error": str(exc)})
         return await self.status()
 
     async def send_command(self, command: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -137,7 +147,9 @@ class EspClient:
                 "command": command,
             }
         if command == "reconnect":
-            await self.poll_once()
+            self._reset_reconnect_budget()
+            await self._log_bus.emit("INFO", "ESP", "Manual ESP reconnect requested")
+            await self.poll_once(force=True)
         if not base_url:
             await self._log_bus.emit(
                 "WARN",
@@ -203,11 +215,18 @@ class EspClient:
             config = await self._config_store.get(include_secrets=True)
             esp_cfg = config.get("esp", {})
             reconnect_sec = max(1.0, float(esp_cfg.get("reconnect_sec") or 5))
+            self._status["max_auto_reconnects"] = self._max_auto_reconnects(esp_cfg)
             ws_url = self._resolve_ws_url(esp_cfg)
             if not ws_url:
                 self._set_ws_state(False, "", "")
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=reconnect_sec)
+                except asyncio.TimeoutError:
+                    pass
+                continue
+            if await self._pause_if_reconnect_limit_reached(esp_cfg):
+                try:
+                    await asyncio.wait_for(self._stop.wait(), timeout=max(reconnect_sec, 15.0))
                 except asyncio.TimeoutError:
                     pass
                 continue
@@ -230,8 +249,7 @@ class EspClient:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                old_reconnects = int(self._status.get("reconnects") or 0)
-                self._status["reconnects"] = old_reconnects + 1
+                self._status["reconnects"] = self._record_reconnect_failure(esp_cfg)
                 self._set_ws_state(False, ws_url, str(exc))
                 now = time.time()
                 if now - self._last_ws_log_at > 15:
@@ -278,6 +296,8 @@ class EspClient:
             self._status["online"] = True
             self._status["mock_mode"] = False
             self._status["last_seen"] = time.time()
+            self._status["reconnects"] = 0
+            self._status["auto_reconnect_paused"] = False
             self._status["ip"] = self._status.get("ip") or self._host_from_url(ws_url)
             if str(self._status.get("state") or "").upper() == "OFFLINE":
                 self._status["state"] = "IDLE"
@@ -290,6 +310,8 @@ class EspClient:
         status["ws_url"] = str(self._status.get("ws_url") or "")
         status["last_ws_error"] = str(self._status.get("last_ws_error") or "")
         status["reconnects"] = int(reconnects if reconnects is not None else self._status.get("reconnects") or 0)
+        status["max_auto_reconnects"] = int(self._status.get("max_auto_reconnects") or 0)
+        status["auto_reconnect_paused"] = bool(self._status.get("auto_reconnect_paused"))
         return status
 
     def _normalize_status(self, doc: dict[str, Any], base_url: str) -> dict[str, Any]:
@@ -304,9 +326,63 @@ class EspClient:
         status["ws_connected"] = bool(self._status.get("ws_connected"))
         status["ws_url"] = str(self._status.get("ws_url") or "")
         status["last_ws_error"] = str(self._status.get("last_ws_error") or "")
-        if "reconnects" not in status or status.get("reconnects") is None:
-            status["reconnects"] = int(self._status.get("reconnects") or 0)
+        status["reconnects"] = 0
+        status["max_auto_reconnects"] = int(self._status.get("max_auto_reconnects") or 40)
+        status["auto_reconnect_paused"] = False
         return status
+
+    def _max_auto_reconnects(self, esp_cfg: dict[str, Any]) -> int:
+        try:
+            return max(0, int(esp_cfg.get("max_auto_reconnects", 40)))
+        except (TypeError, ValueError):
+            return 40
+
+    def _record_reconnect_failure(self, esp_cfg: dict[str, Any]) -> int:
+        max_attempts = self._max_auto_reconnects(esp_cfg)
+        self._status["max_auto_reconnects"] = max_attempts
+        reconnects = int(self._status.get("reconnects") or 0) + 1
+        if max_attempts and reconnects >= max_attempts:
+            reconnects = max_attempts
+            self._status["auto_reconnect_paused"] = True
+        return reconnects
+
+    def _reset_reconnect_budget(self) -> None:
+        self._status["reconnects"] = 0
+        self._status["auto_reconnect_paused"] = False
+        self._status["last_error"] = ""
+        self._status["last_ws_error"] = ""
+
+    async def _pause_if_reconnect_limit_reached(self, esp_cfg: dict[str, Any]) -> bool:
+        max_attempts = self._max_auto_reconnects(esp_cfg)
+        if not max_attempts:
+            self._status["auto_reconnect_paused"] = False
+            self._status["max_auto_reconnects"] = 0
+            return False
+        reconnects = int(self._status.get("reconnects") or 0)
+        if reconnects < max_attempts:
+            self._status["auto_reconnect_paused"] = False
+            self._status["max_auto_reconnects"] = max_attempts
+            return False
+        self._status["reconnects"] = max_attempts
+        self._status["max_auto_reconnects"] = max_attempts
+        self._status["auto_reconnect_paused"] = True
+        self._status["online"] = False
+        self._status["mock_mode"] = True
+        self._status["ws_connected"] = False
+        self._status["last_error"] = (
+            f"Auto reconnect paused after {max_attempts} failed attempts. "
+            "Press reconnect to try again."
+        )
+        now = time.time()
+        if now - self._last_pause_log_at > 60:
+            self._last_pause_log_at = now
+            await self._log_bus.emit(
+                "WARN",
+                "ESP",
+                "ESP auto reconnect paused",
+                {"max_auto_reconnects": max_attempts},
+            )
+        return True
 
     @staticmethod
     def _resolve_ws_url(esp_cfg: dict[str, Any]) -> str:

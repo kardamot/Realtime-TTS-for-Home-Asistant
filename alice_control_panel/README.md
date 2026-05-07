@@ -18,10 +18,11 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - `/data/prompts/*.yaml` prompt profiles.
 - Unified in-memory log ring buffer with WebSocket streaming.
 - ESP offline/mock mode when `esp_base_url` is empty or unavailable.
+- ESP auto reconnect pauses after `esp_max_auto_reconnects` failures; `0` keeps unlimited retries.
 - ESP command stubs for the future lightweight ESP HTTP/WebSocket API.
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.12` keeps the logs and connection stack height stable while new live entries arrive.
+- Version `0.1.13` pauses automatic ESP reconnect attempts after the configured limit; press reconnect to try again.
 
 The old add-ons remain untouched:
 
