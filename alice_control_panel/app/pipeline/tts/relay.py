@@ -85,7 +85,7 @@ class WebSocketPcmOutput(PcmOutput):
 
 
 class EspPcmOutput(PcmOutput):
-    pace_pcm = False
+    pace_pcm = True
 
     def __init__(self, esp_client: Any, log_bus: LogBus, initial_buffer_ms: int = 900) -> None:
         self._esp_client = esp_client
