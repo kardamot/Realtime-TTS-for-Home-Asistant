@@ -162,7 +162,8 @@ class EspPcmOutput(PcmOutput):
         await self._log_bus.emit("INFO", "TTS", "ESP audio stream acknowledged", {"stream_id": self._stream_id})
         silence = self._silence_prefix_bytes()
         if silence:
-            await self._send_chunk(silence, count_bytes=False)
+            for offset in range(0, len(silence), RELAY_CHUNK_BYTES):
+                await self._send_chunk(silence[offset : offset + RELAY_CHUNK_BYTES], count_bytes=False)
         buffered = bytes(self._buffer)
         self._buffer.clear()
         for offset in range(0, len(buffered), RELAY_CHUNK_BYTES):
@@ -176,6 +177,8 @@ class EspPcmOutput(PcmOutput):
         return b"\x00" * (length & ~1)
 
     async def _send_chunk(self, pcm: bytes, count_bytes: bool = True) -> None:
+        if not pcm:
+            return
         await self._esp_client.send_audio_chunk(pcm, stream_id=self._stream_id)
         if count_bytes:
             self.bytes_sent += len(pcm)
