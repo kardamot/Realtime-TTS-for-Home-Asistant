@@ -67,8 +67,8 @@ DEFAULT_CONFIG = {
         "openai": {"api_key": "", "model": "gpt-4o-mini-tts", "voice": "coral", "instructions": ""},
         "cartesia": {"api_key": "", "model_id": "sonic-3", "voice_id": "", "language": "tr", "version": "2026-03-01"},
         "elevenlabs": {"api_key": "", "model_id": "eleven_flash_v2_5", "voice_id": "", "output_format": "pcm_16000", "latency_mode": 3},
-        "google_ai": {"api_key": "", "model": "gemini-3.1-flash-tts-preview", "voice_name": "Kore", "prompt_prefix": ""},
-        "google_cloud": {"credentials_json": "", "voice_name": "", "language_code": "tr-TR", "ssml_gender": "FEMALE"},
+        "google_ai": {"api_key": "", "model": "gemini-2.5-flash-preview-tts", "voice_name": "Kore", "prompt_prefix": ""},
+        "google_cloud": {"credentials_json": "", "voice_name": "tr-TR-Chirp3-HD-Kore", "language_code": "tr-TR", "ssml_gender": "FEMALE"},
     },
     "prompts": {"active_profile": "alice"},
     "pipeline": {"stream_to_esp": True, "max_log_events_per_sec": 10},
@@ -169,6 +169,14 @@ def hydrate_provider_profiles(config: dict) -> dict:
                         or active_profile.get(key) == default_profile.get(key)
                     ):
                         active_profile[key] = llm[key]
+    tts = config.get("tts")
+    if isinstance(tts, dict):
+        google_ai = tts.get("google_ai")
+        if isinstance(google_ai, dict) and google_ai.get("model") == "gemini-3.1-flash-tts-preview":
+            google_ai["model"] = "gemini-2.5-flash-preview-tts"
+        google_cloud = tts.get("google_cloud")
+        if isinstance(google_cloud, dict) and not google_cloud.get("voice_name"):
+            google_cloud["voice_name"] = "tr-TR-Chirp3-HD-Kore"
     return config
 
 
@@ -254,7 +262,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.21"
+    server_version = "AliceControlPanel/0.1.22"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -406,7 +414,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-            "version": "0.1.21",
+            "version": "0.1.22",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

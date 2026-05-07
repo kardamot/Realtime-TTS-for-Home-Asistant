@@ -109,13 +109,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
         },
         "google_ai": {
             "api_key": "",
-            "model": "gemini-3.1-flash-tts-preview",
+            "model": "gemini-2.5-flash-preview-tts",
             "voice_name": "Kore",
             "prompt_prefix": "",
         },
         "google_cloud": {
             "credentials_json": "",
-            "voice_name": "",
+            "voice_name": "tr-TR-Chirp3-HD-Kore",
             "language_code": "tr-TR",
             "ssml_gender": "FEMALE",
         },
@@ -231,6 +231,12 @@ def hydrate_provider_profiles(config: dict[str, Any]) -> dict[str, Any]:
                 group["voice_id"] = flat_voice
             if flat_voice and not group.get("voice") and provider == "openai":
                 group["voice"] = flat_voice
+        google_ai = tts.get("google_ai")
+        if isinstance(google_ai, dict) and google_ai.get("model") == "gemini-3.1-flash-tts-preview":
+            google_ai["model"] = "gemini-2.5-flash-preview-tts"
+        google_cloud = tts.get("google_cloud")
+        if isinstance(google_cloud, dict) and not google_cloud.get("voice_name"):
+            google_cloud["voice_name"] = "tr-TR-Chirp3-HD-Kore"
     return config
 
 

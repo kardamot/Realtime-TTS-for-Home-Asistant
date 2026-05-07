@@ -87,6 +87,11 @@ For streaming text providers:
 {"type":"append","text":"Alice burada.","final":true}
 ```
 
+Google provider notes:
+
+- `google_ai` uses a Google AI Studio / Gemini API key. Set `tts.provider` to `google_ai`, `tts.google_ai.api_key`, model `gemini-2.5-flash-preview-tts`, and a voice such as `Kore`, `Zephyr`, or `Aoede`. Gemini TTS returns 24 kHz PCM.
+- `google_cloud` uses a Google Cloud service-account JSON. Enable Cloud Text-to-Speech API in that project, paste the full JSON into `tts.google_cloud.credentials_json`, and use a voice such as `tr-TR-Chirp3-HD-Kore`.
+
 The server sends:
 
 ```json
@@ -172,5 +177,5 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper and OpenAI Realtime code paths are scaffolded for migration; heavy ML dependencies are intentionally not installed in this first installer-safe image.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.21` keeps live scroll areas pinned to the newest entries unless the user scrolls up manually.
+- `0.1.22` adds Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths.
 - ESP-side audio playback for this protocol can be implemented independently after this backend path is installed.

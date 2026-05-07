@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.21"
+version: "0.1.22"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -87,12 +87,12 @@ options:
       latency_mode: 3
     google_ai:
       api_key: ""
-      model: "gemini-3.1-flash-tts-preview"
+      model: "gemini-2.5-flash-preview-tts"
       voice_name: "Kore"
       prompt_prefix: ""
     google_cloud:
       credentials_json: ""
-      voice_name: ""
+      voice_name: "tr-TR-Chirp3-HD-Kore"
       language_code: "tr-TR"
       ssml_gender: "FEMALE"
 schema:

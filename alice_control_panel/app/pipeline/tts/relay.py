@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import json
 import re
 import uuid
@@ -11,6 +12,8 @@ from urllib.parse import urlencode
 
 import aiohttp
 from fastapi import WebSocket, WebSocketDisconnect
+from google.auth.transport.requests import Request as GoogleAuthRequest
+from google.oauth2 import service_account
 
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
@@ -18,12 +21,15 @@ from app.core.log_bus import LogBus
 
 OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 CARTESIA_WS_URL = "wss://api.cartesia.ai/tts/websocket"
+GOOGLE_AI_MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+GOOGLE_CLOUD_SYNTH_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 DEFAULT_PCM_SAMPLE_RATE = 44100
+GOOGLE_AI_PCM_SAMPLE_RATE = 24000
 DEFAULT_PCM_CHANNELS = 1
 PCM_PACE_INITIAL_BURST_MS = 700
 PCM_PACE_MAX_SLEEP = 0.05
 RELAY_CHUNK_BYTES = 4096
-API_KEY_QUERY_RE = re.compile(r"(api_key=)[^&\s]+")
+API_KEY_QUERY_RE = re.compile(r"((?:api_key|key)=)[^&\s]+")
 
 
 @dataclass(slots=True)
@@ -41,6 +47,14 @@ class TtsRelayConfig:
     cartesia_voice_id: str = ""
     cartesia_language: str = "tr"
     cartesia_version: str = "2026-03-01"
+    google_ai_api_key: str = ""
+    google_ai_model: str = "gemini-2.5-flash-preview-tts"
+    google_ai_voice_name: str = "Kore"
+    google_ai_prompt_prefix: str = ""
+    google_cloud_credentials_json: str = ""
+    google_cloud_voice_name: str = "tr-TR-Chirp3-HD-Kore"
+    google_cloud_language_code: str = "tr-TR"
+    google_cloud_ssml_gender: str = "FEMALE"
 
 
 @dataclass(slots=True)
@@ -184,6 +198,50 @@ def safe_exc_message(exc: Exception) -> str:
     return API_KEY_QUERY_RE.sub(r"\1***", str(exc))
 
 
+def decode_audio_b64(value: str, provider: str) -> bytes:
+    try:
+        return base64.b64decode(value)
+    except (binascii.Error, ValueError) as exc:
+        raise RuntimeError(f"{provider} returned invalid base64 audio.") from exc
+
+
+def extract_inline_audio(doc: dict[str, Any], provider: str) -> bytes:
+    for candidate in doc.get("candidates", []) if isinstance(doc.get("candidates"), list) else []:
+        content = candidate.get("content", {}) if isinstance(candidate, dict) else {}
+        parts = content.get("parts", []) if isinstance(content.get("parts"), list) else []
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            inline = part.get("inlineData") or part.get("inline_data")
+            if isinstance(inline, dict) and inline.get("data"):
+                return decode_audio_b64(str(inline["data"]), provider)
+    raise RuntimeError(f"{provider} did not return audio data.")
+
+
+def strip_wav_header_if_present(audio: bytes) -> tuple[bytes, int | None, int | None]:
+    if len(audio) < 44 or audio[:4] != b"RIFF" or audio[8:12] != b"WAVE":
+        return audio, None, None
+
+    cursor = 12
+    sample_rate: int | None = None
+    channels: int | None = None
+    data: bytes | None = None
+    while cursor + 8 <= len(audio):
+        chunk_id = audio[cursor : cursor + 4]
+        chunk_size = int.from_bytes(audio[cursor + 4 : cursor + 8], "little", signed=False)
+        chunk_start = cursor + 8
+        chunk_end = min(len(audio), chunk_start + chunk_size)
+        chunk = audio[chunk_start:chunk_end]
+        if chunk_id == b"fmt " and len(chunk) >= 16:
+            channels = int.from_bytes(chunk[2:4], "little", signed=False)
+            sample_rate = int.from_bytes(chunk[4:8], "little", signed=False)
+        elif chunk_id == b"data":
+            data = chunk
+            break
+        cursor = chunk_end + (chunk_size % 2)
+    return (data if data is not None else audio), sample_rate, channels
+
+
 def parse_stream_command(doc: dict[str, Any], expect_start: bool) -> StreamCommand:
     msg_type = str(doc.get("type", "")).strip().lower()
     if expect_start and msg_type != "start":
@@ -248,6 +306,8 @@ def relay_config_from_panel(config: dict[str, Any], provider_override: str = "")
     tts = config.get("tts", {}) if isinstance(config, dict) else {}
     openai = tts.get("openai", {}) if isinstance(tts.get("openai"), dict) else {}
     cartesia = tts.get("cartesia", {}) if isinstance(tts.get("cartesia"), dict) else {}
+    google_ai = tts.get("google_ai", {}) if isinstance(tts.get("google_ai"), dict) else {}
+    google_cloud = tts.get("google_cloud", {}) if isinstance(tts.get("google_cloud"), dict) else {}
     return TtsRelayConfig(
         enabled=bool(tts.get("enabled", True)),
         provider=(provider_override or str(tts.get("provider") or "openai")).lower(),
@@ -262,6 +322,14 @@ def relay_config_from_panel(config: dict[str, Any], provider_override: str = "")
         cartesia_voice_id=str(cartesia.get("voice_id") or tts.get("cartesia_voice_id") or ""),
         cartesia_language=str(cartesia.get("language") or tts.get("cartesia_language") or "tr"),
         cartesia_version=str(cartesia.get("version") or tts.get("cartesia_version") or "2026-03-01"),
+        google_ai_api_key=str(google_ai.get("api_key") or tts.get("google_ai_api_key") or ""),
+        google_ai_model=str(google_ai.get("model") or tts.get("google_ai_model") or "gemini-2.5-flash-preview-tts"),
+        google_ai_voice_name=str(google_ai.get("voice_name") or tts.get("google_ai_voice_name") or "Kore"),
+        google_ai_prompt_prefix=str(google_ai.get("prompt_prefix") or tts.get("google_ai_prompt_prefix") or ""),
+        google_cloud_credentials_json=str(google_cloud.get("credentials_json") or tts.get("google_cloud_credentials_json") or ""),
+        google_cloud_voice_name=str(google_cloud.get("voice_name") or tts.get("google_cloud_voice_name") or "tr-TR-Chirp3-HD-Kore"),
+        google_cloud_language_code=str(google_cloud.get("language_code") or tts.get("google_cloud_language_code") or "tr-TR"),
+        google_cloud_ssml_gender=str(google_cloud.get("ssml_gender") or tts.get("google_cloud_ssml_gender") or "FEMALE"),
     )
 
 
@@ -391,6 +459,8 @@ class TtsRelay:
             "openai_api_key_configured": bool(cfg.openai_api_key),
             "cartesia_api_key_configured": bool(cfg.cartesia_api_key),
             "cartesia_voice_configured": bool(cfg.cartesia_voice_id),
+            "google_ai_api_key_configured": bool(cfg.google_ai_api_key),
+            "google_cloud_credentials_configured": bool(cfg.google_cloud_credentials_json),
         }
 
     async def websocket_session(self, ws: WebSocket) -> None:
@@ -407,6 +477,12 @@ class TtsRelay:
                 elif cfg.provider == "openai":
                     text = first_cmd.text if first_cmd.final else await self._collect_buffered_stream_text(ws, first_cmd)
                     await self._relay_openai_stream(session, output, cfg, text)
+                elif cfg.provider == "google_ai":
+                    text = first_cmd.text if first_cmd.final else await self._collect_buffered_stream_text(ws, first_cmd)
+                    await self._relay_google_ai(session, output, cfg, text)
+                elif cfg.provider == "google_cloud":
+                    text = first_cmd.text if first_cmd.final else await self._collect_buffered_stream_text(ws, first_cmd)
+                    await self._relay_google_cloud(session, output, cfg, text)
                 else:
                     await output.error(f"TTS provider '{cfg.provider}' is configured but not implemented in this preview.", 501)
         except WebSocketDisconnect:
@@ -440,6 +516,10 @@ class TtsRelay:
             elif cfg.provider == "cartesia":
                 first_cmd = StreamCommand(msg_type="start", text=text, final=True, provider=cfg.provider)
                 await self._relay_cartesia_continuation(session, output, cfg, first_cmd)
+            elif cfg.provider == "google_ai":
+                await self._relay_google_ai(session, output, cfg, text)
+            elif cfg.provider == "google_cloud":
+                await self._relay_google_cloud(session, output, cfg, text)
             else:
                 await output.error(f"TTS provider '{cfg.provider}' is configured but not implemented in this preview.", 501)
                 return {"ok": False, "status": "provider_not_implemented", "provider": cfg.provider}
@@ -516,6 +596,118 @@ class TtsRelay:
         except Exception as exc:
             await self._log_bus.emit("ERROR", "TTS", "OpenAI TTS stream failed", {"error": safe_exc_message(exc)})
             await output.error(f"OpenAI stream error: {safe_exc_message(exc)}", 502)
+
+    async def _relay_google_ai(
+        self,
+        session: aiohttp.ClientSession,
+        output: PcmOutput,
+        cfg: TtsRelayConfig,
+        text: str,
+    ) -> None:
+        if not cfg.google_ai_api_key:
+            await output.error("Google AI API key is not configured.", 500)
+            return
+        prompt = text
+        if cfg.google_ai_prompt_prefix.strip():
+            prompt = f"{cfg.google_ai_prompt_prefix.strip()}\n\n{text}"
+        payload: dict[str, Any] = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {
+                        "prebuiltVoiceConfig": {
+                            "voiceName": cfg.google_ai_voice_name or "Kore",
+                        }
+                    }
+                },
+            },
+        }
+        url = GOOGLE_AI_MODEL_URL.format(model=cfg.google_ai_model)
+        params = {"key": cfg.google_ai_api_key}
+        timeout = aiohttp.ClientTimeout(total=90, connect=15, sock_read=90)
+        try:
+            async with session.post(url, params=params, json=payload, timeout=timeout) as resp:
+                doc = await resp.json(content_type=None)
+                if resp.status != 200:
+                    await self._log_bus.emit("ERROR", "TTS", "Google AI TTS failed", {"status": resp.status, "body": str(doc)[:500]})
+                    await output.error(f"Google AI TTS error: {str(doc)[:300]}", resp.status)
+                    return
+            audio = extract_inline_audio(doc, "Google AI")
+            pcm, wav_rate, wav_channels = strip_wav_header_if_present(audio)
+            sample_rate = wav_rate or GOOGLE_AI_PCM_SAMPLE_RATE
+            channels = wav_channels or DEFAULT_PCM_CHANNELS
+            await output.start(sample_rate, channels)
+            pacer = PcmPacer(sample_rate, channels) if output.pace_pcm else None
+            await send_pcm_bytes_to_output(output, pcm, pacer)
+            await output.done()
+        except Exception as exc:
+            await self._log_bus.emit("ERROR", "TTS", "Google AI TTS stream failed", {"error": safe_exc_message(exc)})
+            await output.error(f"Google AI stream error: {safe_exc_message(exc)}", 502)
+
+    async def _relay_google_cloud(
+        self,
+        session: aiohttp.ClientSession,
+        output: PcmOutput,
+        cfg: TtsRelayConfig,
+        text: str,
+    ) -> None:
+        if not cfg.google_cloud_credentials_json.strip():
+            await output.error("Google Cloud credentials JSON is not configured.", 500)
+            return
+        try:
+            token = await self._google_cloud_access_token(cfg.google_cloud_credentials_json)
+        except Exception as exc:
+            await output.error(f"Google Cloud credentials error: {safe_exc_message(exc)}", 500)
+            return
+
+        payload: dict[str, Any] = {
+            "input": {"text": text},
+            "voice": {
+                "languageCode": cfg.google_cloud_language_code or "tr-TR",
+                "name": cfg.google_cloud_voice_name or "tr-TR-Chirp3-HD-Kore",
+                "ssmlGender": cfg.google_cloud_ssml_gender or "FEMALE",
+            },
+            "audioConfig": {
+                "audioEncoding": "LINEAR16",
+                "sampleRateHertz": cfg.pcm_sample_rate,
+            },
+        }
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        timeout = aiohttp.ClientTimeout(total=90, connect=15, sock_read=90)
+        try:
+            async with session.post(GOOGLE_CLOUD_SYNTH_URL, headers=headers, json=payload, timeout=timeout) as resp:
+                doc = await resp.json(content_type=None)
+                if resp.status != 200:
+                    await self._log_bus.emit("ERROR", "TTS", "Google Cloud TTS failed", {"status": resp.status, "body": str(doc)[:500]})
+                    await output.error(f"Google Cloud TTS error: {str(doc)[:300]}", resp.status)
+                    return
+            audio_b64 = str(doc.get("audioContent") or "")
+            if not audio_b64:
+                await output.error("Google Cloud TTS did not return audioContent.", 502)
+                return
+            audio = decode_audio_b64(audio_b64, "Google Cloud")
+            pcm, wav_rate, wav_channels = strip_wav_header_if_present(audio)
+            sample_rate = wav_rate or cfg.pcm_sample_rate
+            channels = wav_channels or DEFAULT_PCM_CHANNELS
+            await output.start(sample_rate, channels)
+            pacer = PcmPacer(sample_rate, channels) if output.pace_pcm else None
+            await send_pcm_bytes_to_output(output, pcm, pacer)
+            await output.done()
+        except Exception as exc:
+            await self._log_bus.emit("ERROR", "TTS", "Google Cloud TTS stream failed", {"error": safe_exc_message(exc)})
+            await output.error(f"Google Cloud stream error: {safe_exc_message(exc)}", 502)
+
+    async def _google_cloud_access_token(self, credentials_json: str) -> str:
+        info = json.loads(credentials_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            info,
+            scopes=["https://www.googleapis.com/auth/cloud-platform"],
+        )
+        await asyncio.to_thread(credentials.refresh, GoogleAuthRequest())
+        if not credentials.token:
+            raise RuntimeError("Google Cloud token refresh returned no token.")
+        return credentials.token
 
     async def _relay_cartesia_continuation(
         self,

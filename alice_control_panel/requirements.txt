@@ -1,6 +1,8 @@
 aiohttp
 fastapi
+google-auth
 psutil
 PyYAML
+requests
 uvicorn
 websockets

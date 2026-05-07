@@ -23,8 +23,9 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - TTS relay can stream generated PCM audio to the connected ESP WebSocket using the lightweight `audio_start` / binary PCM / `audio_end` protocol.
 - ESP command stubs for the future lightweight ESP HTTP/WebSocket API.
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
+- Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.21` keeps live scroll areas pinned to the newest entries unless the user scrolls up manually.
+- Version `0.1.22` adds Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths.
 
 The old add-ons remain untouched:
 
