@@ -5,6 +5,7 @@ import copy
 import json
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import aiohttp
@@ -45,6 +46,7 @@ DEFAULT_STATUS: dict[str, Any] = {
 ESP_COMMANDS = {
     "test_speaker",
     "test_mic",
+    "capture_mic",
     "wake_on",
     "wake_off",
     "servo_left",
@@ -56,6 +58,7 @@ ESP_COMMANDS = {
     "reboot",
 }
 SAFE_MODE_ALLOWED_COMMANDS = {"reconnect"}
+MIC_CAPTURE_MAX_BYTES = 768 * 1024
 
 
 class EspClient:
@@ -75,6 +78,15 @@ class EspClient:
         self._last_pause_log_at = 0.0
         self._audio_ack_waiters: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._active_audio_stream_id = ""
+        self._active_mic_stream: dict[str, Any] | None = None
+        self._active_mic_buffer = bytearray()
+        self._mic_stream_handler: Callable[[dict[str, Any], bytes], Awaitable[dict[str, Any]]] | None = None
+
+    def set_mic_stream_handler(
+        self,
+        handler: Callable[[dict[str, Any], bytes], Awaitable[dict[str, Any]]] | None,
+    ) -> None:
+        self._mic_stream_handler = handler
 
     async def start(self) -> None:
         if self._poll_task and not self._poll_task.done():
@@ -333,7 +345,7 @@ class EspClient:
                             await self._handle_ws_text(msg.data, ws_url)
                             continue
                         if msg.type == aiohttp.WSMsgType.BINARY:
-                            await self._ws_hub.publish("esp_binary", {"bytes": len(msg.data)})
+                            await self._handle_ws_binary(msg.data)
                             continue
                         if msg.type == aiohttp.WSMsgType.ERROR:
                             raise RuntimeError(f"ESP websocket error: {ws.exception()}")
@@ -351,6 +363,7 @@ class EspClient:
                 if self._ws is active_ws:
                     self._ws = None
                 self._active_audio_stream_id = ""
+                self._clear_mic_stream("ESP websocket disconnected")
                 self._fail_audio_ack_waiters("ESP websocket disconnected")
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=reconnect_sec)
@@ -399,9 +412,117 @@ class EspClient:
             )
             await self._ws_hub.publish("esp_event", {"type": msg_type, "payload": payload})
             return
+        if msg_type == "mic_start":
+            await self._handle_mic_start(doc, payload)
+            return
+        if msg_type == "mic_end":
+            await self._handle_mic_end(doc, payload)
+            return
+        if msg_type == "mic_error":
+            await self._handle_mic_error(doc, payload)
+            return
         event_payload = {"type": msg_type or "event", "payload": payload}
         await self._ws_hub.publish("esp_event", event_payload)
         await self._log_bus.emit("INFO", "ESP", f"ESP event: {event_payload['type']}", {"payload": payload})
+
+    async def _handle_ws_binary(self, data: bytes) -> None:
+        if not self._active_mic_stream:
+            await self._ws_hub.publish("esp_binary", {"bytes": len(data)})
+            return
+        stream = self._active_mic_stream
+        stream["chunks"] = int(stream.get("chunks") or 0) + 1
+        stream["bytes_received"] = int(stream.get("bytes_received") or 0) + len(data)
+        remaining = MIC_CAPTURE_MAX_BYTES - len(self._active_mic_buffer)
+        if remaining <= 0:
+            stream["truncated"] = True
+            return
+        if len(data) > remaining:
+            self._active_mic_buffer.extend(data[:remaining])
+            stream["truncated"] = True
+            return
+        self._active_mic_buffer.extend(data)
+
+    async def _handle_mic_start(self, doc: dict[str, Any], payload: dict[str, Any]) -> None:
+        if self._active_mic_stream:
+            await self._handle_mic_end({"type": "mic_end"}, {"message": "replaced by a new mic stream"})
+        stream_id = str(doc.get("stream_id") or payload.get("stream_id") or f"mic-{uuid.uuid4().hex}")
+        sample_rate = int(payload.get("sample_rate") or doc.get("sample_rate") or 16000)
+        channels = int(payload.get("channels") or doc.get("channels") or 1)
+        encoding = str(payload.get("encoding") or doc.get("encoding") or "pcm_s16le")
+        self._active_mic_stream = {
+            "stream_id": stream_id,
+            "sample_rate": sample_rate,
+            "channels": channels,
+            "encoding": encoding,
+            "source": str(payload.get("source") or "esp"),
+            "started_at": time.time(),
+            "bytes_received": 0,
+            "chunks": 0,
+            "truncated": False,
+        }
+        self._active_mic_buffer = bytearray()
+        await self._log_bus.emit(
+            "INFO",
+            "STT",
+            "ESP mic stream started",
+            {"stream_id": stream_id, "sample_rate": sample_rate, "channels": channels},
+        )
+        await self._ws_hub.publish("esp_event", {"type": "mic_start", "payload": dict(self._active_mic_stream)})
+
+    async def _handle_mic_end(self, doc: dict[str, Any], payload: dict[str, Any]) -> None:
+        if not self._active_mic_stream:
+            await self._log_bus.emit("WARN", "STT", "ESP mic end received without active stream")
+            return
+        stream = dict(self._active_mic_stream)
+        stream.update({
+            "message": str(payload.get("message") or doc.get("message") or ""),
+            "ended_at": time.time(),
+            "bytes_buffered": len(self._active_mic_buffer),
+        })
+        stream["duration_sec"] = round(float(stream["ended_at"] - stream.get("started_at", stream["ended_at"])), 2)
+        audio = bytes(self._active_mic_buffer)
+        self._active_mic_stream = None
+        self._active_mic_buffer = bytearray()
+        await self._log_bus.emit(
+            "INFO",
+            "STT",
+            "ESP mic stream completed",
+            {
+                "stream_id": stream.get("stream_id"),
+                "bytes": stream.get("bytes_buffered"),
+                "chunks": stream.get("chunks"),
+                "truncated": stream.get("truncated"),
+            },
+        )
+        await self._ws_hub.publish("esp_event", {"type": "mic_end", "payload": stream})
+        self._dispatch_mic_capture(stream, audio)
+
+    async def _handle_mic_error(self, doc: dict[str, Any], payload: dict[str, Any]) -> None:
+        message = str(payload.get("message") or doc.get("message") or "ESP mic stream error")
+        stream = dict(self._active_mic_stream or {})
+        self._active_mic_stream = None
+        self._active_mic_buffer = bytearray()
+        await self._log_bus.emit("WARN", "STT", message, {"stream_id": stream.get("stream_id")})
+        await self._ws_hub.publish("esp_event", {"type": "mic_error", "payload": {"message": message, **stream}})
+
+    def _dispatch_mic_capture(self, metadata: dict[str, Any], audio: bytes) -> None:
+        handler = self._mic_stream_handler
+        if handler is None:
+            return
+
+        async def run_handler() -> None:
+            try:
+                await handler(metadata, audio)
+            except Exception as exc:
+                await self._log_bus.emit("ERROR", "STT", "Mic capture handler failed", {"error": str(exc)})
+
+        asyncio.create_task(run_handler(), name="alice-mic-capture-handler")
+
+    def _clear_mic_stream(self, message: str) -> None:
+        if self._active_mic_stream:
+            self._active_mic_stream["error"] = message
+        self._active_mic_stream = None
+        self._active_mic_buffer = bytearray()
 
     def _set_ws_state(self, connected: bool, ws_url: str, error: str) -> None:
         self._status["ws_connected"] = connected

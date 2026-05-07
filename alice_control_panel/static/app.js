@@ -1,5 +1,5 @@
 const espCommands = [
-  "test_speaker", "test_mic", "wake_on", "wake_off", "servo_left", "servo_center",
+  "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off", "servo_left", "servo_center",
   "servo_right", "amp_mute_on", "amp_mute_off", "reconnect", "reboot"
 ];
 const serverCommands = ["restart_stt", "restart_tts", "reload_prompt", "clear_logs", "safe_mode_on", "safe_mode_off"];

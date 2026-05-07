@@ -42,24 +42,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.24", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.25", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
     prompt_store = PromptStore(config_store)
     esp_client = EspClient(config_store, log_bus, ws_hub)
     llm = OpenAICompatibleLlm(config_store, prompt_store, log_bus)
+    stt_manager = SttManager(config_store, log_bus)
     tts_relay = TtsRelay(config_store, log_bus)
+    voice_pipeline = VoicePipeline(config_store, log_bus, ws_hub, llm, stt_manager, tts_relay, esp_client)
+    esp_client.set_mic_stream_handler(voice_pipeline.run_audio_capture)
 
     app.state.config_store = config_store
     app.state.log_bus = log_bus
     app.state.ws_hub = ws_hub
     app.state.prompt_store = prompt_store
     app.state.esp_client = esp_client
-    app.state.stt_manager = SttManager(config_store, log_bus)
+    app.state.stt_manager = stt_manager
     app.state.llm = llm
     app.state.tts_relay = tts_relay
-    app.state.voice_pipeline = VoicePipeline(config_store, log_bus, ws_hub, llm, tts_relay, esp_client)
+    app.state.voice_pipeline = voice_pipeline
 
     app.include_router(status.router)
     app.include_router(config.router)
