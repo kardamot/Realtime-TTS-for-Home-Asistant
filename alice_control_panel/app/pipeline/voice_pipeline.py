@@ -155,7 +155,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.42",
+                "version": "0.1.43",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -178,6 +178,7 @@ class VoicePipeline:
         encoding = "pcm_s16le"
         vad_enabled = bool(pipeline_cfg.get("live_vad_enabled", True))
         endpoint = await self._create_live_endpoint(pipeline_cfg, sample_rate)
+        ignore_empty_eos_after_vad = False
         await self.start_session("live_ws")
         try:
             while True:
@@ -202,10 +203,22 @@ class VoicePipeline:
                             "started_at": time.time(),
                             "state": "listening",
                         }
+                        await self._send_live_session_started(
+                            websocket,
+                            session_id,
+                            sample_rate,
+                            str(doc.get("language") or "tr"),
+                            pipeline_cfg,
+                            realtime_cfg,
+                            tts_cfg,
+                        )
                         await websocket.send_json({"type": "started", "session_id": session_id})
                         await self._ws_hub.publish("pipeline_status", await self.status())
                         continue
                     if msg_type in {"end", "eos"}:
+                        if ignore_empty_eos_after_vad and not endpoint.audio():
+                            ignore_empty_eos_after_vad = False
+                            continue
                         await self._finalize_live_mic(websocket, endpoint, session_id, sample_rate, channels, encoding, "manual_end")
                         endpoint.reset()
                         continue
@@ -259,6 +272,7 @@ class VoicePipeline:
                         str(result.get("reason") or "vad_end"),
                     )
                     endpoint.reset(keep_pre_roll=True)
+                    ignore_empty_eos_after_vad = True
         except WebSocketDisconnect:
             await self._log_bus.emit("INFO", "STT", "Live mic WebSocket disconnected", {"session_id": session_id})
         except Exception as exc:
@@ -504,6 +518,31 @@ class VoicePipeline:
         self._timeline.append({"ts": time.time(), "category": category, "message": message})
         self._timeline = self._timeline[-50:]
 
+    async def _send_live_session_started(
+        self,
+        websocket: WebSocket,
+        session_id: str,
+        sample_rate: int,
+        language: str,
+        pipeline_cfg: dict[str, Any],
+        realtime_cfg: dict[str, Any],
+        tts_cfg: dict[str, Any],
+    ) -> None:
+        await websocket.send_json(
+            {
+                "type": "session_started",
+                "session_id": session_id,
+                "sample_rate": sample_rate,
+                "language": language,
+                "endpointing_enabled": bool(pipeline_cfg.get("live_vad_enabled", True)),
+                "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
+                "realtime_enabled": bool(realtime_cfg.get("enabled", False)),
+                "realtime_model": str(realtime_cfg.get("model") or ""),
+                "llm_enabled": True,
+                "tts_enabled": bool(tts_cfg.get("enabled", True)),
+            }
+        )
+
     async def _finalize_live_mic(
         self,
         websocket: WebSocket,
@@ -516,7 +555,7 @@ class VoicePipeline:
     ) -> None:
         audio = endpoint.audio()
         if not audio:
-            await websocket.send_json({"type": "empty", "session_id": session_id, "reason": reason})
+            await websocket.send_json({"type": "no_speech_timeout", "session_id": session_id, "reason": reason})
             return
         metadata = {
             "stream_id": session_id,
@@ -535,8 +574,124 @@ class VoicePipeline:
                 "reason": reason,
             }
         )
-        status = await self.run_audio_capture(metadata, audio)
+        status = await self._run_live_voice_turn(websocket, metadata, audio)
         await websocket.send_json({"type": "pipeline_status", "session_id": session_id, "payload": status})
+
+    async def _run_live_voice_turn(self, websocket: WebSocket, metadata: dict[str, Any], audio: bytes) -> dict[str, Any]:
+        config = await self._config_store.get(include_secrets=False)
+        pipeline_cfg = config.get("pipeline", {}) if isinstance(config.get("pipeline"), dict) else {}
+        stt_cfg = config.get("stt", {}) if isinstance(config.get("stt"), dict) else {}
+        if self._stream_active and bool(pipeline_cfg.get("barge_in_enabled", True)):
+            await self.cancel_response("live_voice_barge_in")
+
+        run_cancel_event = asyncio.Event()
+        self._cancel_event = run_cancel_event
+        sample_rate = int(metadata.get("sample_rate") or 16000)
+        session_id = str(metadata.get("stream_id") or "")
+        self._state = "STT"
+        self._stream_active = True
+        self._tts_status = "external_tts_relay"
+        if self._session_active:
+            self._session_turns += 1
+            self._session_last_event = "live_stt"
+        self._last_audio_capture = {
+            **metadata,
+            "bytes_buffered": len(audio),
+            "received_at": time.time(),
+        }
+        self._mark("STT", f"live voice received: {len(audio)} bytes")
+        await self._ws_hub.publish("pipeline_status", await self.status())
+
+        try:
+            result = await self._stt.transcribe_pcm16(audio, sample_rate)
+            text = str(result.get("text") or "").strip()
+            self._stt_result = text or str(result.get("message") or "Audio captured; no transcript yet.")
+            self._last_user_text = text
+            self._last_audio_capture["stt"] = result
+            await self._log_bus.emit("INFO", "STT", "STT transcription completed", {"text": text})
+            await websocket.send_json(
+                {
+                    "type": "stt_result",
+                    "session_id": session_id,
+                    "text": text,
+                    "provider": result.get("provider") or stt_cfg.get("provider") or "faster_whisper",
+                    "language": result.get("language") or stt_cfg.get("language") or "tr",
+                    "duration_sec": result.get("duration_sec") or metadata.get("duration_sec"),
+                }
+            )
+            if not text:
+                self._state = "IDLE"
+                self._session_last_event = "no_speech"
+                await websocket.send_json({"type": "no_speech_timeout", "session_id": session_id, "reason": "empty_transcript"})
+                await websocket.send_json({"type": "session_completed", "session_id": session_id, "reason": "empty_transcript"})
+                return await self.status()
+
+            mode = str(pipeline_cfg.get("mic_response_mode") or "assistant").lower()
+            if mode == "echo":
+                await self._send_live_llm_text(websocket, session_id, text, provider="transcript_echo", model="echo")
+            else:
+                await self._stream_live_llm_response(websocket, session_id, text, config, run_cancel_event)
+
+            self._state = "IDLE" if not run_cancel_event.is_set() else "CANCELLED"
+            self._session_last_event = "turn_completed" if not run_cancel_event.is_set() else "turn_cancelled"
+            await websocket.send_json({"type": "session_completed", "session_id": session_id, "reason": self._session_last_event})
+            return await self.status()
+        except Exception as exc:
+            self._state = "ERROR"
+            self._last_audio_capture["error"] = str(exc)
+            await self._log_bus.emit("ERROR", "PIPELINE", "Live voice turn failed", {"error": str(exc)})
+            await websocket.send_json({"type": "error", "session_id": session_id, "message": str(exc)})
+            raise
+        finally:
+            self._stream_active = False
+            await self._ws_hub.publish("pipeline_status", await self.status())
+
+    async def _stream_live_llm_response(
+        self,
+        websocket: WebSocket,
+        session_id: str,
+        user_text: str,
+        config: dict[str, Any],
+        cancel_event: asyncio.Event,
+    ) -> None:
+        ha_response = await self._try_home_assistant_route(user_text, cancel_event)
+        if ha_response is not None:
+            await self._send_live_llm_text(websocket, session_id, ha_response, provider="home_assistant", model="allowlist")
+            return
+
+        llm_cfg = config.get("llm", {}) if isinstance(config.get("llm"), dict) else {}
+        provider = str(llm_cfg.get("provider") or "openai")
+        model = str(llm_cfg.get("model") or "")
+        self._state = "LLM"
+        self._llm_response = ""
+        await websocket.send_json({"type": "llm_started", "session_id": session_id, "provider": provider, "model": model})
+        async for chunk in self._llm.stream_chat(user_text):
+            if cancel_event.is_set():
+                break
+            if not chunk:
+                continue
+            self._llm_response += chunk
+            await websocket.send_json({"type": "llm_delta", "session_id": session_id, "text": chunk})
+            await websocket.send_json({"type": "llm_chunk", "session_id": session_id, "text": chunk, "final": False})
+            await self._ws_hub.publish("llm_delta", {"text": chunk})
+        await websocket.send_json({"type": "llm_chunk", "session_id": session_id, "text": "", "final": True})
+        await websocket.send_json({"type": "llm_result", "session_id": session_id, "text": self._llm_response})
+        await self._log_bus.emit("INFO", "PIPELINE", "LLM response completed", {"chars": len(self._llm_response)})
+
+    async def _send_live_llm_text(
+        self,
+        websocket: WebSocket,
+        session_id: str,
+        text: str,
+        provider: str,
+        model: str,
+    ) -> None:
+        self._state = "LLM"
+        self._llm_response = text
+        await websocket.send_json({"type": "llm_started", "session_id": session_id, "provider": provider, "model": model})
+        await websocket.send_json({"type": "llm_chunk", "session_id": session_id, "text": text, "final": True})
+        await websocket.send_json({"type": "llm_result", "session_id": session_id, "text": text})
+        await self._log_bus.emit("INFO", "PIPELINE", "LLM response completed", {"chars": len(text), "provider": provider})
 
     async def _create_live_endpoint(self, pipeline_cfg: dict[str, Any], sample_rate: int) -> "_EnergyEndpoint":
         provider = str(pipeline_cfg.get("live_vad_provider") or "silero").strip().lower()
