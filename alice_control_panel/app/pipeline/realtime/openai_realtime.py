@@ -156,11 +156,15 @@ class OpenAIRealtimeBridge:
         assistant_text = ""
         response_requested = False
         response_done = False
+        stt_result_sent = False
+        llm_started_sent = False
         speech_started = False
         audio_ms = 0
         buffered_audio_ms = 0
         input_committed = False
         stripped_packet_headers = 0
+        transcript_event = asyncio.Event()
+        response_wait_task: asyncio.Task[None] | None = None
         realtime_ws: aiohttp.ClientWebSocketResponse | None = None
         client_session: aiohttp.ClientSession | None = None
         reader_task: asyncio.Task[None] | None = None
@@ -202,6 +206,38 @@ class OpenAIRealtimeBridge:
             self._last_event = "response_requested"
             await self._log_bus.emit("INFO", "PIPELINE", "OpenAI Realtime response requested", {"session_id": session_id})
 
+        async def send_stt_result_once(reason: str) -> None:
+            nonlocal stt_result_sent
+            if stt_result_sent:
+                return
+            stt_result_sent = True
+            await send_event("stt_result", text=transcript.strip(), provider="openai_realtime", reason=reason)
+
+        async def send_llm_started_once() -> None:
+            nonlocal llm_started_sent
+            if llm_started_sent:
+                return
+            llm_started_sent = True
+            await send_event("llm_started", model=self._model, provider="openai_realtime")
+
+        async def request_response_after_transcript_wait(reason: str = "realtime_committed") -> None:
+            if response_requested or response_done:
+                return
+            wait_ms = max(0, int(realtime.get("transcript_wait_ms") or 800))
+            if wait_ms and not transcript_event.is_set():
+                try:
+                    await asyncio.wait_for(transcript_event.wait(), timeout=wait_ms / 1000)
+                except asyncio.TimeoutError:
+                    pass
+            if response_requested or response_done:
+                return
+            if bool(realtime.get("suppress_empty_transcript_response", True)) and not transcript.strip():
+                await send_stt_result_once("empty_transcript_suppressed")
+                await finish_response(reason="empty_transcript_suppressed")
+                return
+            await send_stt_result_once(reason)
+            await request_response()
+
         async def finish_response(doc: dict[str, Any] | None = None, reason: str = "openai_realtime_done") -> None:
             nonlocal response_done, assistant_text
             if response_done:
@@ -236,7 +272,7 @@ class OpenAIRealtimeBridge:
                 await self._tts_relay.synthesize_to_esp(assistant_text, self._esp_client, self._cancel_event)
 
         async def handle_realtime_event(doc: dict[str, Any]) -> None:
-            nonlocal transcript, assistant_text, response_done, response_requested, speech_started, input_committed
+            nonlocal transcript, assistant_text, response_done, response_requested, speech_started, input_committed, response_wait_task
             event_type = str(doc.get("type") or "")
             if not event_type:
                 return
@@ -261,15 +297,8 @@ class OpenAIRealtimeBridge:
                 return
             if event_type == "input_audio_buffer.committed":
                 input_committed = True
-                wait_ms = max(0, int(realtime.get("transcript_wait_ms") or 800))
-                if wait_ms:
-                    await asyncio.sleep(wait_ms / 1000)
-                if bool(realtime.get("suppress_empty_transcript_response", True)) and not transcript.strip():
-                    await send_event("stt_result", text="", provider="openai_realtime", reason="empty_transcript_suppressed")
-                    await finish_response(reason="empty_transcript_suppressed")
-                    return
-                await send_event("stt_result", text=transcript.strip(), provider="openai_realtime", reason="realtime_committed")
-                await request_response()
+                if response_wait_task is None or response_wait_task.done():
+                    response_wait_task = asyncio.create_task(request_response_after_transcript_wait("realtime_committed"))
                 return
             if event_type == "conversation.item.input_audio_transcription.delta":
                 delta = extract_realtime_text_delta(doc)
@@ -281,9 +310,17 @@ class OpenAIRealtimeBridge:
                 text = str(doc.get("transcript") or "").strip()
                 if text:
                     transcript = text
-                await send_event("stt_result", text=transcript.strip(), provider="openai_realtime")
+                transcript_event.set()
+                if stt_result_sent:
+                    await send_event("stt_transcript", text=transcript.strip(), provider="openai_realtime", late=True)
+                elif input_committed and (response_wait_task is None or response_wait_task.done()):
+                    response_wait_task = asyncio.create_task(request_response_after_transcript_wait("transcription_completed"))
+                return
+            if event_type == "response.created":
+                await send_llm_started_once()
                 return
             if event_type in {"response.output_text.delta", "response.text.delta", "response.audio_transcript.delta"}:
+                await send_llm_started_once()
                 delta = extract_realtime_text_delta(doc)
                 if delta:
                     assistant_text += delta
@@ -346,7 +383,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.46",
+                version="0.1.47",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -368,10 +405,16 @@ class OpenAIRealtimeBridge:
                         assistant_text = ""
                         response_requested = False
                         response_done = False
+                        stt_result_sent = False
+                        llm_started_sent = False
                         speech_started = False
                         audio_ms = 0
                         buffered_audio_ms = 0
                         input_committed = False
+                        transcript_event = asyncio.Event()
+                        if response_wait_task is not None and not response_wait_task.done():
+                            response_wait_task.cancel()
+                        response_wait_task = None
                         source_sample_rate = int(doc.get("sample_rate") or source_sample_rate)
                         language = str(doc.get("language") or language).strip() or "tr"
                         session_id = str(doc.get("session_id") or session_id).strip() or session_id
@@ -419,10 +462,16 @@ class OpenAIRealtimeBridge:
                         assistant_text = ""
                         response_requested = False
                         response_done = False
+                        stt_result_sent = False
+                        llm_started_sent = False
                         speech_started = False
                         audio_ms = 0
                         buffered_audio_ms = 0
                         input_committed = False
+                        transcript_event = asyncio.Event()
+                        if response_wait_task is not None and not response_wait_task.done():
+                            response_wait_task.cancel()
+                        response_wait_task = None
                         await send_event("session_reset", session_id=session_id)
                         continue
                     await send_event("error", message=f"Unknown realtime message type: {msg_type}")
