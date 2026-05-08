@@ -530,6 +530,10 @@ class TtsRelay:
             cfg = relay_config_from_panel(await self._config_store.get(include_secrets=True), first_cmd.provider)
             output = WebSocketPcmOutput(ws)
             await self._log_bus.emit("INFO", "TTS", "TTS relay websocket started", {"provider": cfg.provider})
+            if first_cmd.final and not first_cmd.text.strip():
+                await self._log_bus.emit("INFO", "TTS", "Empty TTS relay request ignored")
+                await output.done()
+                return
             async with aiohttp.ClientSession() as session:
                 if cfg.provider == "cartesia":
                     await self._relay_cartesia_continuation(session, output, cfg, first_cmd, ws)

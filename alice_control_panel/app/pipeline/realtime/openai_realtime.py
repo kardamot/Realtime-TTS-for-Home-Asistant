@@ -158,6 +158,8 @@ class OpenAIRealtimeBridge:
         response_done = False
         speech_started = False
         audio_ms = 0
+        buffered_audio_ms = 0
+        input_committed = False
         stripped_packet_headers = 0
         realtime_ws: aiohttp.ClientWebSocketResponse | None = None
         client_session: aiohttp.ClientSession | None = None
@@ -209,9 +211,12 @@ class OpenAIRealtimeBridge:
             if final_text and not assistant_text.strip():
                 assistant_text = final_text
                 await send_event("llm_chunk", text=assistant_text, final=True)
-            else:
+            elif assistant_text.strip():
                 await send_event("llm_chunk", text="", final=True)
-            await send_event("llm_result", text=assistant_text)
+            else:
+                await self._log_bus.emit("INFO", "PIPELINE", "OpenAI Realtime completed without assistant text", {"session_id": session_id, "reason": reason})
+            if assistant_text.strip():
+                await send_event("llm_result", text=assistant_text)
             await send_event(
                 "session_completed",
                 reason=reason,
@@ -231,7 +236,7 @@ class OpenAIRealtimeBridge:
                 await self._tts_relay.synthesize_to_esp(assistant_text, self._esp_client, self._cancel_event)
 
         async def handle_realtime_event(doc: dict[str, Any]) -> None:
-            nonlocal transcript, assistant_text, response_done, response_requested, speech_started
+            nonlocal transcript, assistant_text, response_done, response_requested, speech_started, input_committed
             event_type = str(doc.get("type") or "")
             if not event_type:
                 return
@@ -255,6 +260,7 @@ class OpenAIRealtimeBridge:
                 await send_event("vad_end", vad_provider="openai_realtime", audio_ts=doc.get("audio_end_ms"), reason="server_vad")
                 return
             if event_type == "input_audio_buffer.committed":
+                input_committed = True
                 wait_ms = max(0, int(realtime.get("transcript_wait_ms") or 800))
                 if wait_ms:
                     await asyncio.sleep(wait_ms / 1000)
@@ -340,7 +346,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.45",
+                version="0.1.46",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -358,6 +364,14 @@ class OpenAIRealtimeBridge:
                     doc = json.loads(str(message["text"]))
                     msg_type = str(doc.get("type") or "").strip().lower()
                     if msg_type == "start":
+                        transcript = ""
+                        assistant_text = ""
+                        response_requested = False
+                        response_done = False
+                        speech_started = False
+                        audio_ms = 0
+                        buffered_audio_ms = 0
+                        input_committed = False
                         source_sample_rate = int(doc.get("sample_rate") or source_sample_rate)
                         language = str(doc.get("language") or language).strip() or "tr"
                         session_id = str(doc.get("session_id") or session_id).strip() or session_id
@@ -376,12 +390,22 @@ class OpenAIRealtimeBridge:
                         if not realtime_ws:
                             await send_event("error", message="Realtime session is not started.")
                             continue
+                        if input_committed or response_done:
+                            continue
                         try:
-                            if speech_started:
+                            if speech_started and buffered_audio_ms >= 100:
                                 await send_realtime_json({"type": "input_audio_buffer.commit"})
-                                await request_response()
+                                input_committed = True
                             else:
-                                await send_realtime_json({"type": "input_audio_buffer.commit"})
+                                await send_realtime_json({"type": "input_audio_buffer.clear"})
+                                input_committed = True
+                                await send_event(
+                                    "stt_result",
+                                    text="",
+                                    provider="openai_realtime",
+                                    reason="audio_buffer_too_small" if buffered_audio_ms < 100 else "no_speech",
+                                )
+                                await finish_response(reason="audio_buffer_too_small" if buffered_audio_ms < 100 else "no_speech")
                         except Exception as exc:
                             await send_event("error", message=f"Realtime commit failed: {safe_exc_message(exc)}")
                         continue
@@ -396,6 +420,9 @@ class OpenAIRealtimeBridge:
                         response_requested = False
                         response_done = False
                         speech_started = False
+                        audio_ms = 0
+                        buffered_audio_ms = 0
+                        input_committed = False
                         await send_event("session_reset", session_id=session_id)
                         continue
                     await send_event("error", message=f"Unknown realtime message type: {msg_type}")
@@ -419,7 +446,9 @@ class OpenAIRealtimeBridge:
                         )
                 if not raw:
                     continue
-                audio_ms += int((len(raw) / 2) / max(1, source_sample_rate) * 1000)
+                chunk_ms = int((len(raw) / 2) / max(1, source_sample_rate) * 1000)
+                audio_ms += chunk_ms
+                buffered_audio_ms += chunk_ms
                 target = pcm16le_resample_linear(raw, source_sample_rate, target_sample_rate)
                 await send_realtime_json({"type": "input_audio_buffer.append", "audio": base64.b64encode(target).decode("ascii")})
         except WebSocketDisconnect:

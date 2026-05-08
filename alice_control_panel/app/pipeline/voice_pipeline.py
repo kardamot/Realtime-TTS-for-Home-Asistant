@@ -180,7 +180,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.45",
+                "version": "0.1.46",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -749,8 +749,9 @@ class VoicePipeline:
             await websocket.send_json({"type": "llm_delta", "session_id": session_id, "text": chunk})
             await websocket.send_json({"type": "llm_chunk", "session_id": session_id, "text": chunk, "final": False})
             await self._ws_hub.publish("llm_delta", {"text": chunk})
-        await websocket.send_json({"type": "llm_chunk", "session_id": session_id, "text": "", "final": True})
-        await websocket.send_json({"type": "llm_result", "session_id": session_id, "text": self._llm_response})
+        if self._llm_response.strip():
+            await websocket.send_json({"type": "llm_chunk", "session_id": session_id, "text": "", "final": True})
+            await websocket.send_json({"type": "llm_result", "session_id": session_id, "text": self._llm_response})
         await self._log_bus.emit("INFO", "PIPELINE", "LLM response completed", {"chars": len(self._llm_response)})
 
     async def _send_live_llm_text(
