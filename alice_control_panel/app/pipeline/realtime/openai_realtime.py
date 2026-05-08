@@ -25,6 +25,18 @@ def safe_exc_message(exc: Exception) -> str:
     return str(exc).replace("\n", " ").strip()
 
 
+def normalize_esp_pcm_packet(chunk: bytes) -> tuple[bytes, int | None]:
+    if not chunk:
+        return b"", None
+    header: int | None = None
+    if len(chunk) & 1:
+        header = chunk[0]
+        chunk = chunk[1:]
+    if len(chunk) & 1:
+        chunk = chunk[:-1]
+    return bytes(chunk), header
+
+
 def realtime_ws_url(cfg: dict[str, Any]) -> str:
     base = str(cfg.get("ws_url") or OPENAI_REALTIME_WS_URL).strip().rstrip("/")
     separator = "&" if "?" in base else "?"
@@ -146,6 +158,7 @@ class OpenAIRealtimeBridge:
         response_done = False
         speech_started = False
         audio_ms = 0
+        stripped_packet_headers = 0
         realtime_ws: aiohttp.ClientWebSocketResponse | None = None
         client_session: aiohttp.ClientSession | None = None
         reader_task: asyncio.Task[None] | None = None
@@ -327,7 +340,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.44",
+                version="0.1.45",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -394,7 +407,18 @@ class OpenAIRealtimeBridge:
                     if not await open_realtime():
                         continue
                     await send_event("session_started", session_id=session_id, sample_rate=source_sample_rate, realtime_enabled=True)
-                raw = bytes(chunk)
+                raw, stripped_header = normalize_esp_pcm_packet(bytes(chunk))
+                if stripped_header is not None:
+                    stripped_packet_headers += 1
+                    if stripped_packet_headers <= 3:
+                        await self._log_bus.emit(
+                            "INFO",
+                            "PIPELINE",
+                            "OpenAI Realtime mic packet header stripped",
+                            {"session_id": session_id, "packet_len": len(chunk), "header": stripped_header},
+                        )
+                if not raw:
+                    continue
                 audio_ms += int((len(raw) / 2) / max(1, source_sample_rate) * 1000)
                 target = pcm16le_resample_linear(raw, source_sample_rate, target_sample_rate)
                 await send_realtime_json({"type": "input_audio_buffer.append", "audio": base64.b64encode(target).decode("ascii")})

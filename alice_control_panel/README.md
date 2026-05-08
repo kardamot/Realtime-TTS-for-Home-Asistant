@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.45` applies ESP mic packet header stripping to the OpenAI Realtime live voice bridge.
 - Version `0.1.44` strips ESP mic packet handler bytes and suppresses no-speech/hallucinated live transcripts.
 - Version `0.1.43` makes `/voice/ws` emit the legacy voice session events expected by the ESP firmware.
 - Version `0.1.42` separates Live Voice config into prominent OpenAI Live and Gemini Live profiles.
