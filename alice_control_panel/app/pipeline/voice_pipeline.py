@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from typing import Any
@@ -17,6 +18,30 @@ from app.pipeline.realtime.openai_realtime import OpenAIRealtimeBridge
 from app.pipeline.stt.manager import SttManager
 from app.pipeline.stt.vad import SileroVadRuntime
 from app.pipeline.tts.relay import TtsRelay
+
+
+_HALLUCINATION_PHRASES = {
+    "abone ol",
+    "abone olun",
+    "kanala abone ol",
+    "kanalima abone ol",
+    "kanalımıza abone ol",
+    "like and subscribe",
+    "subscribe",
+    "thank you for watching",
+    "thanks for watching",
+    "izlediginiz icin tesekkurler",
+    "izlediğiniz için teşekkürler",
+    "altyazi",
+    "altyazı",
+}
+
+
+def _normalize_transcript(text: str) -> str:
+    normalized = text.strip().lower()
+    normalized = normalized.translate(str.maketrans({"ı": "i", "İ": "i", "ş": "s", "Ş": "s", "ğ": "g", "Ğ": "g", "ü": "u", "Ü": "u", "ö": "o", "Ö": "o", "ç": "c", "Ç": "c"}))
+    normalized = re.sub(r"[^a-z0-9 ]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 class VoicePipeline:
@@ -155,7 +180,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.43",
+                "version": "0.1.44",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -179,6 +204,7 @@ class VoicePipeline:
         vad_enabled = bool(pipeline_cfg.get("live_vad_enabled", True))
         endpoint = await self._create_live_endpoint(pipeline_cfg, sample_rate)
         ignore_empty_eos_after_vad = False
+        stripped_packet_headers = 0
         await self.start_session("live_ws")
         try:
             while True:
@@ -219,7 +245,7 @@ class VoicePipeline:
                         if ignore_empty_eos_after_vad and not endpoint.audio():
                             ignore_empty_eos_after_vad = False
                             continue
-                        await self._finalize_live_mic(websocket, endpoint, session_id, sample_rate, channels, encoding, "manual_end")
+                        await self._finalize_live_mic(websocket, endpoint, session_id, sample_rate, channels, encoding, "manual_end", stripped_packet_headers)
                         endpoint.reset()
                         continue
                     if msg_type in {"cancel", "cancel_response"}:
@@ -247,6 +273,19 @@ class VoicePipeline:
                 chunk = message.get("bytes")
                 if chunk is None:
                     continue
+                chunk = bytes(chunk)
+                if len(chunk) & 1:
+                    stripped_packet_headers += 1
+                    if stripped_packet_headers <= 3:
+                        await self._log_bus.emit(
+                            "INFO",
+                            "STT",
+                            "Live mic packet header stripped",
+                            {"session_id": session_id, "packet_len": len(chunk), "header": chunk[0]},
+                        )
+                    chunk = chunk[1:]
+                if not chunk:
+                    continue
                 result = endpoint.feed(bytes(chunk), use_vad=vad_enabled)
                 self._last_live_mic = {
                     "session_id": session_id,
@@ -270,6 +309,7 @@ class VoicePipeline:
                         channels,
                         encoding,
                         str(result.get("reason") or "vad_end"),
+                        stripped_packet_headers,
                     )
                     endpoint.reset(keep_pre_roll=True)
                     ignore_empty_eos_after_vad = True
@@ -552,7 +592,19 @@ class VoicePipeline:
         channels: int,
         encoding: str,
         reason: str,
+        stripped_packet_headers: int = 0,
     ) -> None:
+        endpoint_status = endpoint.status()
+        if endpoint_status.get("state") != "speaking":
+            await self._log_bus.emit(
+                "INFO",
+                "STT",
+                "Live mic ended without VAD speech",
+                {"session_id": session_id, "reason": reason, **endpoint_status, "stripped_packet_headers": stripped_packet_headers},
+            )
+            await websocket.send_json({"type": "no_speech_timeout", "session_id": session_id, "reason": "no_vad_speech", **endpoint_status})
+            await websocket.send_json({"type": "session_completed", "session_id": session_id, "reason": "no_vad_speech"})
+            return
         audio = endpoint.audio()
         if not audio:
             await websocket.send_json({"type": "no_speech_timeout", "session_id": session_id, "reason": reason})
@@ -564,7 +616,8 @@ class VoicePipeline:
             "channels": channels,
             "encoding": encoding,
             "reason": reason,
-            **endpoint.status(),
+            **endpoint_status,
+            "stripped_packet_headers": stripped_packet_headers,
         }
         await websocket.send_json(
             {
@@ -608,22 +661,30 @@ class VoicePipeline:
             self._stt_result = text or str(result.get("message") or "Audio captured; no transcript yet.")
             self._last_user_text = text
             self._last_audio_capture["stt"] = result
+            suppress_reason = self._live_transcript_suppress_reason(text, metadata, pipeline_cfg)
             await self._log_bus.emit("INFO", "STT", "STT transcription completed", {"text": text})
             await websocket.send_json(
                 {
                     "type": "stt_result",
                     "session_id": session_id,
-                    "text": text,
+                    "text": "" if suppress_reason else text,
                     "provider": result.get("provider") or stt_cfg.get("provider") or "faster_whisper",
                     "language": result.get("language") or stt_cfg.get("language") or "tr",
                     "duration_sec": result.get("duration_sec") or metadata.get("duration_sec"),
+                    "reason": suppress_reason,
                 }
             )
-            if not text:
+            if suppress_reason:
                 self._state = "IDLE"
-                self._session_last_event = "no_speech"
-                await websocket.send_json({"type": "no_speech_timeout", "session_id": session_id, "reason": "empty_transcript"})
-                await websocket.send_json({"type": "session_completed", "session_id": session_id, "reason": "empty_transcript"})
+                self._session_last_event = suppress_reason
+                await self._log_bus.emit(
+                    "WARN",
+                    "STT",
+                    "Live transcript suppressed",
+                    {"text": text, "reason": suppress_reason, "capture": metadata},
+                )
+                await websocket.send_json({"type": "no_speech_timeout", "session_id": session_id, "reason": suppress_reason})
+                await websocket.send_json({"type": "session_completed", "session_id": session_id, "reason": suppress_reason})
                 return await self.status()
 
             mode = str(pipeline_cfg.get("mic_response_mode") or "assistant").lower()
@@ -645,6 +706,20 @@ class VoicePipeline:
         finally:
             self._stream_active = False
             await self._ws_hub.publish("pipeline_status", await self.status())
+
+    def _live_transcript_suppress_reason(self, text: str, metadata: dict[str, Any], pipeline_cfg: dict[str, Any]) -> str:
+        clean = _normalize_transcript(text)
+        if not clean:
+            return "empty_transcript"
+        if not bool(pipeline_cfg.get("suppress_hallucination_phrases", True)):
+            return ""
+        if clean in {_normalize_transcript(item) for item in _HALLUCINATION_PHRASES}:
+            return "hallucination_phrase"
+        if clean.startswith("abone ol") and len(clean) <= 18:
+            return "hallucination_phrase"
+        if clean.startswith("altyazi") and len(clean) <= 24:
+            return "hallucination_phrase"
+        return ""
 
     async def _stream_live_llm_response(
         self,

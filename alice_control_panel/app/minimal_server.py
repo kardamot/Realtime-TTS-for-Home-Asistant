@@ -125,6 +125,7 @@ DEFAULT_CONFIG = {
         "live_vad_pre_roll_ms": 300,
         "live_vad_max_utterance_ms": 12000,
         "live_vad_max_buffer_sec": 20,
+        "suppress_hallucination_phrases": True,
     },
     "debug_logs": True,
     "safe_mode": False,
@@ -351,7 +352,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.43"
+    server_version = "AliceControlPanel/0.1.44"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -512,7 +513,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.43",
+        "version": "0.1.44",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

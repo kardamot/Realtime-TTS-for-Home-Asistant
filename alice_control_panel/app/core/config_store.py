@@ -180,6 +180,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "live_vad_pre_roll_ms": 300,
         "live_vad_max_utterance_ms": 12000,
         "live_vad_max_buffer_sec": 20,
+        "suppress_hallucination_phrases": True,
     },
     "ui": {
         "dark_mode": True,
