@@ -31,6 +31,19 @@ def realtime_ws_url(cfg: dict[str, Any]) -> str:
     return f"{base}{separator}model={str(cfg.get('model') or 'gpt-realtime-mini')}"
 
 
+def active_realtime_config(config: dict[str, Any]) -> dict[str, Any]:
+    realtime = config.get("realtime", {}) if isinstance(config, dict) else {}
+    if not isinstance(realtime, dict):
+        return {}
+    provider = str(realtime.get("provider") or "openai").lower()
+    providers = realtime.get("providers", {}) if isinstance(realtime.get("providers"), dict) else {}
+    profile = providers.get(provider, {}) if isinstance(providers.get(provider), dict) else {}
+    merged = {**realtime, **profile}
+    merged["provider"] = provider
+    merged["providers"] = providers
+    return merged
+
+
 def pcm16le_resample_linear(chunk: bytes, src_rate: int, dst_rate: int) -> bytes:
     if not chunk or src_rate <= 0 or dst_rate <= 0 or src_rate == dst_rate:
         return chunk
@@ -97,11 +110,10 @@ class OpenAIRealtimeBridge:
     async def should_handle_voice_ws(self) -> bool:
         config = await self._config_store.get(include_secrets=True)
         realtime = self._realtime_cfg(config)
-        llm = active_llm_config(config)
         return (
             bool(realtime.get("enabled", False))
             and str(realtime.get("provider") or "openai").lower() == "openai"
-            and bool(str(llm.get("api_key") or "").strip())
+            and bool(self._api_key(config, realtime))
         )
 
     async def status(self) -> dict[str, Any]:
@@ -123,8 +135,7 @@ class OpenAIRealtimeBridge:
         await websocket.accept()
         config = await self._config_store.get(include_secrets=True)
         realtime = self._realtime_cfg(config)
-        llm = active_llm_config(config)
-        api_key = str(llm.get("api_key") or "").strip()
+        api_key = self._api_key(config, realtime)
         source_sample_rate = 16000
         target_sample_rate = max(8000, int(realtime.get("input_sample_rate") or 24000))
         language = str(config.get("stt", {}).get("language") or "tr") if isinstance(config.get("stt"), dict) else "tr"
@@ -316,7 +327,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.41",
+                version="0.1.42",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -480,5 +491,20 @@ class OpenAIRealtimeBridge:
 
     @staticmethod
     def _realtime_cfg(config: dict[str, Any]) -> dict[str, Any]:
-        realtime = config.get("realtime", {}) if isinstance(config, dict) else {}
-        return realtime if isinstance(realtime, dict) else {}
+        return active_realtime_config(config)
+
+    @staticmethod
+    def _api_key(config: dict[str, Any], realtime: dict[str, Any]) -> str:
+        value = str(realtime.get("api_key") or "").strip()
+        if value:
+            return value
+        llm = config.get("llm", {}) if isinstance(config, dict) and isinstance(config.get("llm"), dict) else {}
+        providers = llm.get("providers", {}) if isinstance(llm.get("providers"), dict) else {}
+        openai = providers.get("openai", {}) if isinstance(providers.get("openai"), dict) else {}
+        value = str(openai.get("api_key") or "").strip()
+        if value:
+            return value
+        active_llm = active_llm_config(config)
+        if str(active_llm.get("provider") or "").lower() == "openai":
+            return str(active_llm.get("api_key") or "").strip()
+        return ""

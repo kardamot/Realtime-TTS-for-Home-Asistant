@@ -70,6 +70,23 @@ DEFAULT_CONFIG = {
         "suppress_empty_transcript_response": True,
         "noise_reduction": "near_field",
         "instructions": "",
+        "providers": {
+            "openai": {
+                "api_key": "",
+                "model": "gpt-realtime-mini",
+                "ws_url": "wss://api.openai.com/v1/realtime",
+                "transcription_model": "gpt-4o-mini-transcribe",
+            },
+            "gemini": {
+                "api_key": "",
+                "model": "gemini-2.5-flash-native-audio-preview-12-2025",
+                "voice_name": "Kore",
+                "api_version": "v1beta",
+                "output_sample_rate": 24000,
+                "start_sensitivity": "low",
+                "end_sensitivity": "low",
+            },
+        },
     },
     "ha_bridge": {
         "enabled": True,
@@ -219,6 +236,28 @@ def hydrate_provider_profiles(config: dict) -> dict:
                         or active_profile.get(key) == default_profile.get(key)
                     ):
                         active_profile[key] = llm[key]
+    realtime = config.get("realtime")
+    if isinstance(realtime, dict):
+        providers = realtime.setdefault("providers", {})
+        if isinstance(providers, dict):
+            openai = providers.setdefault("openai", {})
+            if isinstance(openai, dict):
+                default_openai = DEFAULT_CONFIG.get("realtime", {}).get("providers", {}).get("openai", {})
+                for key in ("model", "ws_url", "transcription_model"):
+                    if realtime.get(key) and (not openai.get(key) or openai.get(key) == default_openai.get(key)):
+                        openai[key] = realtime[key]
+            providers.setdefault(
+                "gemini",
+                {
+                    "api_key": "",
+                    "model": "gemini-2.5-flash-native-audio-preview-12-2025",
+                    "voice_name": "Kore",
+                    "api_version": "v1beta",
+                    "output_sample_rate": 24000,
+                    "start_sensitivity": "low",
+                    "end_sensitivity": "low",
+                },
+            )
     tts = config.get("tts")
     if isinstance(tts, dict):
         google_ai = tts.get("google_ai")
@@ -312,7 +351,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.41"
+    server_version = "AliceControlPanel/0.1.42"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -473,7 +512,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.41",
+        "version": "0.1.42",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

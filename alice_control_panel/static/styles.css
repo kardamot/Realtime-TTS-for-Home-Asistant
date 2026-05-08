@@ -283,6 +283,9 @@ nav a:hover { background: #121a25; color: var(--text); }
   grid-template-columns: repeat(auto-fit,minmax(240px,1fr));
   gap: 10px;
 }
+.live-provider-grid {
+  grid-template-columns: repeat(2,minmax(260px,1fr));
+}
 .provider-card {
   display: grid;
   align-content: start;
@@ -293,6 +296,13 @@ nav a:hover { background: #121a25; color: var(--text); }
   background: #101720;
   padding: 12px;
   opacity: .78;
+}
+.live-provider-card {
+  border-color: rgba(100,169,255,.32);
+  background: linear-gradient(180deg, rgba(100,169,255,.06), rgba(16,23,32,1));
+}
+.live-provider-card h4 {
+  font-size: 16px;
 }
 .provider-card.active {
   border-color: rgba(57,197,187,.62);
@@ -397,6 +407,7 @@ label.wide { grid-column: 1 / -1; }
     min-height: 260px;
   }
   .config-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .live-provider-grid { grid-template-columns: 1fr; }
   .config-group-head { align-items: flex-start; flex-direction: column; }
   .provider-switch { justify-content: flex-start; }
 }

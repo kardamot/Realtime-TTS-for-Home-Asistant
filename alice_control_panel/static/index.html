@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.41" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.41" />
+  <link rel="icon" type="image/png" href="/alice-logo.png?v=0.1.42" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.42" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-            <div class="title-logo"><img src="/alice-logo.png?v=0.1.41" alt="Alice" /></div>
+            <div class="title-logo"><img src="/alice-logo.png?v=0.1.42" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -185,7 +185,49 @@
               </section>
 
               <section class="config-group">
-                <h3>STT & VAD</h3>
+                <header class="config-group-head">
+                  <h3>Live Voice</h3>
+                  <div class="provider-switch live-switch" data-provider-kind="realtime">
+                    <button data-provider="openai">OpenAI Live</button>
+                    <button data-provider="gemini">Gemini Live</button>
+                  </div>
+                </header>
+                <div class="config-grid compact">
+                  <label class="check-row"><input data-path="realtime.enabled" type="checkbox" /><span>Live voice</span></label>
+                  <label><span>Active live</span><select data-path="realtime.provider" data-provider-select="realtime"><option>openai</option><option>gemini</option></select></label>
+                  <label><span>Input rate</span><input data-path="realtime.input_sample_rate" type="number" /></label>
+                  <label><span>Response timeout ms</span><input data-path="realtime.response_timeout_ms" type="number" /></label>
+                  <label><span>Transcript wait ms</span><input data-path="realtime.transcript_wait_ms" type="number" /></label>
+                  <label><span>Turn detection</span><select data-path="realtime.turn_detection"><option>server_vad</option><option>semantic_vad</option></select></label>
+                  <label><span>VAD threshold</span><input data-path="realtime.vad_threshold" type="number" step="0.01" /></label>
+                  <label><span>Silence ms</span><input data-path="realtime.silence_duration_ms" type="number" /></label>
+                  <label><span>Prefix padding ms</span><input data-path="realtime.prefix_padding_ms" type="number" /></label>
+                  <label><span>Noise reduction</span><select data-path="realtime.noise_reduction"><option>near_field</option><option>far_field</option><option>none</option></select></label>
+                  <label class="wide"><span>Live instructions</span><textarea data-path="realtime.instructions"></textarea></label>
+                </div>
+                <div class="provider-grid live-provider-grid">
+                  <section class="provider-card live-provider-card" data-provider-kind="realtime" data-provider-card="openai">
+                    <h4>OpenAI Live</h4>
+                    <label><span>API key</span><input data-path="realtime.providers.openai.api_key" type="password" /></label>
+                    <label><span>Model</span><input data-path="realtime.providers.openai.model" /></label>
+                    <label><span>Realtime WS URL</span><input data-path="realtime.providers.openai.ws_url" /></label>
+                    <label><span>Realtime STT model</span><input data-path="realtime.providers.openai.transcription_model" /></label>
+                  </section>
+                  <section class="provider-card live-provider-card" data-provider-kind="realtime" data-provider-card="gemini">
+                    <h4>Gemini Live</h4>
+                    <label><span>API key</span><input data-path="realtime.providers.gemini.api_key" type="password" /></label>
+                    <label><span>Model</span><input data-path="realtime.providers.gemini.model" /></label>
+                    <label><span>Voice name</span><input data-path="realtime.providers.gemini.voice_name" /></label>
+                    <label><span>API version</span><input data-path="realtime.providers.gemini.api_version" /></label>
+                    <label><span>Output rate</span><input data-path="realtime.providers.gemini.output_sample_rate" type="number" /></label>
+                    <label><span>Start sensitivity</span><select data-path="realtime.providers.gemini.start_sensitivity"><option>low</option><option>medium</option><option>high</option></select></label>
+                    <label><span>End sensitivity</span><select data-path="realtime.providers.gemini.end_sensitivity"><option>low</option><option>medium</option><option>high</option></select></label>
+                  </section>
+                </div>
+              </section>
+
+              <section class="config-group">
+                <h3>Classic STT & VAD</h3>
                 <div class="config-grid compact">
                   <label><span>STT provider</span><select data-path="stt.provider"><option>faster_whisper</option></select></label>
                   <label><span>STT model</span><input data-path="stt.model" /></label>
@@ -194,17 +236,6 @@
                   <label><span>Compute type</span><input data-path="stt.compute_type" /></label>
                   <label><span>Beam size</span><input data-path="stt.beam_size" type="number" /></label>
                   <label class="check-row"><input data-path="stt.vad_filter" type="checkbox" /><span>STT VAD filter</span></label>
-                  <label class="check-row"><input data-path="realtime.enabled" type="checkbox" /><span>OpenAI Realtime</span></label>
-                  <label><span>Realtime model</span><input data-path="realtime.model" /></label>
-                  <label><span>Realtime WS URL</span><input data-path="realtime.ws_url" /></label>
-                  <label><span>Realtime input rate</span><input data-path="realtime.input_sample_rate" type="number" /></label>
-                  <label><span>Realtime STT model</span><input data-path="realtime.transcription_model" /></label>
-                  <label><span>Transcript wait ms</span><input data-path="realtime.transcript_wait_ms" type="number" /></label>
-                  <label><span>Turn detection</span><select data-path="realtime.turn_detection"><option>server_vad</option><option>semantic_vad</option></select></label>
-                  <label><span>VAD threshold</span><input data-path="realtime.vad_threshold" type="number" step="0.01" /></label>
-                  <label><span>Prefix padding ms</span><input data-path="realtime.prefix_padding_ms" type="number" /></label>
-                  <label><span>Silence ms</span><input data-path="realtime.silence_duration_ms" type="number" /></label>
-                  <label><span>Noise reduction</span><select data-path="realtime.noise_reduction"><option>near_field</option><option>far_field</option><option>none</option></select></label>
                   <label><span>Live VAD provider</span><select data-path="pipeline.live_vad_provider"><option>silero</option><option>energy</option></select></label>
                   <label><span>Silero start prob</span><input data-path="pipeline.live_vad_silero_start_prob" type="number" step="0.01" /></label>
                   <label><span>Silero end prob</span><input data-path="pipeline.live_vad_silero_end_prob" type="number" step="0.01" /></label>
@@ -346,6 +377,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.41"></script>
+  <script src="/app.js?v=0.1.42"></script>
   </body>
 </html>
