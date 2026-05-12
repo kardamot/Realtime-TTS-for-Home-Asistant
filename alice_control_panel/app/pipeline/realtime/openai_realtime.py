@@ -547,7 +547,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.60",
+                version="0.1.62",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -722,7 +722,11 @@ class OpenAIRealtimeBridge:
             audio_input["noise_reduction"] = None
         transcription_model = str(realtime.get("transcription_model") or "").strip()
         if transcription_model:
-            audio_input["transcription"] = {"model": transcription_model, "language": language}
+            transcription = {"model": transcription_model, "language": language}
+            transcription_prompt = str(realtime.get("transcription_prompt") or "").strip()
+            if transcription_prompt:
+                transcription["prompt"] = transcription_prompt
+            audio_input["transcription"] = transcription
         return {
             "type": "session.update",
             "session": {

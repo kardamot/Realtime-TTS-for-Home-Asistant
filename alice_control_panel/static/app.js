@@ -20,6 +20,130 @@ let eventSocketSeq = 0;
 let statusTimer = null;
 let statusRefreshTimer = null;
 const autoScrollState = new WeakMap();
+let helpPopover = null;
+
+const HELP_TEXTS = {
+  connections: {
+    title: "Connections",
+    body: [
+      "Bu panel robot ve servis bağlantılarının kısa özetidir. ESP satırı HTTP status poll tarafını, ESP WS satırı canlı WebSocket bağlantısını gösterir.",
+      "STT, LLM ve TTS satırları o anda aktif seçili sağlayıcıları gösterir. HA Bridge satırı Home Assistant entegrasyonunun hazır olup olmadığını ve izin verilen entity listesinin kullanılıp kullanılmadığını anlatır.",
+      "Reconnects değeri ESP bağlantısı koptuğunda yapılan otomatik deneme sayısıdır. Limit dolarsa sistem boşa uğraşmayı bırakır; yeniden denemek için reconnect komutu kullanılır."
+    ]
+  },
+  logs: {
+    title: "Logs",
+    body: [
+      "Burada ESP, STT, LLM, TTS, Pipeline, Home Assistant ve sistem olayları tek canlı akışta görünür. Yeni log geldikçe pencere terminal gibi aşağı kayar.",
+      "Search, level ve category filtreleri sadece görüntüyü süzer; logları silmez. Pause akışı dondurur, Download mevcut logları dosya olarak indirir, Clear ise paneldeki log bufferını temizler.",
+      "Hata ayıklarken en değerli yer burasıdır: bağlantı kopmaları, TTS sağlayıcı hataları, VAD/STT kararları ve HA allowlist okumaları burada görünür."
+    ]
+  },
+  hardware: {
+    title: "Hardware",
+    body: [
+      "Bu panel ESP tarafından bildirilen donanım durumlarını gösterir. Mic, Speaker, Servo, Amp ve Wake alanları robotun kendi status cevabından veya eventlerinden beslenir.",
+      "State alanı robotun o anki çalışma durumudur: IDLE, LISTENING, THINKING, SPEAKING veya ERROR gibi. Bir değer unknown görünüyorsa panel değil, ESP tarafı henüz o bilgiyi göndermiyor demektir."
+    ]
+  },
+  pipeline: {
+    title: "Voice Pipeline",
+    body: [
+      "Bu panel ses ve metin hattını elle test etmek içindir. Text test kutusuna yazıp LLM + TTS dersen metin LLM'e gider, gelen cevap seçili TTS ile ESP'ye okutulur.",
+      "TTS only sadece yazdığın metni seçili TTS sağlayıcısıyla okutur; LLM'e soru sormaz. Bu, ses sağlayıcısını ve ESP audio stream hattını hızlı test etmek için kullanışlıdır.",
+      "Start session, Stop session ve Cancel response canlı oturum/barge-in altyapısını denemek içindir. User/STT ve LLM alanları son algılanan konuşmayı ve üretilen cevabı gösterir."
+    ]
+  },
+  commands: {
+    title: "Command Panel",
+    body: [
+      "Üst bölüm ESP komutlarıdır: hoparlör testi, mikrofon testi, wake aç/kapat, servo hareketleri, amfi mute, reconnect ve reboot gibi doğrudan robota giden işler burada durur.",
+      "Alt bölüm server komutlarıdır. STT/TTS yeniden başlatma, prompt reload, log temizleme, safe mode aç/kapat gibi add-on tarafındaki işlemleri tetikler.",
+      "Bazı butonlar ESP firmware tarafında henüz desteklenmiyorsa komut loga düşer ve 'not implemented' benzeri cevap döner. Bu normaldir; panel komut yolunu kaybetmez."
+    ]
+  },
+  prompts: {
+    title: "Prompt Editor",
+    body: [
+      "Prompt profilleri Alice'in genel karakterini ve davranış talimatını yönetir. Alice, Debug veya Minimal gibi profiller dosya olarak /data/prompts altında saklanır.",
+      "Aktif profil, LLM system prompt boşsa classic LLM hattında kullanılır. Live Voice tarafında da Live instructions ve LLM system prompt boşsa yine aktif prompt profiline düşülür.",
+      "New yeni profil oluşturur, Copy mevcut profili kopyalar, Activate seçili profili aktif yapar, Save ise metin değişikliklerini kaydeder. Prompt değişikliği server restart gerektirmez."
+    ]
+  },
+  config: {
+    title: "Config",
+    body: [
+      "Config paneli add-on'un kalıcı ayar merkezidir. Sağlayıcı API keyleri, ESP adresleri, Home Assistant allowlist'i, prompt fallback davranışı ve audio buffer ayarları buradan yönetilir.",
+      "Kaydedilen değerler /data/alice_config.json altında kalır; add-on güncellesen de normalde korunur. API key ve tokenlar repo içine yazılmaz.",
+      "Export varsayılan olarak secretları maskeleyerek dışa aktarır. Secrets kutusunu açarsan gerçek keyleri de dahil eder; bunu sadece gerçekten yedek almak istediğinde kullan."
+    ]
+  },
+  panelEsp: {
+    title: "Panel & ESP",
+    body: [
+      "Panel port, token ve password web panel/API erişimini yönetir. Token veya password boşsa ev içi lokal kullanım için auth kapalı kalabilir; doluysa REST, WebSocket ve UI erişimi korunur.",
+      "ESP base URL robotun HTTP API adresidir. ESP WebSocket URL canlı event, log, mikrofon ve audio stream yolu için kullanılır. Genelde aynı IP'nin /ws endpointidir.",
+      "Max auto reconnects bağlantı kopunca kaç kez otomatik deneneceğini belirler. Debug logs daha ayrıntılı kayıt üretir; Safe mode riskli/aktif işleri azaltmak için acil durum anahtarıdır."
+    ]
+  },
+  liveVoice: {
+    title: "Live Voice",
+    body: [
+      "Bu bölüm düşük gecikmeli canlı konuşma hattını yönetir. OpenAI Live seçilirse ESP'nin /voice/ws bağlantısı OpenAI Realtime hattına yönlenir; None seçilirse live hat devre dışı kalır.",
+      "Turn detection, VAD threshold, silence ve prefix ayarları konuşmanın nerede başlayıp bittiğini belirler. Semantic eagerness sadece semantic_vad seçildiğinde modelin konuşma sonunu ne kadar istekli kapatacağını etkiler.",
+      "Live instructions canlı oturuma özel kişilik talimatıdır. Boş bırakırsan sistem önce LLM system prompt'a, o da boşsa aktif Prompt Editor profiline düşer. Realtime STT prompt ise transkripsiyona ipucu verir; Türkçe ve özel isimlerde işe yarayabilir.",
+      "Gemini Live kartı şimdilik sağlayıcı bilgilerini hazır tutmak içindir. Tam canlı Gemini WebSocket hattı henüz OpenAI Live kadar bağlı değildir."
+    ]
+  },
+  sttVad: {
+    title: "Classic STT & VAD",
+    body: [
+      "Classic STT tarafı tek seferlik mikrofon yakalama veya live olmayan pipeline için faster-whisper ayarlarını tutar. Model, language, compute type ve beam size transkripsiyon kalitesini/gecikmesini etkiler.",
+      "Live VAD provider konuşma başlangıç/bitiş algısını yönetir. Silero daha gerçek VAD yaklaşımıdır; energy daha basit RMS tabanlı yedek yoldur.",
+      "Start/end olasılıkları, RMS eşikleri, silence ve max utterance değerleri mikrofon ortamına göre ince ayar ister. Dip gürültüsü varsa enerji tabanlı ayarlar kolayca yanlış tetiklenebilir."
+    ]
+  },
+  homeAssistant: {
+    title: "Home Assistant",
+    body: [
+      "HA Bridge, Alice'in Home Assistant state ve servislerine kontrollü erişimini sağlar. Bu sistem bilinçli olarak allowlist mantığıyla çalışır; tüm entityler robota açılmaz.",
+      "Allowed entity IDs kutusuna sadece izin vermek istediğin entityleri satır satır yazarsın. Örneğin weather.erzurum_hava_durumu burada varsa Alice onu okuyabilir; listede olmayan entitylere erişmez.",
+      "Route home control açıkken LLM cevabından önce bazı ev kontrolü ve hava durumu istekleri doğrudan HA bridge tarafından karşılanır. HA API base Home Assistant Supervisor içinden varsayılan olarak doğru gelir."
+    ]
+  },
+  llm: {
+    title: "LLM",
+    body: [
+      "LLM bölümü metni anlayıp cevap üreten sağlayıcıyı seçer. OpenAI, OpenRouter, Groq, Gemini ve generic OpenAI-compatible profilleri ayrı ayrı saklanır; sağlayıcı değiştirince eski key/model bilgileri silinmez.",
+      "Active LLM hangi profilin kullanılacağını belirler. Temperature cevapların ne kadar serbest olacağını etkiler; düşük değer daha tutarlı, yüksek değer daha yaratıcı cevap verir.",
+      "LLM system prompt doluysa aktif Prompt Editor profilinin üstüne geçer. Boş bırakılırsa seçili prompt profili Alice'in genel kişiliği olarak kullanılır."
+    ]
+  },
+  tts: {
+    title: "TTS",
+    body: [
+      "TTS bölümü yazıyı sese çeviren sağlayıcıyı seçer. OpenAI, Cartesia, ElevenLabs, Google AI ve Google Cloud bilgileri ayrı kartlarda saklanır; geçiş yaptığında önceki sağlayıcının ayarları kaybolmaz.",
+      "PCM rate genel ESP audio hedefidir; bazı sağlayıcılar kendi sabit sample rate'iyle gelebilir ve backend bunu uygun metadata ile iletir. ESP start buffer ve silence prefix ilk ses takılmalarını azaltmak için kullanılır.",
+      "Mic response, mikrofon testlerinden sonra ne yapılacağını seçer: sadece asistan cevabı, duyulan metni tekrar etme veya önce tekrar edip sonra cevaplama. Barge-in cancel açıksa konuşma sırasında yeni giriş eski cevabı kesebilir."
+    ]
+  }
+};
+
+const HELP_TARGETS = [
+  [".connections-panel > header h2", "connections"],
+  ["#logs > header h2", "logs"],
+  [".hardware-panel > header h2", "hardware"],
+  ["#pipeline > header h2", "pipeline"],
+  ["#commands > header h2", "commands"],
+  ["#prompts > header h2", "prompts"],
+  ["#config > header h2", "config"],
+  ["#config .config-group:nth-of-type(1) h3", "panelEsp"],
+  ["#config .config-group:nth-of-type(2) h3", "liveVoice"],
+  ["#config .config-group:nth-of-type(3) h3", "sttVad"],
+  ["#config .config-group:nth-of-type(4) h3", "homeAssistant"],
+  ["#config .config-group:nth-of-type(5) h3", "llm"],
+  ["#config .config-group:nth-of-type(6) h3", "tts"]
+];
 
 const $ = (id) => document.getElementById(id);
 const text = (id, value) => { const el = $(id); if (el) el.textContent = value ?? "-"; };
@@ -60,6 +184,109 @@ function keepAutoScrolled(el, mutate, force = false) {
 function setAutoText(id, value) {
   const el = $(id);
   keepAutoScrolled(el, () => { el.textContent = value ?? "-"; });
+}
+
+function initHelpBubbles() {
+  HELP_TARGETS.forEach(([selector, key]) => {
+    const heading = document.querySelector(selector);
+    if (!heading || heading.dataset.helpAttached) return;
+    const parent = heading.parentElement;
+    if (!parent) return;
+    const titleRow = document.createElement("div");
+    titleRow.className = "help-title";
+    parent.insertBefore(titleRow, heading);
+    titleRow.appendChild(heading);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "help-trigger";
+    button.dataset.help = key;
+    button.setAttribute("aria-label", `${HELP_TEXTS[key]?.title || "Panel"} yardimi`);
+    button.textContent = "?";
+    button.onclick = (event) => {
+      event.stopPropagation();
+      toggleHelpBubble(key, button);
+    };
+    titleRow.appendChild(button);
+    heading.dataset.helpAttached = "true";
+  });
+
+  document.addEventListener("click", (event) => {
+    if (helpPopover?.contains(event.target) || event.target.closest?.(".help-trigger")) return;
+    closeHelpBubble();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeHelpBubble();
+  });
+  window.addEventListener("resize", closeHelpBubble);
+}
+
+function ensureHelpPopover() {
+  if (helpPopover) return helpPopover;
+  helpPopover = document.createElement("section");
+  helpPopover.id = "help-popover";
+  helpPopover.className = "help-popover hidden";
+  helpPopover.setAttribute("role", "dialog");
+  helpPopover.setAttribute("aria-live", "polite");
+  document.body.appendChild(helpPopover);
+  return helpPopover;
+}
+
+function toggleHelpBubble(key, anchor) {
+  const popover = ensureHelpPopover();
+  if (!popover.classList.contains("hidden") && popover.dataset.helpKey === key) {
+    closeHelpBubble();
+    return;
+  }
+  openHelpBubble(key, anchor);
+}
+
+function openHelpBubble(key, anchor) {
+  const doc = HELP_TEXTS[key];
+  if (!doc) return;
+  const popover = ensureHelpPopover();
+  popover.dataset.helpKey = key;
+  popover.innerHTML = "";
+
+  const header = document.createElement("header");
+  const title = document.createElement("h3");
+  title.textContent = doc.title;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "Kapat";
+  close.setAttribute("aria-label", "Yardimi kapat");
+  close.onclick = closeHelpBubble;
+  header.append(title, close);
+  popover.appendChild(header);
+
+  doc.body.forEach((paragraph) => {
+    const p = document.createElement("p");
+    p.textContent = paragraph;
+    popover.appendChild(p);
+  });
+
+  popover.classList.remove("hidden");
+  window.requestAnimationFrame(() => {
+    const rect = anchor.getBoundingClientRect();
+    const gap = 8;
+    const margin = 12;
+    const width = popover.offsetWidth;
+    const height = popover.offsetHeight;
+    let left = rect.left + rect.width / 2 - width / 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+    let top = rect.bottom + gap;
+    if (top + height > window.innerHeight - margin) {
+      top = rect.top - height - gap;
+    }
+    if (top < margin) top = margin;
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+  });
+}
+
+function closeHelpBubble() {
+  if (!helpPopover) return;
+  helpPopover.classList.add("hidden");
+  helpPopover.dataset.helpKey = "";
 }
 
 function notice(value) {
@@ -158,6 +385,7 @@ function stripMasked(value) {
 
 async function boot() {
   initAutoScrollContainers();
+  initHelpBubbles();
   renderButtons();
   initProviderSwitches();
   $("refresh-btn").onclick = () => guard("Refresh failed", loadStatus);

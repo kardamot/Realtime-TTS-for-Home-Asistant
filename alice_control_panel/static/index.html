@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.60" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.60" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.62" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.62" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.60" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.62" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -201,6 +201,7 @@
                   <label><span>Response timeout ms</span><input data-path="realtime.response_timeout_ms" type="number" /></label>
                   <label><span>Transcript wait ms</span><input data-path="realtime.transcript_wait_ms" type="number" /></label>
                   <label><span>Turn detection</span><select data-path="realtime.turn_detection"><option>server_vad</option><option>semantic_vad</option></select></label>
+                  <label><span>Semantic eagerness</span><select data-path="realtime.semantic_eagerness"><option>low</option><option>medium</option><option>high</option><option>auto</option></select></label>
                   <label><span>VAD threshold</span><input data-path="realtime.vad_threshold" type="number" step="0.01" /></label>
                   <label><span>Silence ms</span><input data-path="realtime.silence_duration_ms" type="number" /></label>
                   <label><span>Prefix padding ms</span><input data-path="realtime.prefix_padding_ms" type="number" /></label>
@@ -214,6 +215,7 @@
                     <label><span>Model</span><input data-path="realtime.providers.openai.model" /></label>
                     <label><span>Realtime WS URL</span><input data-path="realtime.providers.openai.ws_url" /></label>
                     <label><span>Realtime STT model</span><input data-path="realtime.providers.openai.transcription_model" /></label>
+                    <label><span>Realtime STT prompt</span><textarea data-path="realtime.providers.openai.transcription_prompt"></textarea></label>
                   </section>
                   <section class="provider-card live-provider-card" data-provider-kind="realtime" data-provider-card="gemini">
                     <h4>Gemini Live</h4>
@@ -381,6 +383,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.60"></script>
+  <script src="/app.js?v=0.1.62"></script>
   </body>
 </html>

@@ -87,6 +87,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "silence_duration_ms": 420,
         "semantic_eagerness": "high",
         "transcription_model": "gpt-4o-mini-transcribe",
+        "transcription_prompt": "",
         "transcript_wait_ms": 800,
         "response_timeout_ms": 12000,
         "ha_tools_enabled": False,
@@ -99,6 +100,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
                 "model": "gpt-realtime-mini",
                 "ws_url": "wss://api.openai.com/v1/realtime",
                 "transcription_model": "gpt-4o-mini-transcribe",
+                "transcription_prompt": "",
             },
             "gemini": {
                 "api_key": "",

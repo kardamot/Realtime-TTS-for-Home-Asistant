@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.60"
+version: "0.1.62"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -88,6 +88,7 @@ options:
     silence_duration_ms: 420
     semantic_eagerness: "high"
     transcription_model: "gpt-4o-mini-transcribe"
+    transcription_prompt: ""
     transcript_wait_ms: 800
     response_timeout_ms: 12000
     ha_tools_enabled: false
@@ -100,6 +101,7 @@ options:
         model: "gpt-realtime-mini"
         ws_url: "wss://api.openai.com/v1/realtime"
         transcription_model: "gpt-4o-mini-transcribe"
+        transcription_prompt: ""
       gemini:
         api_key: ""
         model: "gemini-2.5-flash-native-audio-preview-12-2025"
@@ -228,6 +230,7 @@ schema:
     silence_duration_ms: int
     semantic_eagerness: list(low|medium|high|auto)
     transcription_model: str
+    transcription_prompt: str
     transcript_wait_ms: int
     response_timeout_ms: int
     ha_tools_enabled: bool
@@ -240,6 +243,7 @@ schema:
         model: str
         ws_url: str
         transcription_model: str
+        transcription_prompt: str
       gemini:
         api_key: password
         model: str

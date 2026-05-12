@@ -110,6 +110,74 @@ nav a:hover { background: #121a25; color: var(--text); }
   line-height: 1.25;
   text-shadow: 0 0 18px rgba(178,112,255,.24);
 }
+.help-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.help-title h2,
+.help-title h3 {
+  min-width: 0;
+}
+.help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 1px solid rgba(200,156,255,.45);
+  border-radius: 999px;
+  background: rgba(200,156,255,.09);
+  color: #e6dcff;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+}
+.help-trigger:hover,
+.help-trigger:focus {
+  border-color: rgba(200,156,255,.72);
+  background: rgba(200,156,255,.18);
+  box-shadow: 0 0 0 2px rgba(200,156,255,.08);
+}
+.help-popover {
+  position: fixed;
+  z-index: 1000;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(68vh, 520px);
+  overflow: auto;
+  border: 1px solid rgba(100,169,255,.34);
+  border-radius: 10px;
+  background: #111924;
+  box-shadow: 0 18px 44px rgba(0,0,0,.48), 0 0 0 1px rgba(200,156,255,.08) inset;
+  padding: 14px;
+}
+.help-popover header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.help-popover h3 {
+  margin: 0;
+  color: #d9ccff;
+  font-size: 15px;
+}
+.help-popover button {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.help-popover p {
+  margin: 10px 0 0;
+  color: #cbd6e2;
+  font-size: 13px;
+  line-height: 1.45;
+}
 
 .connections-panel,
 .hardware-panel {

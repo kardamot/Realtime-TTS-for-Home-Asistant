@@ -25,6 +25,7 @@ ELEVENLABS_STREAM_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/
 GOOGLE_AI_MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 GOOGLE_CLOUD_SYNTH_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 DEFAULT_PCM_SAMPLE_RATE = 44100
+OPENAI_PCM_SAMPLE_RATE = 24000
 GOOGLE_AI_PCM_SAMPLE_RATE = 24000
 DEFAULT_PCM_CHANNELS = 1
 PCM_PACE_INITIAL_BURST_MS = 700
@@ -672,8 +673,8 @@ class TtsRelay:
                     await self._log_bus.emit("ERROR", "TTS", "OpenAI TTS failed", {"status": resp.status, "body": body[:500]})
                     await output.error(f"OpenAI TTS error: {body[:300]}", resp.status)
                     return
-                await output.start(cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS)
-                pacer = PcmPacer(cfg.pcm_sample_rate, DEFAULT_PCM_CHANNELS) if output.pace_pcm else None
+                await output.start(OPENAI_PCM_SAMPLE_RATE, DEFAULT_PCM_CHANNELS)
+                pacer = PcmPacer(OPENAI_PCM_SAMPLE_RATE, DEFAULT_PCM_CHANNELS) if output.pace_pcm else None
                 pending = b""
                 async for chunk in resp.content.iter_chunked(RELAY_CHUNK_BYTES):
                     if not chunk:

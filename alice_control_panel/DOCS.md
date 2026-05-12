@@ -227,6 +227,8 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.62` adds compact contextual help bubbles to dashboard and config panel headings.
+- `0.1.61` adds OpenAI Live semantic eagerness/STT prompt fields and fixes OpenAI TTS PCM rate metadata.
 - `0.1.60` strengthens active provider card borders and compacts Home Assistant bridge controls.
 - `0.1.59` gives main panel headings a clearer, slightly larger violet accent.
 - `0.1.58` gives main panel headings a larger violet accent.
