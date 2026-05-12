@@ -248,10 +248,12 @@ nav a:hover { background: #121a25; color: var(--text); }
 .config-group {
   display: grid;
   gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(38,50,65,.75);
+  padding-top: 18px;
+  border-top: 1px solid rgba(100,169,255,.28);
+  box-shadow: 0 -1px 0 rgba(255,255,255,.025);
 }
 .config-group:first-child { padding-top: 0; border-top: 0; }
+.config-group:first-child { box-shadow: none; }
 .config-group h3, .provider-card h4 { margin: 0; font-size: 14px; }
 .config-group-head {
   display: flex;
@@ -301,6 +303,17 @@ nav a:hover { background: #121a25; color: var(--text); }
   border-color: rgba(100,169,255,.32);
   background: linear-gradient(180deg, rgba(100,169,255,.06), rgba(16,23,32,1));
 }
+.live-provider-card:not(.active) {
+  border-color: rgba(38,50,65,.82);
+  background: #101720;
+  filter: saturate(.58);
+  opacity: .46;
+}
+.live-provider-card:not(.active) input,
+.live-provider-card:not(.active) select,
+.live-provider-card:not(.active) textarea {
+  opacity: .7;
+}
 .live-provider-card h4 {
   font-size: 16px;
 }
@@ -321,6 +334,13 @@ label.wide { grid-column: 1 / -1; }
 }
 .check-row input { flex: 0 0 auto; }
 .check-row span { min-width: 0; }
+.check-pair {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 8px;
+  align-items: end;
+}
+.check-pair .check-row { margin: 0; }
 .inline-check {
   display: inline-flex;
   grid-auto-flow: column;
@@ -425,6 +445,7 @@ label.wide { grid-column: 1 / -1; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .title-logo { width: 72px; height: 72px; }
   .metrics, .pipeline, .config-grid, .log-tools { grid-template-columns: 1fr; }
+  .check-pair { grid-template-columns: 1fr; }
   .log-panel .log-list { min-height: 260px; }
   .hardware { grid-template-columns: 1fr; }
   .log-row { grid-template-columns: 72px 50px minmax(0,1fr); }

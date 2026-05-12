@@ -316,7 +316,10 @@ function fillConfig() {
       configDirty = true;
       const next = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
       setDeep(currentConfig, el.dataset.path, next);
-      if (el.dataset.providerSelect) renderProviderSwitches();
+      if (el.dataset.path === "realtime.enabled" && next && activeProvider("realtime") === "none") {
+        setDeep(currentConfig, "realtime.provider", "openai");
+      }
+      if (el.dataset.providerSelect || el.dataset.path === "realtime.enabled") renderProviderSwitches();
     };
     el.oninput = updateValue;
     el.onchange = el.dataset.providerSelect
@@ -334,27 +337,37 @@ function initProviderSwitches() {
   });
 }
 
+function activeProvider(kind) {
+  if (kind === "realtime" && !getDeep(currentConfig, "realtime.enabled")) return "none";
+  return String(getDeep(currentConfig, `${kind}.provider`) || "").toLowerCase();
+}
+
 function renderProviderSwitches() {
+  const realtimeEnabled = document.querySelector('[data-path="realtime.enabled"]');
+  if (realtimeEnabled) realtimeEnabled.checked = Boolean(getDeep(currentConfig, "realtime.enabled"));
   document.querySelectorAll(".provider-switch").forEach((group) => {
     const kind = group.dataset.providerKind;
-    const active = String(getDeep(currentConfig, `${kind}.provider`) || "").toLowerCase();
+    const active = activeProvider(kind);
     group.querySelectorAll("button").forEach((button) => {
       button.classList.toggle("active", button.dataset.provider === active);
     });
   });
   document.querySelectorAll("[data-provider-select]").forEach((select) => {
     const kind = select.dataset.providerSelect;
-    const active = String(getDeep(currentConfig, `${kind}.provider`) || "").toLowerCase();
+    const active = activeProvider(kind);
     if (active) select.value = active;
   });
   document.querySelectorAll(".provider-card").forEach((card) => {
-    const active = String(getDeep(currentConfig, `${card.dataset.providerKind}.provider`) || "").toLowerCase();
+    const active = activeProvider(card.dataset.providerKind);
     card.classList.toggle("active", card.dataset.providerCard === active);
   });
 }
 
 async function selectProvider(kind, provider) {
   if (!kind || !provider) return;
+  if (kind === "realtime") {
+    setDeep(currentConfig, "realtime.enabled", provider !== "none");
+  }
   setDeep(currentConfig, `${kind}.provider`, provider);
   configDirty = true;
   renderProviderSwitches();
