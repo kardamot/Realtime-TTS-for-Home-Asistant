@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import re
 import time
 import uuid
 from typing import Any
@@ -19,6 +20,10 @@ from app.pipeline.llm.openai_compatible import active_llm_config
 
 
 OPENAI_REALTIME_WS_URL = "wss://api.openai.com/v1/realtime"
+EMOTION_TAG_RE = re.compile(r"<emotion:\s*([^>]+)>", re.IGNORECASE)
+INCOMPLETE_EMOTION_TAG_RE = re.compile(r"<emotion:\s*[^>]*$", re.IGNORECASE)
+STREAM_CHUNK_MIN_CHARS = 28
+STREAM_CHUNK_HARD_CHARS = 90
 
 
 def safe_exc_message(exc: Exception) -> str:
@@ -94,6 +99,88 @@ def extract_realtime_response_text(doc: dict[str, Any]) -> str:
     return "".join(parts).strip()
 
 
+class RealtimeTextChunker:
+    def __init__(self) -> None:
+        self._raw_pending = ""
+        self._spoken_pending = ""
+        self._all_spoken_text = ""
+
+    @property
+    def all_text(self) -> str:
+        return self._all_spoken_text.strip()
+
+    def _strip_emotions(self) -> list[str]:
+        emotions: list[str] = []
+        while True:
+            match = EMOTION_TAG_RE.search(self._raw_pending)
+            if not match:
+                break
+            emotion = match.group(1).strip()
+            if emotion:
+                emotions.append(emotion)
+            self._raw_pending = self._raw_pending[: match.start()] + self._raw_pending[match.end() :]
+        return emotions
+
+    def _flush_safe_text(self) -> None:
+        incomplete = INCOMPLETE_EMOTION_TAG_RE.search(self._raw_pending)
+        if incomplete:
+            safe_text = self._raw_pending[: incomplete.start()]
+            self._raw_pending = self._raw_pending[incomplete.start() :]
+        else:
+            safe_text = self._raw_pending
+            self._raw_pending = ""
+        if not safe_text:
+            return
+        self._spoken_pending += safe_text
+        self._all_spoken_text += safe_text
+
+    def _find_boundary(self) -> int:
+        text = self._spoken_pending
+        for idx, ch in enumerate(text):
+            if ch in ".?!\n" and idx + 1 >= STREAM_CHUNK_MIN_CHARS:
+                next_char_ok = idx + 1 >= len(text) or text[idx + 1].isspace() or text[idx + 1] in "\"'"
+                if next_char_ok:
+                    return idx + 1
+        if len(text) >= STREAM_CHUNK_HARD_CHARS:
+            split_idx = text.rfind(" ", STREAM_CHUNK_MIN_CHARS, STREAM_CHUNK_HARD_CHARS)
+            if split_idx > 0:
+                return split_idx
+            return STREAM_CHUNK_HARD_CHARS
+        return -1
+
+    def _drain_chunks(self, final: bool) -> list[str]:
+        parts: list[str] = []
+        while True:
+            boundary = self._find_boundary()
+            if boundary < 0:
+                break
+            part = self._spoken_pending[:boundary].strip()
+            self._spoken_pending = self._spoken_pending[boundary:].lstrip()
+            if part:
+                parts.append(part)
+        if final:
+            tail = self._spoken_pending.strip()
+            self._spoken_pending = ""
+            if tail:
+                parts.append(tail)
+        return parts
+
+    def push(self, delta: str) -> tuple[list[str], list[str]]:
+        self._raw_pending += delta
+        emotions = self._strip_emotions()
+        self._flush_safe_text()
+        return emotions, self._drain_chunks(final=False)
+
+    def finish(self) -> tuple[list[str], list[str], str]:
+        emotions = self._strip_emotions()
+        if self._raw_pending and not INCOMPLETE_EMOTION_TAG_RE.search(self._raw_pending):
+            self._flush_safe_text()
+        else:
+            self._raw_pending = ""
+        chunks = self._drain_chunks(final=True)
+        return emotions, chunks, self.all_text
+
+
 class OpenAIRealtimeBridge:
     def __init__(
         self,
@@ -154,6 +241,8 @@ class OpenAIRealtimeBridge:
         session_id = f"rt-{uuid.uuid4().hex[:10]}"
         transcript = ""
         assistant_text = ""
+        text_chunker = RealtimeTextChunker()
+        tts_chunk_started = False
         response_requested = False
         response_done = False
         stt_result_sent = False
@@ -220,6 +309,12 @@ class OpenAIRealtimeBridge:
             llm_started_sent = True
             await send_event("llm_started", model=self._model, provider="openai_realtime")
 
+        async def send_tts_chunk(text: str, final: bool) -> None:
+            nonlocal tts_chunk_started
+            if text.strip():
+                tts_chunk_started = True
+            await send_event("llm_chunk", text=text, final=final)
+
         async def request_response_after_transcript_wait(reason: str = "realtime_committed") -> None:
             if response_requested or response_done:
                 return
@@ -239,16 +334,31 @@ class OpenAIRealtimeBridge:
             await request_response()
 
         async def finish_response(doc: dict[str, Any] | None = None, reason: str = "openai_realtime_done") -> None:
-            nonlocal response_done, assistant_text
+            nonlocal response_done, assistant_text, text_chunker, tts_chunk_started
             if response_done:
                 return
             response_done = True
             final_text = extract_realtime_response_text(doc or {})
+            ready_chunks: list[str] = []
+            ready_emotions: list[str] = []
             if final_text and not assistant_text.strip():
                 assistant_text = final_text
-                await send_event("llm_chunk", text=assistant_text, final=True)
-            elif assistant_text.strip():
-                await send_event("llm_chunk", text="", final=True)
+                text_chunker = RealtimeTextChunker()
+                ready_emotions, ready_chunks = text_chunker.push(final_text)
+
+            emotions, final_chunks, spoken_text = text_chunker.finish()
+            for emotion in [*ready_emotions, *emotions]:
+                await send_event("emotion", name=emotion)
+            if spoken_text:
+                assistant_text = spoken_text
+
+            chunks_to_send = [*ready_chunks, *final_chunks]
+            if chunks_to_send:
+                for chunk in chunks_to_send[:-1]:
+                    await send_tts_chunk(chunk, final=False)
+                await send_tts_chunk(chunks_to_send[-1], final=True)
+            elif assistant_text.strip() and tts_chunk_started:
+                await send_tts_chunk("", final=True)
             else:
                 await self._log_bus.emit("INFO", "PIPELINE", "OpenAI Realtime completed without assistant text", {"session_id": session_id, "reason": reason})
             if assistant_text.strip():
@@ -272,7 +382,7 @@ class OpenAIRealtimeBridge:
                 await self._tts_relay.synthesize_to_esp(assistant_text, self._esp_client, self._cancel_event)
 
         async def handle_realtime_event(doc: dict[str, Any]) -> None:
-            nonlocal transcript, assistant_text, response_done, response_requested, speech_started, input_committed, response_wait_task
+            nonlocal transcript, assistant_text, text_chunker, response_done, response_requested, speech_started, input_committed, response_wait_task
             event_type = str(doc.get("type") or "")
             if not event_type:
                 return
@@ -324,7 +434,12 @@ class OpenAIRealtimeBridge:
                 delta = extract_realtime_text_delta(doc)
                 if delta:
                     assistant_text += delta
-                    await send_event("llm_chunk", text=delta, final=False)
+                    await send_event("llm_delta", text=delta)
+                    emotions, chunks = text_chunker.push(delta)
+                    for emotion in emotions:
+                        await send_event("emotion", name=emotion)
+                    for chunk in chunks:
+                        await send_tts_chunk(chunk, final=False)
                 return
             if event_type == "response.done":
                 await finish_response(doc)
@@ -383,7 +498,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.47",
+                version="0.1.48",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -403,6 +518,8 @@ class OpenAIRealtimeBridge:
                     if msg_type == "start":
                         transcript = ""
                         assistant_text = ""
+                        text_chunker = RealtimeTextChunker()
+                        tts_chunk_started = False
                         response_requested = False
                         response_done = False
                         stt_result_sent = False
@@ -460,6 +577,8 @@ class OpenAIRealtimeBridge:
                         await self.cancel("reset")
                         transcript = ""
                         assistant_text = ""
+                        text_chunker = RealtimeTextChunker()
+                        tts_chunk_started = False
                         response_requested = False
                         response_done = False
                         stt_result_sent = False
