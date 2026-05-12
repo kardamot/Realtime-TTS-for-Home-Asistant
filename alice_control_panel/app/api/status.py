@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, WebSocket
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 
 from app.core.auth import auth_required, require_request_auth, require_websocket_auth
 from app.system.health import system_health
@@ -23,7 +23,7 @@ async def health(request: Request) -> dict[str, Any]:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.48",
+        "version": "0.1.49",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": system_health(),
@@ -71,7 +71,7 @@ async def events_ws(websocket: WebSocket) -> None:
                     "health": {
                         "ok": True,
                         "service": "alice_control_panel",
-            "version": "0.1.48",
+                        "version": "0.1.49",
                         "system": system_health(),
                     },
                     "esp": await websocket.app.state.esp_client.status(),
@@ -82,5 +82,7 @@ async def events_ws(websocket: WebSocket) -> None:
         while True:
             event = await queue.get()
             await websocket.send_json(event)
+    except WebSocketDisconnect:
+        pass
     finally:
         await hub.unsubscribe(queue)
