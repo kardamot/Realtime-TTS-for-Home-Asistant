@@ -126,7 +126,7 @@ class HomeAssistantBridge:
             }
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-                async with session.get(self._base_url(cfg), headers=self._headers(token)) as resp:
+                async with session.get(f"{self._base_url(cfg)}/config", headers=self._headers(token)) as resp:
                     body = await resp.text()
                     return {
                         "enabled": True,

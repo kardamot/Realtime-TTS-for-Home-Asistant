@@ -349,6 +349,9 @@ class OpenAIRealtimeBridge:
                 assistant_text = final_text
                 text_chunker = RealtimeTextChunker()
                 ready_emotions, ready_chunks = text_chunker.push(final_text)
+            elif assistant_text.strip() and not text_chunker.all_text:
+                text_chunker = RealtimeTextChunker()
+                ready_emotions, ready_chunks = text_chunker.push(assistant_text)
 
             emotions, final_chunks, spoken_text = text_chunker.finish()
             for emotion in [*ready_emotions, *emotions]:
@@ -381,9 +384,9 @@ class OpenAIRealtimeBridge:
                 "OpenAI Realtime session completed",
                 {"session_id": session_id, "transcript_chars": len(transcript), "assistant_chars": len(assistant_text)},
             )
-            if assistant_text.strip() and not self._cancel_event.is_set():
-                self._last_event = "tts"
-                await self._tts_relay.synthesize_to_esp(assistant_text, self._esp_client, self._cancel_event)
+            # The ESP voice client consumes llm_chunk/llm_result events and opens
+            # the TTS relay itself. Starting a second direct ESP audio stream here
+            # races the firmware player and can trigger tts_still_active.
 
         async def try_home_assistant_route(reason: str) -> bool:
             nonlocal assistant_text, response_requested, text_chunker
@@ -404,7 +407,6 @@ class OpenAIRealtimeBridge:
                 response_requested = True
                 assistant_text = speech
                 text_chunker = RealtimeTextChunker()
-                text_chunker.push(speech)
                 await send_llm_started_once()
                 self._last_event = "ha_route"
                 await self._log_bus.emit(
@@ -545,7 +547,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.52",
+                version="0.1.53",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
