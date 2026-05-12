@@ -45,10 +45,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue); box-shado
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--cyan); }
 textarea { min-height: 108px; resize: vertical; }
 
-.shell { display: grid; grid-template-columns: 176px minmax(0,1fr); min-height: 100vh; }
-.sidebar { position: sticky; top: 0; height: 100vh; padding: 16px 10px; background: var(--side); border-right: 1px solid var(--line); }
+.shell { display: grid; grid-template-columns: 156px minmax(0,1fr); min-height: 100vh; }
+.sidebar { position: sticky; top: 0; height: 100vh; padding: 14px 8px; background: var(--side); border-right: 1px solid var(--line); }
 nav { display: grid; gap: 6px; }
-nav a { display: flex; align-items: center; min-height: 40px; padding: 0 10px; color: #c4d0dc; text-decoration: none; border-radius: 8px; }
+nav a { display: flex; align-items: center; min-height: 38px; padding: 0 9px; color: #c4d0dc; text-decoration: none; border-radius: 8px; }
 nav a:hover { background: #121a25; color: var(--text); }
 
 .workspace { min-width: 0; padding: 22px; }
@@ -56,8 +56,8 @@ nav a:hover { background: #121a25; color: var(--text); }
 .title-group { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .title-logo {
   flex: 0 0 auto;
-  width: 84px;
-  height: 84px;
+  width: 92px;
+  height: 92px;
   overflow: hidden;
   border: 1px solid rgba(255,189,84,.34);
   border-radius: 8px;
@@ -413,17 +413,17 @@ label.wide { grid-column: 1 / -1; }
 }
 @media (max-width: 780px) {
   .shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidebar { position: static; height: auto; padding: 7px 8px; border-right: 0; border-bottom: 1px solid var(--line); }
   nav {
     grid-auto-flow: column;
     grid-auto-columns: max-content;
     overflow-x: auto;
     padding-bottom: 2px;
   }
-  nav a { min-height: 34px; padding: 0 12px; white-space: nowrap; }
+  nav a { min-height: 32px; padding: 0 10px; white-space: nowrap; }
   .workspace { padding: 14px; }
   .topbar { align-items: flex-start; flex-direction: column; }
-  .title-logo { width: 66px; height: 66px; }
+  .title-logo { width: 72px; height: 72px; }
   .metrics, .pipeline, .config-grid, .log-tools { grid-template-columns: 1fr; }
   .log-panel .log-list { min-height: 260px; }
   .hardware { grid-template-columns: 1fr; }
