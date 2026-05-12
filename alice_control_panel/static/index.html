@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.55" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.55" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.56" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.56" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.55" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.56" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -190,13 +190,12 @@
                 <header class="config-group-head">
                   <h3>Live Voice</h3>
                   <div class="provider-switch live-switch" data-provider-kind="realtime">
-                    <button data-provider="none">None</button>
                     <button data-provider="openai">OpenAI Live</button>
                     <button data-provider="gemini">Gemini Live</button>
+                    <button data-provider="none">None</button>
                   </div>
                 </header>
                 <div class="config-grid compact">
-                  <label class="check-row"><input data-path="realtime.enabled" type="checkbox" /><span>Live voice</span></label>
                   <label><span>Active live</span><select data-path="realtime.provider" data-provider-select="realtime"><option>none</option><option>openai</option><option>gemini</option></select></label>
                   <label><span>Input rate</span><input data-path="realtime.input_sample_rate" type="number" /></label>
                   <label><span>Response timeout ms</span><input data-path="realtime.response_timeout_ms" type="number" /></label>
@@ -380,6 +379,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.55"></script>
+  <script src="/app.js?v=0.1.56"></script>
   </body>
 </html>

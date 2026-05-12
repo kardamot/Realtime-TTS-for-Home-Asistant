@@ -227,6 +227,7 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.56` makes Live Voice activation rely on the provider selector and moves `None` to the right.
 - `0.1.55` improves Config section spacing, moves Safe mode next to Debug logs, and adds a `None` Live Voice selector.
 - `0.1.54` makes Home Assistant weather entity replies more natural and advice-oriented.
 - `0.1.46` suppresses empty Realtime commits/responses and ignores empty TTS relay requests.
