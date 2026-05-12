@@ -190,6 +190,7 @@ class OpenAIRealtimeBridge:
         ws_hub: WsHub,
         tts_relay: Any,
         esp_client: Any,
+        ha_bridge: Any | None = None,
     ) -> None:
         self._config_store = config_store
         self._prompt_store = prompt_store
@@ -197,6 +198,7 @@ class OpenAIRealtimeBridge:
         self._ws_hub = ws_hub
         self._tts_relay = tts_relay
         self._esp_client = esp_client
+        self._ha_bridge = ha_bridge
         self._active = False
         self._connected = False
         self._last_event = "idle"
@@ -331,6 +333,8 @@ class OpenAIRealtimeBridge:
                 await finish_response(reason="empty_transcript_suppressed")
                 return
             await send_stt_result_once(reason)
+            if await try_home_assistant_route(reason):
+                return
             await request_response()
 
         async def finish_response(doc: dict[str, Any] | None = None, reason: str = "openai_realtime_done") -> None:
@@ -380,6 +384,49 @@ class OpenAIRealtimeBridge:
             if assistant_text.strip() and not self._cancel_event.is_set():
                 self._last_event = "tts"
                 await self._tts_relay.synthesize_to_esp(assistant_text, self._esp_client, self._cancel_event)
+
+        async def try_home_assistant_route(reason: str) -> bool:
+            nonlocal assistant_text, response_requested, text_chunker
+            if self._ha_bridge is None or response_done or response_requested:
+                return False
+            user_text = transcript.strip()
+            if not user_text:
+                return False
+            try:
+                if not await self._ha_bridge.should_route_home_control(user_text):
+                    return False
+                result = await self._ha_bridge.handle_text_command(user_text)
+                if not result.get("handled"):
+                    return False
+                speech = str(result.get("speech") or "").strip()
+                if not speech:
+                    return False
+                response_requested = True
+                assistant_text = speech
+                text_chunker = RealtimeTextChunker()
+                text_chunker.push(speech)
+                await send_llm_started_once()
+                self._last_event = "ha_route"
+                await self._log_bus.emit(
+                    "INFO",
+                    "HA",
+                    "Realtime HA route completed",
+                    {
+                        "session_id": session_id,
+                        "reason": reason,
+                        "ok": bool(result.get("ok")),
+                        "entity_id": result.get("entity_id"),
+                        "action": result.get("action"),
+                    },
+                )
+                await finish_response(reason="ha_route")
+                return True
+            except PermissionError as exc:
+                await self._log_bus.emit("WARN", "HA", "Realtime HA route denied", {"session_id": session_id, "error": str(exc)})
+                return False
+            except Exception as exc:
+                await self._log_bus.emit("ERROR", "HA", "Realtime HA route failed", {"session_id": session_id, "error": safe_exc_message(exc)})
+                return False
 
         async def handle_realtime_event(doc: dict[str, Any]) -> None:
             nonlocal transcript, assistant_text, text_chunker, response_done, response_requested, speech_started, input_committed, response_wait_task
@@ -498,7 +545,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.51",
+                version="0.1.52",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",

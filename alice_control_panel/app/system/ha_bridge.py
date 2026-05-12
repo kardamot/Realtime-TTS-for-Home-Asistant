@@ -385,8 +385,23 @@ class HomeAssistantBridge:
         value = str(state.get("state") or "bilinmiyor")
         attributes = state.get("attributes") if isinstance(state.get("attributes"), dict) else {}
         unit = str(attributes.get("unit_of_measurement") or "").strip()
+        entity_id = str(state.get("entity_id") or "")
         if value in {"unknown", "unavailable"}:
             return f"{friendly_name} durumu su anda bilinmiyor."
+        if entity_id.startswith("weather."):
+            temperature = attributes.get("temperature")
+            temperature_unit = str(attributes.get("temperature_unit") or unit or "C").strip()
+            humidity = attributes.get("humidity")
+            wind_speed = attributes.get("wind_speed")
+            wind_unit = str(attributes.get("wind_speed_unit") or "").strip()
+            parts = [f"{friendly_name}: {value}"]
+            if temperature is not None and temperature != "":
+                parts.append(f"sicaklik {temperature} {temperature_unit}")
+            if humidity is not None and humidity != "":
+                parts.append(f"nem %{humidity}")
+            if wind_speed is not None and wind_speed != "":
+                parts.append(f"ruzgar {wind_speed}{(' ' + wind_unit) if wind_unit else ''}")
+            return ", ".join(parts) + "."
         return f"{friendly_name}: {value}{(' ' + unit) if unit else ''}."
 
     def has_entity_scope(self, cfg: dict[str, Any]) -> bool:
