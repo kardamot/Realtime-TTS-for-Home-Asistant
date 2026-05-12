@@ -338,8 +338,8 @@ nav a:hover { background: #121a25; color: var(--text); }
   font-size: 15px;
 }
 .provider-card.active {
-  border-color: rgba(57,197,187,.62);
-  box-shadow: 0 0 0 1px rgba(57,197,187,.08) inset;
+  border: 2px solid rgba(57,197,187,.78);
+  box-shadow: 0 0 0 1px rgba(57,197,187,.14) inset, 0 0 18px rgba(57,197,187,.08);
   opacity: 1;
 }
 .provider-card textarea { min-height: 76px; }
