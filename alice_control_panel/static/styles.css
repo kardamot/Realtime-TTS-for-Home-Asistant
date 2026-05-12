@@ -101,8 +101,14 @@ nav a:hover { background: #121a25; color: var(--text); }
 .span-12 { grid-column: span 12; }
 .row-span-2 { grid-row: span 2; }
 .panel { padding: 14px; }
-.panel header { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 34px; margin-bottom: 12px; }
-.panel h2 { margin: 0; font-size: 15px; }
+.panel header { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 34px; margin-bottom: 14px; }
+.panel h2 {
+  margin: 0;
+  color: #f4f9ff;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+}
 
 .connections-panel,
 .hardware-panel {
@@ -244,17 +250,30 @@ nav a:hover { background: #121a25; color: var(--text); }
 .command-panel .commands:first-of-type { flex: 1 1 auto; align-content: start; overflow: auto; }
 .command-panel .commands.secondary { flex: 0 0 auto; }
 .commands.secondary { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-.config-layout { display: grid; gap: 16px; }
+.config-layout { display: grid; gap: 24px; }
 .config-group {
   display: grid;
-  gap: 12px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(100,169,255,.28);
-  box-shadow: 0 -1px 0 rgba(255,255,255,.025);
+  gap: 14px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(100,169,255,.36);
+  box-shadow: 0 -1px 0 rgba(255,255,255,.04);
 }
 .config-group:first-child { padding-top: 0; border-top: 0; }
 .config-group:first-child { box-shadow: none; }
-.config-group h3, .provider-card h4 { margin: 0; font-size: 14px; }
+.config-group h3 {
+  margin: 0;
+  color: #b9dcff;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.provider-card h4 {
+  margin: 0;
+  color: #d7fffb;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+}
 .config-group-head {
   display: flex;
   justify-content: space-between;
@@ -315,7 +334,7 @@ nav a:hover { background: #121a25; color: var(--text); }
   opacity: .7;
 }
 .live-provider-card h4 {
-  font-size: 16px;
+  font-size: 15px;
 }
 .provider-card.active {
   border-color: rgba(57,197,187,.62);
