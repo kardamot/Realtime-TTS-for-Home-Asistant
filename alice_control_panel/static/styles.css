@@ -104,10 +104,11 @@ nav a:hover { background: #121a25; color: var(--text); }
 .panel header { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 34px; margin-bottom: 14px; }
 .panel h2 {
   margin: 0;
-  color: #f4f9ff;
-  font-size: 17px;
+  color: #d9ccff;
+  font-size: 18px;
   font-weight: 800;
   line-height: 1.25;
+  text-shadow: 0 0 18px rgba(145,115,255,.18);
 }
 
 .connections-panel,
