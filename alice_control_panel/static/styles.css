@@ -45,10 +45,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue); box-shado
 input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--cyan); }
 textarea { min-height: 108px; resize: vertical; }
 
-.shell { display: grid; grid-template-columns: 156px minmax(0,1fr); min-height: 100vh; }
+.shell { display: grid; grid-template-columns: 146px minmax(0,1fr); min-height: 100vh; }
 .sidebar { position: sticky; top: 0; height: 100vh; padding: 14px 8px; background: var(--side); border-right: 1px solid var(--line); }
 nav { display: grid; gap: 6px; }
-nav a { display: flex; align-items: center; min-height: 38px; padding: 0 9px; color: #c4d0dc; text-decoration: none; border-radius: 8px; }
+nav a { display: flex; align-items: center; min-height: 37px; padding: 0 8px; color: #c4d0dc; text-decoration: none; border-radius: 8px; }
 nav a:hover { background: #121a25; color: var(--text); }
 
 .workspace { min-width: 0; padding: 22px; }
