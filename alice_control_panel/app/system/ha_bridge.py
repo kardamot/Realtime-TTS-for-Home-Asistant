@@ -89,6 +89,41 @@ _IGNORED_MATCH_TERMS = (
     | set(_DOMAIN_HINTS)
     | {"alice", "lutfen", "bir", "de", "da", "mi", "mu", "midir", "bana", "icin", "su", "sunu", "oradaki"}
 )
+
+_WEATHER_CONDITION_TR = {
+    "clear-night": "acik bir gece",
+    "cloudy": "bulutlu",
+    "fog": "sisli",
+    "hail": "dolu riski olan",
+    "lightning": "gok gurultulu",
+    "lightning-rainy": "gok gurultulu ve yagmurlu",
+    "partlycloudy": "parcali bulutlu",
+    "pouring": "saganak yagmurlu",
+    "rainy": "yagmurlu",
+    "snowy": "karli",
+    "snowy-rainy": "karla karisik yagmurlu",
+    "sunny": "gunesli",
+    "windy": "ruzgarli",
+    "windy-variant": "ruzgarli ve bulutlu",
+    "exceptional": "olagan disi",
+}
+
+
+def _float_or_none(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_number(value: float | None) -> str:
+    if value is None:
+        return ""
+    if abs(value - round(value)) < 0.05:
+        return str(int(round(value)))
+    return f"{value:.1f}".replace(".", ",")
 _CONTROL_DOMAINS = {"light", "switch", "fan", "input_boolean", "media_player", "climate", "humidifier"}
 
 
@@ -389,19 +424,42 @@ class HomeAssistantBridge:
         if value in {"unknown", "unavailable"}:
             return f"{friendly_name} durumu su anda bilinmiyor."
         if entity_id.startswith("weather."):
-            temperature = attributes.get("temperature")
+            temperature = _float_or_none(attributes.get("temperature"))
             temperature_unit = str(attributes.get("temperature_unit") or unit or "C").strip()
-            humidity = attributes.get("humidity")
-            wind_speed = attributes.get("wind_speed")
+            humidity = _float_or_none(attributes.get("humidity"))
+            wind_speed = _float_or_none(attributes.get("wind_speed"))
             wind_unit = str(attributes.get("wind_speed_unit") or "").strip()
-            parts = [f"{friendly_name}: {value}"]
-            if temperature is not None and temperature != "":
-                parts.append(f"sicaklik {temperature} {temperature_unit}")
-            if humidity is not None and humidity != "":
-                parts.append(f"nem %{humidity}")
-            if wind_speed is not None and wind_speed != "":
-                parts.append(f"ruzgar {wind_speed}{(' ' + wind_unit) if wind_unit else ''}")
-            return ", ".join(parts) + "."
+            condition = _WEATHER_CONDITION_TR.get(value.lower().replace("_", "-"), value)
+            location = friendly_name.replace("Hava Durumu", "").replace("hava durumu", "").strip() or friendly_name
+            bits = [f"{location} tarafında hava {condition}"]
+            if temperature is not None:
+                bits.append(f"sıcaklık {_format_number(temperature)} derece")
+            if wind_speed is not None:
+                bits.append(f"rüzgar {_format_number(wind_speed)} {wind_unit or 'civarında'}")
+            if humidity is not None:
+                bits.append(f"nem yüzde {_format_number(humidity)}")
+
+            advice: list[str] = []
+            if value.lower() in {"rainy", "pouring", "lightning-rainy", "snowy-rainy"}:
+                advice.append("Şemsiye fikri bugün fena değil")
+            if value.lower() in {"snowy", "snowy-rainy"}:
+                advice.append("Kaygan zeminlere dikkat, Alice onaylı temkin modu")
+            if temperature is not None:
+                if temperature <= 0:
+                    advice.append("Sıkı giyin, dışarısı bayağı ısırıyor")
+                elif temperature <= 8:
+                    advice.append("Kalın bir şey almak iyi olur")
+                elif temperature <= 16:
+                    advice.append("İnce bir ceket iyi gider")
+                elif temperature >= 28:
+                    advice.append("Su içmeyi unutma, sıcak taraflara geçmişiz")
+            if wind_speed is not None and wind_speed >= 20:
+                advice.append("Rüzgar da kendini belli ediyor")
+
+            sentence = ", ".join(bits) + "."
+            if advice:
+                sentence += " " + advice[0] + "."
+            return sentence
         return f"{friendly_name}: {value}{(' ' + unit) if unit else ''}."
 
     def has_entity_scope(self, cfg: dict[str, Any]) -> bool:
