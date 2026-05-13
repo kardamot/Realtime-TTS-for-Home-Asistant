@@ -129,6 +129,122 @@ const HELP_TEXTS = {
   }
 };
 
+const HELP_DETAIL_TEXTS = {
+  panelEspFields: {
+    title: "Panel & ESP alanlari",
+    body: [
+      "Bu detaylar panelin nasil korunacagini ve ESP ile hangi adreslerden konusacagini belirler. Yanlis adres girilirse panel acilir, ama robot mock/offline gorunur."
+    ],
+    items: [
+      ["Panel port", "Add-on web panelinin dinledigi porttur. Varsayilan 8099; Home Assistant disindan http://HA_IP:8099 ile acilir."],
+      ["Panel token", "API, WebSocket ve UI icin basit bearer/token korumasi saglar. Bos kalirsa lokal kullanim icin auth kapali olabilir."],
+      ["Panel password", "Token yerine veya tokenla birlikte kullanilabilen basit panel sifresidir. Ev ici kullanimda bos birakmak mumkun, ama dis aglara acma."],
+      ["ESP base URL", "Robotun HTTP API adresidir. Ornek: http://192.168.1.49. Status poll ve POST /api/command buradan gider."],
+      ["ESP WebSocket URL", "Robotun canli event/log/mikrofon/audio WebSocket yoludur. Genelde ws://192.168.1.49/ws seklindedir."],
+      ["Reconnect interval", "ESP koptugunda otomatik denemeler arasindaki bekleme suresidir. Cok kisa olursa gereksiz log ve ag trafigi uretir."],
+      ["Max auto reconnects", "Otomatik deneme limitidir. Limit dolunca sistem durur ve manuel reconnect bekler. 0 verirsen sinirsiz dener."],
+      ["Debug logs", "Daha ayrintili log uretir. Testte faydali, stabil kullanimda log kalabaligini azaltmak icin kapatilabilir."],
+      ["Safe mode", "Riskli otomasyonlari azaltmak veya sorunlu bir pipeline'i yavaslatmak icin guvenli moda alir. Acil durum freni gibi dusun."]
+    ]
+  },
+  liveVoiceFields: {
+    title: "Live Voice alanlari",
+    body: [
+      "Live Voice, wake word sonrasindaki dusuk gecikmeli konusma hattidir. Bu ayarlar konusmanin ne zaman baslayip bitecegini ve OpenAI/Gemini live profilinin nasil calisacagini belirler."
+    ],
+    items: [
+      ["Active live", "none secilirse live hat kapali kalir. openai secilirse /voice/ws OpenAI Realtime hattina gider. gemini karti simdilik hazir profil olarak tutulur."],
+      ["Input rate", "ESP'den gelen mikrofon PCM sample rate degeridir. ESP tarafindaki gercek rate ile uyusmali; yanlis olursa STT/VAD zamanlamasi sapar."],
+      ["Output voice", "Live modelin dogrudan ses uretmesi kullanildiginda secilecek sestir. Classic TTS kullaniminda asil ses TTS bolumunden gelir."],
+      ["Output format", "Live hattin urettigi audio formatidir. ESP tarafinin bekledigi PCM formatiyla uyumlu olmali."],
+      ["Turn detection", "Konusma bitisini kimin karar verecegini secer. server_vad klasik esik/sessizlik, semantic_vad modelin anlam temelli bitis kararidir."],
+      ["VAD threshold", "server_vad icin konusma algilama hassasiyetidir. Dusurmek daha kolay tetikler; yukseltmek dip gurultusune karsi daha sert davranir."],
+      ["Prefix padding ms", "Konusma baslamadan hemen onceki kisa sesi de yakalamak icin basa eklenen tampon suresidir. Ilk heceleri kesmeyi azaltir."],
+      ["Silence duration ms", "Konusma bittikten sonra kac ms sessizlik gorulurse turn kapanir. Kisa deger hizli cevap, uzun deger daha az erken kesme demektir."],
+      ["Semantic eagerness", "semantic_vad seciliyken modelin konusma bitti demeye ne kadar istekli olacagidir. High hizli, low daha sabirli davranir."],
+      ["Idle timeout ms", "Live oturum bos kalirsa ne kadar sure sonra toparlanacagini belirler. Takili kalan oturumlari temizlemeye yarar."],
+      ["Live instructions", "Canli oturuma ozel kisilik ve davranis talimatidir. Bos kalirsa LLM system prompt'a, o da bossa aktif Prompt Editor profiline dusulur."],
+      ["Realtime STT prompt", "Transkripsiyon icin ipucu metnidir. Turkce, Alice, yerel isimler veya sik yanlis duyulan kelimeleri buraya yazmak tanimayi iyilestirebilir."],
+      ["OpenAI Live key/model/base URL", "OpenAI Realtime icin kimlik ve model ayarlaridir. Genelde base URL varsayilan kalir; model ve key doldurulur."],
+      ["Gemini Live key/model/voice", "Gelecekteki Gemini live hatti icin saklanan profil bilgileridir. Su an OpenAI Live kadar tamamlanmis bir canli yol degildir."]
+    ]
+  },
+  sttVadFields: {
+    title: "Classic STT & VAD alanlari",
+    body: [
+      "Bu bolum live olmayan mikrofon yakalama ve yerel VAD kararlari icindir. Mikrofon dip gurultusu varsa ozellikle VAD ayarlari hassas davranir."
+    ],
+    items: [
+      ["STT provider", "Su an faster_whisper hedeflenir. Mikrofon kaydi metne cevrilirken bu motor kullanilir."],
+      ["STT model", "Whisper model boyutudur. Kucuk modeller hizli, buyuk modeller daha dogru ama daha agir calisir."],
+      ["Language", "Transkripsiyon dili. Turkce icin tr kullanmak hallucination ve dil kaymasini azaltabilir."],
+      ["Compute type", "Modelin hesaplama hassasiyetidir. int8 daha hafif, float16/float32 daha agir ama bazi sistemlerde daha kaliteli olabilir."],
+      ["CPU threads", "Whisper isleminde kac CPU thread kullanilacagidir. Mini PC'de fazla vermek sistemi gereksiz yorabilir."],
+      ["Workers", "Ayni anda kac is parcacigi calisacagini belirler. Genelde dusuk tutmak daha stabil olur."],
+      ["Beam size", "STT'nin alternatif metin arama genisligidir. Yuksek deger kaliteyi artirabilir ama gecikmeyi de artirir."],
+      ["Live VAD provider", "silero gercek VAD modelidir; energy ise ses enerjisine bakar. Dip gurultulu ortamda silero daha mantikli baslangic noktasi."],
+      ["Start probability", "Silero konusma basladi demek icin gereken olasilik esigidir. Dusuk deger hassas, yuksek deger secici davranir."],
+      ["End probability", "Silero konusma bitti demek icin gereken esiktir. Yanlis erken bitislerde ayar gerekebilir."],
+      ["RMS threshold", "Energy VAD icin ses siddeti esigidir. Dip gurultusu yuksekse bu degeri artirmak gerekebilir."],
+      ["Min speech ms", "Konusma kabul edilmeden once gereken minimum ses suresidir. Cok kisa tikirti ve patlamalari elemek icin kullanilir."],
+      ["Min silence ms", "Konusma bitisi icin gereken sessizlik suresidir. Kisa olursa erken keser, uzun olursa cevap gecikir."],
+      ["Max utterance ms", "Tek konusma parcasi icin ust sinirdir. VAD takilsa bile oturumu sonsuza kadar acik birakmaz."]
+    ]
+  },
+  homeAssistantFields: {
+    title: "Home Assistant alanlari",
+    body: [
+      "Home Assistant bolumu bilincli olarak beyaz liste mantigiyla calisir. Alice sadece senin yazdigin entityleri okuyup yonetebilmeli."
+    ],
+    items: [
+      ["HA API base", "Add-on icinden Home Assistant API adresidir. Supervisor ortaminda varsayilan deger genelde dogrudur."],
+      ["HA Bridge enabled", "Alice'in Home Assistant state ve servis yolunu kullanip kullanmayacagini acar/kapatir."],
+      ["Route home control", "Hava durumu veya basit ev kontrolu gibi istekleri LLM'e birakmadan once HA bridge tarafinda yakalamaya calisir."],
+      ["Allowed entity IDs", "Erisime izin verdigin entityleri satir satir yazarsin. Liste disindaki entityler okunmaz ve kontrol edilmez."],
+      ["Weather entity", "Hava durumu sorularinda oncelikli kullanilacak weather entitysidir. Allowed list icinde olmasi gerekir."],
+      ["Service calls", "Kontrol komutlari ileride HA servislerine donusebilir. Allowlist bu yuzden guvenlik siniri olarak onemli kalir."]
+    ]
+  },
+  llmFields: {
+    title: "LLM alanlari",
+    body: [
+      "LLM metni anlayip cevap ureten kisimdir. Her saglayicinin karti ayri saklanir; saglayici degistirmek diger key ve model bilgilerini silmez."
+    ],
+    items: [
+      ["Active LLM", "Klasik pipeline'da hangi metin modeli profilinin kullanilacagini secer. Live Voice aciksa cevap uretimi live hatta kayabilir."],
+      ["Temperature", "Cevabin yaraticiligini belirler. 0.2-0.4 daha tutarli, 0.7 ve ustu daha serbest cevaplar uretir."],
+      ["Streaming", "Model cevabini parca parca almak icindir. Erken TTS ve daha dusuk algilanan gecikme icin faydali olabilir."],
+      ["LLM system prompt", "Bu alan doluysa Prompt Editor profilinin onune gecer. Bos birakilirsa aktif prompt profili kullanilir."],
+      ["OpenAI", "OpenAI API key, model ve base URL ayarlari. Normal OpenAI kullaniminda bu kart doldurulur."],
+      ["OpenRouter", "OpenRouter uzerinden farkli modelleri tek API ile denemek icindir. Base URL genelde OpenRouter varsayilanidir."],
+      ["Groq", "Groq'un OpenAI uyumlu sohbet endpoint mantigiyla calisir. Dusuk gecikmeli metin cevaplari icin kullanilabilir."],
+      ["Gemini", "Google Gemini classic text modeli icindir. Gemini Live ile ayni sey degildir; bu kart metin cevabi uretir."],
+      ["OpenAI Compatible", "LM Studio, Ollama proxy, vLLM veya baska OpenAI uyumlu endpointler icin genel profil."]
+    ]
+  },
+  ttsFields: {
+    title: "TTS alanlari",
+    body: [
+      "TTS yaziyi sese cevirir ve sonuc ESP'ye stream edilir. Provider kartlari ayri saklandigi icin Cartesia'dan Google Cloud'a gecmek eski Cartesia ayarlarini silmez."
+    ],
+    items: [
+      ["Active TTS", "Hangi TTS saglayicisinin kullanilacagini secer. OpenAI, Cartesia, ElevenLabs, Google AI ve Google Cloud ayri profillerdir."],
+      ["PCM rate", "ESP'ye hedeflenen PCM sample rate bilgisidir. Bazilarinda saglayici kendi rate'ini verir; backend uygun metadata ile yollar."],
+      ["ESP start buffer ms", "ESP'nin ses baslamadan once ne kadar tampon toplamasini istedigini belirler. Ilk saniye takilmalarini azaltabilir."],
+      ["ESP silence prefix ms", "Sesin basina kisa sessizlik ekler. DAC/I2S/stream baslangicindaki tiklama ve kesilmeleri yumusatmak icindir."],
+      ["Mic response", "Mikrofon testinden sonra sadece cevap, sadece duydugunu tekrar veya once tekrar sonra cevap davranisini secer."],
+      ["TTS enabled", "Kapaliysa metin uretilebilir ama sese donusturme atlanir."],
+      ["Stream TTS to ESP", "Aciksa ses ESP'ye WebSocket/audio protokoluyle gider. Kapaliysa backend TTS uretse bile robota okutmaz."],
+      ["Barge-in cancel", "Kullanici konusurken mevcut cevabi kesmeye izin verir. Full-duplex hedefi icin onemli bir ayardir."],
+      ["OpenAI TTS", "OpenAI API key, model, voice ve instructions alanlarini kullanir. Instructions ses tarzini yonlendirebilir."],
+      ["Cartesia", "Cartesia API key, model ID, voice ID, language ve version ayarlaridir. Kredi/limit hatalari bu provider'dan gelebilir."],
+      ["ElevenLabs", "API key, model, voice, output format ve latency mode ayarlaridir. Dusuk latency modlari kalite/gecikme dengesi kurar."],
+      ["Google AI", "AI Studio API key, model ve voice name ile calisir. Prompt prefix, sese gidecek metni uslup olarak yonlendirebilir."],
+      ["Google Cloud", "Service account JSON, voice name, language code ve gender alanlarini kullanir. Cloud TTS icin JSON kimligi gerekir."]
+    ]
+  }
+};
+
 const HELP_TARGETS = [
   [".connections-panel > header h2", "connections"],
   ["#logs > header h2", "logs"],
@@ -137,12 +253,12 @@ const HELP_TARGETS = [
   ["#commands > header h2", "commands"],
   ["#prompts > header h2", "prompts"],
   ["#config > header h2", "config"],
-  ["#config .config-group:nth-of-type(1) h3", "panelEsp"],
-  ["#config .config-group:nth-of-type(2) h3", "liveVoice"],
-  ["#config .config-group:nth-of-type(3) h3", "sttVad"],
-  ["#config .config-group:nth-of-type(4) h3", "homeAssistant"],
-  ["#config .config-group:nth-of-type(5) h3", "llm"],
-  ["#config .config-group:nth-of-type(6) h3", "tts"]
+  ["#config .config-group:nth-of-type(1) h3", "panelEsp", "panelEspFields"],
+  ["#config .config-group:nth-of-type(2) h3", "liveVoice", "liveVoiceFields"],
+  ["#config .config-group:nth-of-type(3) h3", "sttVad", "sttVadFields"],
+  ["#config .config-group:nth-of-type(4) h3", "homeAssistant", "homeAssistantFields"],
+  ["#config .config-group:nth-of-type(5) h3", "llm", "llmFields"],
+  ["#config .config-group:nth-of-type(6) h3", "tts", "ttsFields"]
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -187,7 +303,7 @@ function setAutoText(id, value) {
 }
 
 function initHelpBubbles() {
-  HELP_TARGETS.forEach(([selector, key]) => {
+  HELP_TARGETS.forEach(([selector, key, detailKey]) => {
     const heading = document.querySelector(selector);
     if (!heading || heading.dataset.helpAttached) return;
     const parent = heading.parentElement;
@@ -207,6 +323,19 @@ function initHelpBubbles() {
       toggleHelpBubble(key, button);
     };
     titleRow.appendChild(button);
+    if (detailKey && HELP_DETAIL_TEXTS[detailKey]) {
+      const detailButton = document.createElement("button");
+      detailButton.type = "button";
+      detailButton.className = "help-trigger help-trigger-detail";
+      detailButton.dataset.help = detailKey;
+      detailButton.setAttribute("aria-label", `${HELP_DETAIL_TEXTS[detailKey].title} detaylari`);
+      detailButton.textContent = "??";
+      detailButton.onclick = (event) => {
+        event.stopPropagation();
+        toggleHelpBubble(detailKey, detailButton, true);
+      };
+      titleRow.appendChild(detailButton);
+    }
     heading.dataset.helpAttached = "true";
   });
 
@@ -231,21 +360,22 @@ function ensureHelpPopover() {
   return helpPopover;
 }
 
-function toggleHelpBubble(key, anchor) {
+function toggleHelpBubble(key, anchor, isDetail = false) {
   const popover = ensureHelpPopover();
   if (!popover.classList.contains("hidden") && popover.dataset.helpKey === key) {
     closeHelpBubble();
     return;
   }
-  openHelpBubble(key, anchor);
+  openHelpBubble(key, anchor, isDetail);
 }
 
-function openHelpBubble(key, anchor) {
-  const doc = HELP_TEXTS[key];
+function openHelpBubble(key, anchor, isDetail = false) {
+  const doc = isDetail ? HELP_DETAIL_TEXTS[key] : HELP_TEXTS[key];
   if (!doc) return;
   const popover = ensureHelpPopover();
   popover.dataset.helpKey = key;
   popover.innerHTML = "";
+  popover.classList.toggle("detail", Boolean(isDetail || doc.items?.length));
 
   const header = document.createElement("header");
   const title = document.createElement("h3");
@@ -263,6 +393,21 @@ function openHelpBubble(key, anchor) {
     p.textContent = paragraph;
     popover.appendChild(p);
   });
+
+  if (doc.items?.length) {
+    const list = document.createElement("ul");
+    list.className = "help-detail-list";
+    doc.items.forEach(([label, description]) => {
+      const item = document.createElement("li");
+      const name = document.createElement("strong");
+      name.textContent = label;
+      const detail = document.createElement("span");
+      detail.textContent = description;
+      item.append(name, detail);
+      list.appendChild(item);
+    });
+    popover.appendChild(list);
+  }
 
   popover.classList.remove("hidden");
   window.requestAnimationFrame(() => {
@@ -286,6 +431,7 @@ function openHelpBubble(key, anchor) {
 function closeHelpBubble() {
   if (!helpPopover) return;
   helpPopover.classList.add("hidden");
+  helpPopover.classList.remove("detail");
   helpPopover.dataset.helpKey = "";
 }
 

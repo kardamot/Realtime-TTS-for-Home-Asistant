@@ -354,7 +354,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.62"
+    server_version = "AliceControlPanel/0.1.63"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -515,7 +515,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-                "version": "0.1.62",
+                "version": "0.1.63",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

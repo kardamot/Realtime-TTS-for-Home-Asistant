@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.63` makes help buttons more subtle and adds detailed `??` field guides for complex config sections.
 - Version `0.1.62` adds compact contextual help bubbles to dashboard and config panel headings.
 - Version `0.1.61` adds OpenAI Live semantic eagerness/STT prompt fields and fixes OpenAI TTS PCM rate metadata.
 - Version `0.1.60` strengthens active provider card borders and compacts Home Assistant bridge controls.
