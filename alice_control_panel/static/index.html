@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.65" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.65" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.66" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.66" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.65" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.66" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -135,6 +135,7 @@
           <section id="commands" class="panel span-6 command-panel">
             <header><h2>Command Panel</h2></header>
             <div id="esp-commands" class="commands"></div>
+            <div id="server-commands" class="commands secondary"></div>
             <section class="mic-debug">
               <div class="mic-debug-head">
                 <b>Mic Debug</b>
@@ -151,7 +152,6 @@
               <audio id="mic-debug-audio" controls preload="none"></audio>
               <div id="mic-debug-meta" class="mic-debug-meta">RMS/peak bilgisi kayıt sonrası görünür.</div>
             </section>
-            <div id="server-commands" class="commands secondary"></div>
           </section>
 
           <section id="prompts" class="panel span-12 prompt-panel">
@@ -399,6 +399,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.65"></script>
+  <script src="/app.js?v=0.1.66"></script>
   </body>
 </html>

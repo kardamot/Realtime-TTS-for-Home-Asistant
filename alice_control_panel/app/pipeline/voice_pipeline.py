@@ -198,7 +198,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.65",
+                "version": "0.1.66",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -499,6 +499,7 @@ class VoicePipeline:
             rms = int((total_sq / sample_count) ** 0.5)
 
         MIC_CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
+        self._cleanup_mic_debug_captures()
         path = MIC_CAPTURES_DIR / f"latest_{channel}.wav"
         with wave.open(str(path), "wb") as wav_file:
             wav_file.setnchannels(1)
@@ -521,6 +522,16 @@ class VoicePipeline:
         }
         self._mic_debug_captures[channel] = capture
         return capture
+
+    def _cleanup_mic_debug_captures(self) -> None:
+        keep = {"latest_left.wav", "latest_right.wav"}
+        for path in MIC_CAPTURES_DIR.glob("*.wav"):
+            if path.name in keep:
+                continue
+            try:
+                path.unlink()
+            except OSError:
+                pass
 
     @staticmethod
     def _normalize_mic_debug_channel(channel: str) -> str:

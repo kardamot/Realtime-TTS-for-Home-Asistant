@@ -354,14 +354,27 @@ nav a:hover { background: #121a25; color: var(--text); }
   white-space: nowrap;
 }
 
-.commands { display: grid; grid-template-columns: repeat(auto-fit,minmax(118px,1fr)); gap: 8px; }
+.commands {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(108px,132px));
+  justify-content: start;
+  gap: 8px;
+}
+.commands button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
 .command-panel {
   display: flex;
   flex-direction: column;
 }
-.command-panel .commands { grid-template-columns: repeat(auto-fit,minmax(132px,1fr)); }
+.command-panel .commands { grid-template-columns: repeat(auto-fit,minmax(108px,132px)); }
 .command-panel .commands:first-of-type { flex: 1 1 auto; align-content: start; overflow: auto; }
-.command-panel .commands.secondary { flex: 0 0 auto; }
+.command-panel .commands.secondary {
+  flex: 0 0 auto;
+  grid-template-columns: repeat(auto-fit,minmax(132px,160px));
+}
 .commands.secondary { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .mic-debug {
   display: grid;
@@ -392,13 +405,14 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .mic-debug-actions {
   display: grid;
-  grid-template-columns: repeat(6,minmax(0,1fr));
+  grid-template-columns: repeat(auto-fit,minmax(108px,132px));
+  justify-content: start;
   gap: 7px;
 }
 .mic-debug-actions button {
-  min-height: 30px;
-  padding: 0 8px;
-  font-size: 12px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
 }
 .mic-debug audio {
   width: 100%;
