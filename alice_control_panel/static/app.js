@@ -7,6 +7,11 @@ const serverCommands = [
   "start_voice_session", "stop_voice_session", "cancel_response",
   "safe_mode_on", "safe_mode_off"
 ];
+const commandLabels = {
+  servo_left: "motor left",
+  servo_center: "motor stop",
+  servo_right: "motor right",
+};
 let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
@@ -60,7 +65,7 @@ const HELP_TEXTS = {
   commands: {
     title: "Command Panel",
     body: [
-      "Üst bölüm ESP komutlarıdır: hoparlör testi, mikrofon testi, wake aç/kapat, servo hareketleri, amfi mute, reconnect ve reboot gibi doğrudan robota giden işler burada durur.",
+      "Üst bölüm ESP komutlarıdır: hoparlör testi, mikrofon testi, wake aç/kapat, kısa N20 motor testi, amfi mute, reconnect ve reboot gibi doğrudan robota giden işler burada durur.",
       "Mic Debug satırı sol ve sağ I2S mikrofon kanalını ayrı ayrı kısa WAV kaydı olarak yakalamak içindir. Yeni mikrofon bağlantısında SEL/kanal tersliği veya sessiz kanal sorununu hızlıca ayırt eder.",
       "Alt bölüm server komutlarıdır. STT/TTS yeniden başlatma, prompt reload, log temizleme, safe mode aç/kapat gibi add-on tarafındaki işlemleri tetikler.",
       "Bazı butonlar ESP firmware tarafında henüz desteklenmiyorsa komut loga düşer ve 'not implemented' benzeri cevap döner. Bu normaldir; panel komut yolunu kaybetmez."
@@ -812,7 +817,8 @@ function renderButtons() {
   $("esp-commands").innerHTML = "";
   espCommands.forEach((cmd) => {
     const btn = document.createElement("button");
-    btn.textContent = cmd.replaceAll("_", " ");
+    btn.textContent = commandLabels[cmd] || cmd.replaceAll("_", " ");
+    btn.title = cmd.startsWith("servo_") ? `${cmd} firmware komutu; N20 motor testi icin kullaniliyor.` : cmd;
     btn.onclick = () => guard("Command failed", () => sendCommand(cmd));
     $("esp-commands").appendChild(btn);
   });
