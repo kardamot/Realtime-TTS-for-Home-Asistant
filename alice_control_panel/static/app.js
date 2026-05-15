@@ -19,6 +19,7 @@ let eventSocket = null;
 let eventSocketSeq = 0;
 let statusTimer = null;
 let statusRefreshTimer = null;
+let micDebug = {};
 const autoScrollState = new WeakMap();
 let helpPopover = null;
 
@@ -58,6 +59,7 @@ const HELP_TEXTS = {
     title: "Command Panel",
     body: [
       "Üst bölüm ESP komutlarıdır: hoparlör testi, mikrofon testi, wake aç/kapat, servo hareketleri, amfi mute, reconnect ve reboot gibi doğrudan robota giden işler burada durur.",
+      "Mic Debug satırı sol ve sağ I2S mikrofon kanalını ayrı ayrı kısa WAV kaydı olarak yakalamak içindir. Yeni mikrofon bağlantısında SEL/kanal tersliği veya sessiz kanal sorununu hızlıca ayırt eder.",
       "Alt bölüm server komutlarıdır. STT/TTS yeniden başlatma, prompt reload, log temizleme, safe mode aç/kapat gibi add-on tarafındaki işlemleri tetikler.",
       "Bazı butonlar ESP firmware tarafında henüz desteklenmiyorsa komut loga düşer ve 'not implemented' benzeri cevap döner. Bu normaldir; panel komut yolunu kaybetmez."
     ]
@@ -503,6 +505,13 @@ function wsPath(path) {
   return url.toString();
 }
 
+function cacheBustedPath(path) {
+  const url = new URL(path, location.origin);
+  if (token) url.searchParams.set("token", token);
+  url.searchParams.set("t", String(Date.now()));
+  return url.pathname + url.search;
+}
+
 function getDeep(obj, path) {
   return path.split(".").reduce((acc, key) => acc && acc[key], obj);
 }
@@ -541,6 +550,12 @@ async function boot() {
   $("session-start").onclick = () => guard("Session start failed", startVoiceSession);
   $("session-stop").onclick = () => guard("Session stop failed", stopVoiceSession);
   $("response-cancel").onclick = () => guard("Response cancel failed", cancelResponse);
+  $("mic-record-left").onclick = () => guard("Left mic capture failed", () => recordMicDebug("left"));
+  $("mic-record-right").onclick = () => guard("Right mic capture failed", () => recordMicDebug("right"));
+  $("mic-play-left").onclick = () => guard("Left mic playback failed", () => playMicDebug("left"));
+  $("mic-play-right").onclick = () => guard("Right mic playback failed", () => playMicDebug("right"));
+  $("mic-download-left").onclick = () => guard("Left mic download failed", () => downloadMicDebug("left"));
+  $("mic-download-right").onclick = () => guard("Right mic download failed", () => downloadMicDebug("right"));
   $("config-save").onclick = () => guard("Config save failed", saveConfig);
   $("config-export").onclick = () => guard("Config export failed", exportConfig);
   $("config-import").onclick = () => $("config-import-file").click();
@@ -670,8 +685,36 @@ async function loadStatus() {
   text("hw-state", esp.state || "OFFLINE");
   setAutoText("stt-text", pipe.stt_result || pipe.last_user_text || "No utterance yet");
   setAutoText("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
+  renderMicDebug(pipe.mic_debug || {});
   renderTimeline(pipe.timeline || []);
   if (!configDirty) fillConfig();
+}
+
+function renderMicDebug(info) {
+  micDebug = info || {};
+  const captures = micDebug.captures || {};
+  const left = captures.left;
+  const right = captures.right;
+  const latest = [left, right].filter(Boolean).sort((a, b) => Number(b.stored_at || 0) - Number(a.stored_at || 0))[0];
+  text(
+    "mic-debug-status",
+    latest
+      ? `latest ${latest.channel || "mic"} - ${fmtSeconds(Math.round((Date.now() / 1000) - Number(latest.stored_at || 0)))} ago`
+      : "No debug capture yet"
+  );
+  text(
+    "mic-debug-meta",
+    latest
+      ? `${String(latest.channel || "mic").toUpperCase()} | ${latest.duration_sec || 0}s | ${latest.bytes_buffered || 0} bytes | rms ${latest.rms || 0} | peak ${latest.peak || 0}`
+      : "RMS/peak bilgisi kayıt sonrası görünür."
+  );
+  ["left", "right"].forEach((channel) => {
+    const available = Boolean(captures[channel]?.url);
+    const play = $(`mic-play-${channel}`);
+    const download = $(`mic-download-${channel}`);
+    if (play) play.disabled = !available;
+    if (download) download.disabled = !available;
+  });
 }
 
 function formatReconnects(esp) {
@@ -784,6 +827,45 @@ async function sendCommand(command) {
   notice(result.message || `${command} sent`);
   renderLogs({ forceScroll: command === "clear_logs" });
   await loadStatus();
+}
+
+async function recordMicDebug(channel) {
+  const command = channel === "right" ? "capture_mic_right" : "capture_mic_left";
+  notice(`${channel.toUpperCase()} mic recording requested`);
+  await sendCommand(command);
+}
+
+async function refreshMicDebug() {
+  const info = await api("/api/mic/debug");
+  renderMicDebug(info);
+  return info;
+}
+
+async function playMicDebug(channel) {
+  const info = await refreshMicDebug();
+  const capture = info.captures?.[channel];
+  if (!capture?.url) {
+    notice(`${channel.toUpperCase()} mic kaydı henüz yok`);
+    return;
+  }
+  const audio = $("mic-debug-audio");
+  audio.src = cacheBustedPath(capture.url);
+  await audio.play();
+}
+
+async function downloadMicDebug(channel) {
+  const info = await refreshMicDebug();
+  const capture = info.captures?.[channel];
+  if (!capture?.url) {
+    notice(`${channel.toUpperCase()} mic kaydı henüz yok`);
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = cacheBustedPath(capture.url);
+  a.download = capture.filename || `alice_mic_${channel}.wav`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 async function saveConfig() {

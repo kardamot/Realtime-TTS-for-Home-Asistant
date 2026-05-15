@@ -5,12 +5,15 @@ import json
 import re
 import time
 import uuid
+import wave
+from pathlib import Path
 from typing import Any
 
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
+from app.core.paths import MIC_CAPTURES_DIR
 from app.core.ws_hub import WsHub
 from app.esp.esp_client import EspClient
 from app.pipeline.llm.openai_compatible import OpenAICompatibleLlm
@@ -83,6 +86,7 @@ class VoicePipeline:
         self._session_last_event = "idle"
         self._live_clients = 0
         self._last_live_mic: dict[str, Any] = {}
+        self._mic_debug_captures: dict[str, dict[str, Any]] = {}
 
     async def status(self) -> dict[str, Any]:
         return {
@@ -108,8 +112,22 @@ class VoicePipeline:
                 "clients": self._live_clients,
                 "last": self._last_live_mic,
             },
+            "mic_debug": self.mic_debug_status(),
             "realtime": await self._realtime_bridge.status() if self._realtime_bridge else {},
         }
+
+    def mic_debug_status(self) -> dict[str, Any]:
+        return {
+            "captures": {channel: dict(info) for channel, info in self._mic_debug_captures.items()},
+            "available_channels": ["left", "right"],
+        }
+
+    def mic_debug_capture_path(self, channel: str) -> Path | None:
+        safe_channel = self._normalize_mic_debug_channel(channel)
+        path = MIC_CAPTURES_DIR / f"latest_{safe_channel}.wav"
+        if not path.exists():
+            return None
+        return path
 
     async def restart_tts(self) -> dict[str, Any]:
         self._tts_status = "restarted"
@@ -180,7 +198,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.63",
+                "version": "0.1.64",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -409,6 +427,18 @@ class VoicePipeline:
         if self._stream_active and bool(config.get("pipeline", {}).get("barge_in_enabled", True)):
             await self.cancel_response("mic_barge_in")
         sample_rate = int(metadata.get("sample_rate") or 16000)
+        purpose = str(metadata.get("purpose") or "").lower()
+        if purpose == "mic_debug":
+            self._state = "IDLE"
+            capture = self._store_mic_debug_capture(metadata, audio, sample_rate)
+            self._last_audio_capture = capture
+            self._stt_result = (
+                f"{capture.get('channel', 'mic')} mic debug capture: "
+                f"{capture.get('duration_sec', 0)}s, rms {capture.get('rms', 0)}, peak {capture.get('peak', 0)}."
+            )
+            await self._log_bus.emit("INFO", "STT", "Mic debug capture stored", capture)
+            await self._ws_hub.publish("pipeline_status", await self.status())
+            return await self.status()
         self._state = "STT"
         self._stream_active = True
         self._cancel_event = asyncio.Event()
@@ -451,6 +481,55 @@ class VoicePipeline:
         finally:
             self._stream_active = False
             await self._ws_hub.publish("pipeline_status", await self.status())
+
+    def _store_mic_debug_capture(self, metadata: dict[str, Any], audio: bytes, sample_rate: int) -> dict[str, Any]:
+        channel = self._normalize_mic_debug_channel(str(metadata.get("channel") or "current"))
+        sample_count = len(audio) // 2
+        peak = 0
+        rms = 0
+        if sample_count:
+            samples = memoryview(audio[: sample_count * 2]).cast("h")
+            total_sq = 0
+            for sample in samples:
+                value = int(sample)
+                abs_value = abs(value)
+                if abs_value > peak:
+                    peak = abs_value
+                total_sq += value * value
+            rms = int((total_sq / sample_count) ** 0.5)
+
+        MIC_CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
+        path = MIC_CAPTURES_DIR / f"latest_{channel}.wav"
+        with wave.open(str(path), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(audio[: sample_count * 2])
+
+        capture = {
+            **metadata,
+            "channel": channel,
+            "bytes_buffered": sample_count * 2,
+            "sample_rate": sample_rate,
+            "samples": sample_count,
+            "duration_sec": round(sample_count / sample_rate, 2) if sample_rate > 0 else 0,
+            "rms": rms,
+            "peak": peak,
+            "stored_at": time.time(),
+            "filename": path.name,
+            "url": f"/api/mic/debug/{channel}.wav",
+        }
+        self._mic_debug_captures[channel] = capture
+        return capture
+
+    @staticmethod
+    def _normalize_mic_debug_channel(channel: str) -> str:
+        value = channel.strip().lower()
+        if value in {"left", "l", "sol"}:
+            return "left"
+        if value in {"right", "r", "sag", "sağ"}:
+            return "right"
+        return "current"
 
     async def _echo_transcript(self, text: str, config: dict[str, Any], cancel_event: asyncio.Event) -> None:
         self._state = "TTS"

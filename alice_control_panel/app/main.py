@@ -12,7 +12,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import commands, config, esp, ha, logs, pipeline, prompts, status
+from app.api import commands, config, esp, ha, logs, mic, pipeline, prompts, status
 from app.core.auth import require_websocket_auth
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.63", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.64", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
@@ -89,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(ha.router)
     app.include_router(commands.router)
     app.include_router(pipeline.router)
+    app.include_router(mic.router)
 
     static_root = STATIC_DIR if (STATIC_DIR / "index.html").exists() else FRONTEND_DIST_DIR
     if static_root.exists():

@@ -31,6 +31,7 @@ button {
   cursor: pointer;
 }
 button:hover { background: #2b3d59; }
+button:disabled { cursor: not-allowed; opacity: .45; }
 input, select, textarea {
   width: 100%;
   min-width: 0;
@@ -362,6 +363,47 @@ nav a:hover { background: #121a25; color: var(--text); }
 .command-panel .commands:first-of-type { flex: 1 1 auto; align-content: start; overflow: auto; }
 .command-panel .commands.secondary { flex: 0 0 auto; }
 .commands.secondary { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.mic-debug {
+  display: grid;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(100,169,255,.22);
+}
+.mic-debug-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+.mic-debug-head b {
+  color: #b9dcff;
+  font-size: 13px;
+}
+.mic-debug-head span,
+.mic-debug-meta {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mic-debug-actions {
+  display: grid;
+  grid-template-columns: repeat(6,minmax(0,1fr));
+  gap: 7px;
+}
+.mic-debug-actions button {
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.mic-debug audio {
+  width: 100%;
+  height: 32px;
+}
 .config-layout { display: grid; gap: 24px; }
 .config-group {
   display: grid;
@@ -557,6 +599,7 @@ label.wide { grid-column: 1 / -1; }
     height: auto;
     min-height: 260px;
   }
+  .mic-debug-actions { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .config-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .live-provider-grid { grid-template-columns: 1fr; }
   .config-group-head { align-items: flex-start; flex-direction: column; }
@@ -582,6 +625,7 @@ label.wide { grid-column: 1 / -1; }
   .log-row { grid-template-columns: 72px 50px minmax(0,1fr); }
   .log-row span { display: none; }
   .help-detail-list li { grid-template-columns: 1fr; gap: 4px; }
+  .mic-debug-actions { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 460px) {
   .commands { grid-template-columns: repeat(2,minmax(0,1fr)); }

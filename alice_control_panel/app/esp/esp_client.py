@@ -47,6 +47,8 @@ ESP_COMMANDS = {
     "test_speaker",
     "test_mic",
     "capture_mic",
+    "capture_mic_left",
+    "capture_mic_right",
     "wake_on",
     "wake_off",
     "servo_left",
@@ -449,11 +451,15 @@ class EspClient:
         sample_rate = int(payload.get("sample_rate") or doc.get("sample_rate") or 16000)
         channels = int(payload.get("channels") or doc.get("channels") or 1)
         encoding = str(payload.get("encoding") or doc.get("encoding") or "pcm_s16le")
+        channel = str(payload.get("channel") or doc.get("channel") or "current")
+        purpose = str(payload.get("purpose") or doc.get("purpose") or "pipeline")
         self._active_mic_stream = {
             "stream_id": stream_id,
             "sample_rate": sample_rate,
             "channels": channels,
             "encoding": encoding,
+            "channel": channel,
+            "purpose": purpose,
             "source": str(payload.get("source") or "esp"),
             "started_at": time.time(),
             "bytes_received": 0,

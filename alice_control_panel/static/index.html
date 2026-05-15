@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.63" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.63" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.64" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.64" />
   </head>
   <body>
     <main class="shell">
@@ -23,7 +23,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.63" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.64" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -135,6 +135,22 @@
           <section id="commands" class="panel span-6 command-panel">
             <header><h2>Command Panel</h2></header>
             <div id="esp-commands" class="commands"></div>
+            <section class="mic-debug">
+              <div class="mic-debug-head">
+                <b>Mic Debug</b>
+                <span id="mic-debug-status">No debug capture yet</span>
+              </div>
+              <div class="mic-debug-actions">
+                <button id="mic-record-left">Record L</button>
+                <button id="mic-record-right">Record R</button>
+                <button id="mic-play-left">Play L</button>
+                <button id="mic-play-right">Play R</button>
+                <button id="mic-download-left">Download L</button>
+                <button id="mic-download-right">Download R</button>
+              </div>
+              <audio id="mic-debug-audio" controls preload="none"></audio>
+              <div id="mic-debug-meta" class="mic-debug-meta">RMS/peak bilgisi kayıt sonrası görünür.</div>
+            </section>
             <div id="server-commands" class="commands secondary"></div>
           </section>
 
@@ -383,6 +399,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.63"></script>
+  <script src="/app.js?v=0.1.64"></script>
   </body>
 </html>
