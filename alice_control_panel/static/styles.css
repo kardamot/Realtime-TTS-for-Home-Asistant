@@ -356,38 +356,38 @@ nav a:hover { background: #121a25; color: var(--text); }
 
 .commands {
   display: grid;
-  grid-template-columns: repeat(auto-fit,minmax(108px,132px));
+  grid-template-columns: repeat(auto-fit,minmax(92px,112px));
   justify-content: start;
-  gap: 8px;
+  gap: 7px;
 }
 .commands button {
-  min-height: 32px;
-  padding: 0 10px;
-  font-size: 13px;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 .command-panel {
   display: flex;
   flex-direction: column;
 }
-.command-panel .commands { grid-template-columns: repeat(auto-fit,minmax(108px,132px)); }
+.command-panel .commands { grid-template-columns: repeat(auto-fit,minmax(92px,112px)); }
 .command-panel .commands:first-of-type {
   flex: 0 0 auto;
-  min-height: 72px;
-  max-height: 122px;
+  min-height: 67px;
+  max-height: 108px;
   align-content: start;
   overflow: auto;
 }
 .command-panel .commands.secondary {
   flex: 0 0 auto;
-  grid-template-columns: repeat(auto-fit,minmax(132px,160px));
+  grid-template-columns: repeat(auto-fit,minmax(118px,142px));
 }
-.commands.secondary { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.commands.secondary { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .mic-debug {
   display: grid;
-  gap: 8px;
+  gap: 7px;
   flex: 0 0 auto;
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid rgba(100,169,255,.22);
 }
 .mic-debug-head {
@@ -411,18 +411,18 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .mic-debug-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit,minmax(108px,132px));
+  grid-template-columns: repeat(auto-fit,minmax(92px,112px));
   justify-content: start;
   gap: 7px;
 }
 .mic-debug-actions button {
-  min-height: 32px;
-  padding: 0 10px;
-  font-size: 13px;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 .mic-debug audio {
   width: 100%;
-  height: 32px;
+  height: 30px;
 }
 .config-layout { display: grid; gap: 24px; }
 .config-group {
