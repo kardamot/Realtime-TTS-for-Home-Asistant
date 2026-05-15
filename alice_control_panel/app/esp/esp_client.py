@@ -471,7 +471,13 @@ class EspClient:
             "INFO",
             "STT",
             "ESP mic stream started",
-            {"stream_id": stream_id, "sample_rate": sample_rate, "channels": channels},
+            {
+                "stream_id": stream_id,
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "channel": channel,
+                "purpose": purpose,
+            },
         )
         await self._ws_hub.publish("esp_event", {"type": "mic_start", "payload": dict(self._active_mic_stream)})
 
@@ -505,11 +511,23 @@ class EspClient:
 
     async def _handle_mic_error(self, doc: dict[str, Any], payload: dict[str, Any]) -> None:
         message = str(payload.get("message") or doc.get("message") or "ESP mic stream error")
-        stream = dict(self._active_mic_stream or {})
+        stream = dict(payload or {})
+        if self._active_mic_stream:
+            stream.update(self._active_mic_stream)
+        stream["message"] = message
         self._active_mic_stream = None
         self._active_mic_buffer = bytearray()
-        await self._log_bus.emit("WARN", "STT", message, {"stream_id": stream.get("stream_id")})
-        await self._ws_hub.publish("esp_event", {"type": "mic_error", "payload": {"message": message, **stream}})
+        await self._log_bus.emit(
+            "WARN",
+            "STT",
+            message,
+            {
+                "stream_id": stream.get("stream_id"),
+                "channel": stream.get("channel"),
+                "purpose": stream.get("purpose"),
+            },
+        )
+        await self._ws_hub.publish("esp_event", {"type": "mic_error", "payload": stream})
 
     def _dispatch_mic_capture(self, metadata: dict[str, Any], audio: bytes) -> None:
         handler = self._mic_stream_handler

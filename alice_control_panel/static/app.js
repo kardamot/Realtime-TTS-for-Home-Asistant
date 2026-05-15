@@ -10,6 +10,7 @@ const serverCommands = [
 let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
+let latestStatus = {};
 let logs = [];
 let paused = false;
 let configDirty = false;
@@ -19,6 +20,7 @@ let eventSocket = null;
 let eventSocketSeq = 0;
 let statusTimer = null;
 let statusRefreshTimer = null;
+let micDebugRefreshTimers = [];
 let micDebug = {};
 const autoScrollState = new WeakMap();
 let helpPopover = null;
@@ -626,6 +628,7 @@ function scheduleStatusRefresh(delay = 250) {
 
 async function loadStatus() {
   const data = await api("/api/status");
+  latestStatus = data || {};
   const esp = data.esp || {};
   const pipe = data.pipeline || {};
   const health = (data.health || {}).system || {};
@@ -696,11 +699,12 @@ function renderMicDebug(info) {
   const left = captures.left;
   const right = captures.right;
   const latest = [left, right].filter(Boolean).sort((a, b) => Number(b.stored_at || 0) - Number(a.stored_at || 0))[0];
+  const espWsConnected = Boolean(latestStatus.esp?.ws_connected);
   text(
     "mic-debug-status",
     latest
       ? `latest ${latest.channel || "mic"} - ${fmtSeconds(Math.round((Date.now() / 1000) - Number(latest.stored_at || 0)))} ago`
-      : "No debug capture yet"
+      : espWsConnected ? "No debug capture yet" : "ESP WS offline - recording needs WebSocket"
   );
   text(
     "mic-debug-meta",
@@ -831,8 +835,18 @@ async function sendCommand(command) {
 
 async function recordMicDebug(channel) {
   const command = channel === "right" ? "capture_mic_right" : "capture_mic_left";
-  notice(`${channel.toUpperCase()} mic recording requested`);
+  const label = channel === "right" ? "RIGHT" : "LEFT";
+  const espWsConnected = Boolean(latestStatus.esp?.ws_connected);
+  notice(espWsConnected ? `${label} mic recording requested; wait a few seconds.` : `${label} mic requested, but ESP WS is offline.`);
+  text("mic-debug-status", `${label} mic recording...`);
   await sendCommand(command);
+  micDebugRefreshTimers.forEach((timer) => window.clearTimeout(timer));
+  micDebugRefreshTimers = [1200, 4200, 6500].map((delay) =>
+    window.setTimeout(() => {
+      refreshMicDebug().catch(() => undefined);
+      loadStatus().catch(() => undefined);
+    }, delay)
+  );
 }
 
 async function refreshMicDebug() {
@@ -1081,7 +1095,7 @@ function connectEvents() {
   eventSocket = socket;
   socket.onmessage = (event) => {
     const doc = JSON.parse(event.data);
-    if (doc.type === "snapshot" || doc.type === "esp_status" || doc.type === "pipeline_status" || doc.type === "config_updated") {
+    if (doc.type === "snapshot" || doc.type === "esp_status" || doc.type === "pipeline_status" || doc.type === "config_updated" || doc.type === "esp_event") {
       scheduleStatusRefresh();
     }
   };
