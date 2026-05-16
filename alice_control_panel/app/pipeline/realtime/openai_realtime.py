@@ -17,6 +17,7 @@ from app.core.log_bus import LogBus
 from app.core.prompt_store import PromptStore
 from app.core.ws_hub import WsHub
 from app.pipeline.llm.openai_compatible import active_llm_config
+from app.system.ha_narrator import HaNarrator
 
 
 OPENAI_REALTIME_WS_URL = "wss://api.openai.com/v1/realtime"
@@ -202,6 +203,7 @@ class OpenAIRealtimeBridge:
         tts_relay: Any,
         esp_client: Any,
         ha_bridge: Any | None = None,
+        ha_narrator: HaNarrator | None = None,
     ) -> None:
         self._config_store = config_store
         self._prompt_store = prompt_store
@@ -210,6 +212,7 @@ class OpenAIRealtimeBridge:
         self._tts_relay = tts_relay
         self._esp_client = esp_client
         self._ha_bridge = ha_bridge
+        self._ha_narrator = ha_narrator
         self._active = False
         self._connected = False
         self._last_event = "idle"
@@ -480,6 +483,8 @@ class OpenAIRealtimeBridge:
                 if not result.get("handled"):
                     return False
                 speech = str(result.get("speech") or "").strip()
+                if self._ha_narrator is not None and result.get("ok"):
+                    speech = (await self._ha_narrator.narrate(user_text, result, speech)).strip()
                 if not speech:
                     return False
                 response_requested = True
@@ -644,7 +649,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.74",
+                version="0.1.75",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",

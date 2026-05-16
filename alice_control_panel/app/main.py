@@ -26,6 +26,7 @@ from app.pipeline.stt.manager import SttManager
 from app.pipeline.tts.relay import TtsRelay
 from app.pipeline.voice_pipeline import VoicePipeline
 from app.system.ha_bridge import HomeAssistantBridge
+from app.system.ha_narrator import HaNarrator
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -45,17 +46,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.74", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.75", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
     prompt_store = PromptStore(config_store)
     esp_client = EspClient(config_store, log_bus, ws_hub)
     ha_bridge = HomeAssistantBridge(config_store, log_bus)
+    ha_narrator = HaNarrator(config_store, prompt_store, log_bus)
     llm = OpenAICompatibleLlm(config_store, prompt_store, log_bus)
     stt_manager = SttManager(config_store, log_bus)
     tts_relay = TtsRelay(config_store, log_bus)
-    realtime_bridge = OpenAIRealtimeBridge(config_store, prompt_store, log_bus, ws_hub, tts_relay, esp_client, ha_bridge)
+    realtime_bridge = OpenAIRealtimeBridge(
+        config_store,
+        prompt_store,
+        log_bus,
+        ws_hub,
+        tts_relay,
+        esp_client,
+        ha_bridge,
+        ha_narrator,
+    )
     voice_pipeline = VoicePipeline(
         config_store,
         log_bus,
@@ -66,6 +77,7 @@ def create_app() -> FastAPI:
         esp_client,
         ha_bridge,
         realtime_bridge,
+        ha_narrator,
     )
     esp_client.set_mic_stream_handler(voice_pipeline.run_audio_capture)
 
@@ -75,6 +87,7 @@ def create_app() -> FastAPI:
     app.state.prompt_store = prompt_store
     app.state.esp_client = esp_client
     app.state.ha_bridge = ha_bridge
+    app.state.ha_narrator = ha_narrator
     app.state.realtime_bridge = realtime_bridge
     app.state.stt_manager = stt_manager
     app.state.llm = llm

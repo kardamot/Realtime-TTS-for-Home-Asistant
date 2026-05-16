@@ -21,6 +21,7 @@ from app.pipeline.realtime.openai_realtime import OpenAIRealtimeBridge
 from app.pipeline.stt.manager import SttManager
 from app.pipeline.stt.vad import SileroVadRuntime
 from app.pipeline.tts.relay import TtsRelay
+from app.system.ha_narrator import HaNarrator
 
 
 _HALLUCINATION_PHRASES = {
@@ -59,6 +60,7 @@ class VoicePipeline:
         esp: EspClient,
         ha_bridge: Any | None = None,
         realtime_bridge: OpenAIRealtimeBridge | None = None,
+        ha_narrator: HaNarrator | None = None,
     ) -> None:
         self._config_store = config_store
         self._log_bus = log_bus
@@ -69,6 +71,7 @@ class VoicePipeline:
         self._esp = esp
         self._ha_bridge = ha_bridge
         self._realtime_bridge = realtime_bridge
+        self._ha_narrator = ha_narrator
         self._state = "IDLE"
         self._last_user_text = ""
         self._stt_result = ""
@@ -198,7 +201,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.74",
+                "version": "0.1.75",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -576,6 +579,9 @@ class VoicePipeline:
             result = await self._ha_bridge.handle_text_command(text)
             if not result.get("handled"):
                 return None
+            speech = str(result.get("speech") or "Home Assistant komutu islendi.")
+            if self._ha_narrator is not None and result.get("ok"):
+                speech = await self._ha_narrator.narrate(text, result, speech)
             self._last_audio_capture["ha_command"] = {
                 "ok": bool(result.get("ok")),
                 "action": result.get("action"),
@@ -583,7 +589,7 @@ class VoicePipeline:
                 "domain": result.get("domain"),
                 "service": result.get("service"),
             }
-            return str(result.get("speech") or "Home Assistant komutu islendi.")
+            return speech
         except PermissionError as exc:
             await self._log_bus.emit("WARN", "PIPELINE", "Home Assistant route skipped", {"error": str(exc)})
             return None

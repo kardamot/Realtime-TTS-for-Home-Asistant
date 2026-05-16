@@ -199,6 +199,28 @@ class HomeAssistantBridge:
                 resp.raise_for_status()
                 return await resp.json()
 
+    async def get_weather_forecast_response(self, entity_id: str) -> dict[str, Any]:
+        cfg = await self._cfg()
+        self.assert_entity_allowed(entity_id, cfg)
+        responses: dict[str, Any] = {}
+        for service_name in ("get_forecasts", "get_forecast"):
+            for forecast_type in ("hourly", "daily"):
+                try:
+                    async with self._session() as session:
+                        async with session.post(
+                            f"{self._base_url(cfg)}/services/weather/{service_name}?return_response",
+                            headers=self._headers(),
+                            json={"entity_id": entity_id, "type": forecast_type},
+                        ) as resp:
+                            if resp.status >= 400:
+                                continue
+                            responses[f"{service_name}_{forecast_type}"] = await resp.json()
+                except Exception:
+                    continue
+            if responses:
+                break
+        return responses
+
     async def list_states(self, domain: str = "", limit: int = 64) -> list[dict[str, Any]]:
         cfg = await self._cfg()
         domain = domain.strip().lower()
@@ -293,9 +315,23 @@ class HomeAssistantBridge:
         domain = entity_id.split(".", 1)[0] if "." in entity_id else ""
         if action == "read":
             state = await self.get_state(entity_id)
-            speech = self._state_speech(state or entity, friendly)
-            await self._log_bus.emit("INFO", "HA", "Allowlisted HA state read", {"entity_id": entity_id})
-            return {"handled": True, "ok": True, "action": action, "entity_id": entity_id, "speech": speech, "state": state}
+            state_doc = state or entity
+            if domain == "weather":
+                forecast_response = await self.get_weather_forecast_response(entity_id)
+                if forecast_response:
+                    state_doc = {**state_doc, "alice_forecast_response": forecast_response}
+            speech = self._state_speech(state_doc, friendly)
+            await self._log_bus.emit("INFO", "HA", "Allowlisted HA state read", {"entity_id": entity_id, "domain": domain})
+            return {
+                "handled": True,
+                "ok": True,
+                "action": action,
+                "entity_id": entity_id,
+                "domain": domain,
+                "speech": speech,
+                "state": state_doc,
+                "narration_kind": "weather" if entity_id.startswith("weather.") else "",
+            }
 
         service = self._service_for_action(domain, action)
         if not service:
