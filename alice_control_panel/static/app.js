@@ -714,7 +714,7 @@ function renderMicDebug(info) {
   text(
     "mic-debug-meta",
     latest
-      ? `${String(latest.channel || "mic").toUpperCase()} | ${latest.duration_sec || 0}s | ${latest.bytes_buffered || 0} bytes | rms ${latest.rms || 0} | peak ${latest.peak || 0}`
+      ? `${String(latest.channel || "mic").toUpperCase()} | ${latest.duration_sec || 0}s | ${latest.bytes_buffered || 0} bytes | rms ${latest.rms || 0} | peak ${latest.peak || 0} | shift ${latest.shift_bits ?? "-"} | clip ${latest.clip_pct ?? 0}%`
       : "RMS/peak bilgisi kayıt sonrası görünür."
   );
   ["left", "right"].forEach((channel) => {

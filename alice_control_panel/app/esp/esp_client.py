@@ -453,6 +453,10 @@ class EspClient:
         encoding = str(payload.get("encoding") or doc.get("encoding") or "pcm_s16le")
         channel = str(payload.get("channel") or doc.get("channel") or "current")
         purpose = str(payload.get("purpose") or doc.get("purpose") or "pipeline")
+        try:
+            shift_bits = int(payload.get("shift_bits") or doc.get("shift_bits"))
+        except (TypeError, ValueError):
+            shift_bits = None
         self._active_mic_stream = {
             "stream_id": stream_id,
             "sample_rate": sample_rate,
@@ -460,6 +464,7 @@ class EspClient:
             "encoding": encoding,
             "channel": channel,
             "purpose": purpose,
+            "shift_bits": shift_bits,
             "source": str(payload.get("source") or "esp"),
             "started_at": time.time(),
             "bytes_received": 0,
@@ -477,6 +482,7 @@ class EspClient:
                 "channels": channels,
                 "channel": channel,
                 "purpose": purpose,
+                "shift_bits": shift_bits,
             },
         )
         await self._ws_hub.publish("esp_event", {"type": "mic_start", "payload": dict(self._active_mic_stream)})
@@ -491,6 +497,21 @@ class EspClient:
             "ended_at": time.time(),
             "bytes_buffered": len(self._active_mic_buffer),
         })
+        for key in (
+            "samples",
+            "avg_abs",
+            "rms",
+            "peak",
+            "clip_pct",
+            "silent_pct",
+            "shift_bits",
+            "duration_ms",
+            "bytes",
+            "chunks",
+        ):
+            value = payload.get(key, doc.get(key))
+            if value is not None:
+                stream[key] = value
         stream["duration_sec"] = round(float(stream["ended_at"] - stream.get("started_at", stream["ended_at"])), 2)
         audio = bytes(self._active_mic_buffer)
         self._active_mic_stream = None
@@ -504,6 +525,10 @@ class EspClient:
                 "bytes": stream.get("bytes_buffered"),
                 "chunks": stream.get("chunks"),
                 "truncated": stream.get("truncated"),
+                "rms": stream.get("rms"),
+                "peak": stream.get("peak"),
+                "clip_pct": stream.get("clip_pct"),
+                "shift_bits": stream.get("shift_bits"),
             },
         )
         await self._ws_hub.publish("esp_event", {"type": "mic_end", "payload": stream})
