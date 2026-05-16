@@ -481,6 +481,11 @@ function fmtSeconds(value) {
   return `${s}s`;
 }
 
+function fmtMs(value) {
+  const total = Number(value);
+  return Number.isFinite(total) ? `${Math.round(total)}ms` : "-";
+}
+
 function tone(value) {
   const key = String(value || "").toLowerCase();
   if (key.includes("online") || key.includes("idle") || key.includes("ok")) return "good";
@@ -693,8 +698,9 @@ async function loadStatus() {
   text("hw-state", esp.state || "OFFLINE");
   setAutoText("stt-text", pipe.stt_result || pipe.last_user_text || "No utterance yet");
   setAutoText("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
+  renderRealtimeLatency(realtime.latency || {});
   renderMicDebug(pipe.mic_debug || {});
-  renderTimeline(pipe.timeline || []);
+  renderTimeline(pipe.timeline || [], realtime.latency || {});
   if (!configDirty) fillConfig();
 }
 
@@ -800,9 +806,41 @@ async function selectProvider(kind, provider) {
   await saveConfig();
 }
 
-function renderTimeline(items) {
+function renderRealtimeLatency(latency) {
+  const box = $("realtime-latency");
+  if (!box) return;
+  const summary = latency.summary || {};
+  const events = latency.events || [];
+  const latest = events.length ? events[events.length - 1] : null;
+  const chips = [
+    ["speech -> LLM", summary.speech_to_first_delta_ms],
+    ["stop -> LLM", summary.speech_stop_to_first_delta_ms],
+    ["commit -> LLM", summary.commit_to_first_delta_ms],
+    ["response -> LLM", summary.response_to_first_delta_ms],
+  ];
+  box.innerHTML = "";
+  chips.forEach(([label, value]) => {
+    const chip = document.createElement("div");
+    chip.className = "latency-chip";
+    const title = document.createElement("span");
+    const metric = document.createElement("b");
+    title.textContent = label;
+    metric.textContent = fmtMs(value);
+    chip.append(title, metric);
+    box.appendChild(chip);
+  });
+  if (latest && !Object.keys(summary).length) {
+    box.firstElementChild.querySelector("b").textContent = `${String(latest.name || "event").replaceAll("_", " ")} +${fmtMs(latest.ms)}`;
+  }
+}
+
+function renderTimeline(items, latency = {}) {
   const box = $("timeline");
-  const list = items.slice(-6);
+  const realtimeRows = (latency.events || []).slice(-8).map((event) => ({
+    category: "RT",
+    message: `${String(event.name || "event").replaceAll("_", " ")} +${fmtMs(event.ms)}`,
+  }));
+  const list = [...items.slice(-3), ...realtimeRows].slice(-8);
   keepAutoScrolled(box, () => {
     box.innerHTML = list.length ? "" : "<div><b>IDLE</b><span>Waiting for audio/text</span></div>";
     list.forEach((item) => {

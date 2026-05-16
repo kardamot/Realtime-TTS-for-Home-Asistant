@@ -24,6 +24,17 @@ EMOTION_TAG_RE = re.compile(r"<emotion:\s*([^>]+)>", re.IGNORECASE)
 INCOMPLETE_EMOTION_TAG_RE = re.compile(r"<emotion:\s*[^>]*$", re.IGNORECASE)
 STREAM_CHUNK_MIN_CHARS = 28
 STREAM_CHUNK_HARD_CHARS = 90
+REALTIME_LATENCY_DELTAS = (
+    ("speech_to_commit_ms", "speech_started", "input_committed"),
+    ("speech_to_transcript_ms", "speech_started", "transcription_completed"),
+    ("speech_to_response_request_ms", "speech_started", "response_requested"),
+    ("speech_to_first_delta_ms", "speech_started", "first_llm_delta"),
+    ("speech_stop_to_first_delta_ms", "speech_stopped", "first_llm_delta"),
+    ("commit_to_first_delta_ms", "input_committed", "first_llm_delta"),
+    ("response_to_first_delta_ms", "response_requested", "first_llm_delta"),
+    ("first_delta_to_first_chunk_ms", "first_llm_delta", "first_tts_chunk"),
+    ("total_ms", "start_received", "session_completed"),
+)
 
 
 def safe_exc_message(exc: Exception) -> str:
@@ -206,6 +217,11 @@ class OpenAIRealtimeBridge:
         self._session_id = ""
         self._model = ""
         self._started_at: float | None = None
+        self._latency_session_id = ""
+        self._latency_started_monotonic: float | None = None
+        self._latency_events: list[dict[str, Any]] = []
+        self._latency_summary: dict[str, int] = {}
+        self._latency_updated_at: float | None = None
         self._cancel_event = asyncio.Event()
 
     async def should_handle_voice_ws(self) -> bool:
@@ -230,6 +246,49 @@ class OpenAIRealtimeBridge:
             "last_event": self._last_event,
             "last_error": self._last_error,
             "uptime_sec": int(time.time() - self._started_at) if self._started_at else 0,
+            "latency": self._latency_snapshot(),
+        }
+
+    def _reset_latency(self, session_id: str, **data: Any) -> None:
+        self._latency_session_id = session_id
+        self._latency_started_monotonic = time.monotonic()
+        self._latency_events = []
+        self._latency_summary = {}
+        self._latency_updated_at = time.time()
+        self._mark_latency("client_connected", **data)
+
+    def _mark_latency(self, name: str, **data: Any) -> None:
+        started = self._latency_started_monotonic
+        elapsed_ms = 0 if started is None else max(0, int((time.monotonic() - started) * 1000))
+        clean = {
+            key: value
+            for key, value in data.items()
+            if value is None or isinstance(value, (str, int, float, bool))
+        }
+        event = {"name": name, "ms": elapsed_ms, "at": time.time(), **clean}
+        self._latency_events.append(event)
+        self._latency_events = self._latency_events[-32:]
+        self._latency_summary = self._build_latency_summary()
+        self._latency_updated_at = event["at"]
+
+    def _build_latency_summary(self) -> dict[str, int]:
+        first_by_name: dict[str, int] = {}
+        for event in self._latency_events:
+            name = str(event.get("name") or "")
+            if name and name not in first_by_name:
+                first_by_name[name] = int(event.get("ms") or 0)
+        summary: dict[str, int] = {}
+        for field, start, end in REALTIME_LATENCY_DELTAS:
+            if start in first_by_name and end in first_by_name:
+                summary[field] = max(0, first_by_name[end] - first_by_name[start])
+        return summary
+
+    def _latency_snapshot(self) -> dict[str, Any]:
+        return {
+            "session_id": self._latency_session_id,
+            "events": [dict(event) for event in self._latency_events],
+            "summary": dict(self._latency_summary),
+            "updated_at": self._latency_updated_at,
         }
 
     async def websocket_session(self, websocket: WebSocket) -> None:
@@ -253,6 +312,10 @@ class OpenAIRealtimeBridge:
         audio_ms = 0
         buffered_audio_ms = 0
         input_committed = False
+        first_audio_marked = False
+        first_transcript_delta_marked = False
+        first_llm_delta_marked = False
+        first_tts_chunk_marked = False
         stripped_packet_headers = 0
         transcript_event = asyncio.Event()
         response_wait_task: asyncio.Task[None] | None = None
@@ -267,6 +330,7 @@ class OpenAIRealtimeBridge:
         self._session_id = session_id
         self._model = str(realtime.get("model") or "gpt-realtime-mini")
         self._started_at = time.time()
+        self._reset_latency(session_id, model=self._model)
 
         async def send_event(event_type: str, **data: Any) -> None:
             payload = {"type": event_type, **data}
@@ -295,6 +359,7 @@ class OpenAIRealtimeBridge:
                 }
             )
             self._last_event = "response_requested"
+            self._mark_latency("response_requested")
             await self._log_bus.emit("INFO", "PIPELINE", "OpenAI Realtime response requested", {"session_id": session_id})
 
         async def send_stt_result_once(reason: str) -> None:
@@ -302,6 +367,7 @@ class OpenAIRealtimeBridge:
             if stt_result_sent:
                 return
             stt_result_sent = True
+            self._mark_latency("stt_result_sent", reason=reason)
             await send_event("stt_result", text=transcript.strip(), provider="openai_realtime", reason=reason)
 
         async def send_llm_started_once() -> None:
@@ -309,12 +375,16 @@ class OpenAIRealtimeBridge:
             if llm_started_sent:
                 return
             llm_started_sent = True
+            self._mark_latency("llm_started")
             await send_event("llm_started", model=self._model, provider="openai_realtime")
 
         async def send_tts_chunk(text: str, final: bool) -> None:
-            nonlocal tts_chunk_started
+            nonlocal first_tts_chunk_marked, tts_chunk_started
             if text.strip():
                 tts_chunk_started = True
+                if not first_tts_chunk_marked:
+                    first_tts_chunk_marked = True
+                    self._mark_latency("first_tts_chunk", chars=len(text))
             await send_event("llm_chunk", text=text, final=final)
 
         async def request_response_after_transcript_wait(reason: str = "realtime_committed") -> None:
@@ -325,6 +395,7 @@ class OpenAIRealtimeBridge:
                 try:
                     await asyncio.wait_for(transcript_event.wait(), timeout=wait_ms / 1000)
                 except asyncio.TimeoutError:
+                    self._mark_latency("transcript_wait_timeout", wait_ms=wait_ms)
                     pass
             if response_requested or response_done:
                 return
@@ -370,6 +441,7 @@ class OpenAIRealtimeBridge:
                 await self._log_bus.emit("INFO", "PIPELINE", "OpenAI Realtime completed without assistant text", {"session_id": session_id, "reason": reason})
             if assistant_text.strip():
                 await send_event("llm_result", text=assistant_text)
+            self._mark_latency("session_completed", reason=reason, audio_ms=audio_ms)
             await send_event(
                 "session_completed",
                 reason=reason,
@@ -378,11 +450,17 @@ class OpenAIRealtimeBridge:
                 transcript=transcript,
             )
             self._last_event = "completed"
+            latency = self._latency_snapshot()
             await self._log_bus.emit(
                 "INFO",
                 "PIPELINE",
                 "OpenAI Realtime session completed",
-                {"session_id": session_id, "transcript_chars": len(transcript), "assistant_chars": len(assistant_text)},
+                {
+                    "session_id": session_id,
+                    "transcript_chars": len(transcript),
+                    "assistant_chars": len(assistant_text),
+                    "latency": latency.get("summary", {}),
+                },
             )
             # The ESP voice client consumes llm_chunk/llm_result events and opens
             # the TTS relay itself. Starting a second direct ESP audio stream here
@@ -409,6 +487,7 @@ class OpenAIRealtimeBridge:
                 text_chunker = RealtimeTextChunker()
                 await send_llm_started_once()
                 self._last_event = "ha_route"
+                self._mark_latency("ha_route_completed")
                 await self._log_bus.emit(
                     "INFO",
                     "HA",
@@ -431,7 +510,7 @@ class OpenAIRealtimeBridge:
                 return False
 
         async def handle_realtime_event(doc: dict[str, Any]) -> None:
-            nonlocal transcript, assistant_text, text_chunker, response_done, response_requested, speech_started, input_committed, response_wait_task
+            nonlocal first_llm_delta_marked, first_transcript_delta_marked, input_committed, response_requested, response_done, response_wait_task, speech_started, text_chunker, transcript, assistant_text
             event_type = str(doc.get("type") or "")
             if not event_type:
                 return
@@ -444,24 +523,32 @@ class OpenAIRealtimeBridge:
                 await send_event("error", message=f"OpenAI Realtime: {message}")
                 return
             if event_type == "session.updated":
+                self._mark_latency("session_updated")
                 await send_event("realtime_session_updated", model=self._model)
                 return
             if event_type == "input_audio_buffer.speech_started":
                 speech_started = True
+                self._mark_latency("speech_started", audio_ts=doc.get("audio_start_ms"))
                 await self._cancel_playback("realtime_barge_in")
+                self._mark_latency("barge_in_cancel_sent")
                 await send_event("vad_start", vad_provider="openai_realtime", audio_ts=doc.get("audio_start_ms"))
                 return
             if event_type == "input_audio_buffer.speech_stopped":
+                self._mark_latency("speech_stopped", audio_ts=doc.get("audio_end_ms"))
                 await send_event("vad_end", vad_provider="openai_realtime", audio_ts=doc.get("audio_end_ms"), reason="server_vad")
                 return
             if event_type == "input_audio_buffer.committed":
                 input_committed = True
+                self._mark_latency("input_committed")
                 if response_wait_task is None or response_wait_task.done():
                     response_wait_task = asyncio.create_task(request_response_after_transcript_wait("realtime_committed"))
                 return
             if event_type == "conversation.item.input_audio_transcription.delta":
                 delta = extract_realtime_text_delta(doc)
                 if delta:
+                    if not first_transcript_delta_marked:
+                        first_transcript_delta_marked = True
+                        self._mark_latency("first_stt_delta", chars=len(delta))
                     transcript += delta
                     await send_event("stt_delta", text=delta, provider="openai_realtime")
                 return
@@ -469,6 +556,7 @@ class OpenAIRealtimeBridge:
                 text = str(doc.get("transcript") or "").strip()
                 if text:
                     transcript = text
+                self._mark_latency("transcription_completed", chars=len(transcript))
                 transcript_event.set()
                 if stt_result_sent:
                     await send_event("stt_transcript", text=transcript.strip(), provider="openai_realtime", late=True)
@@ -476,12 +564,16 @@ class OpenAIRealtimeBridge:
                     response_wait_task = asyncio.create_task(request_response_after_transcript_wait("transcription_completed"))
                 return
             if event_type == "response.created":
+                self._mark_latency("response_created")
                 await send_llm_started_once()
                 return
             if event_type in {"response.output_text.delta", "response.text.delta", "response.audio_transcript.delta"}:
                 await send_llm_started_once()
                 delta = extract_realtime_text_delta(doc)
                 if delta:
+                    if not first_llm_delta_marked:
+                        first_llm_delta_marked = True
+                        self._mark_latency("first_llm_delta", chars=len(delta))
                     assistant_text += delta
                     await send_event("llm_delta", text=delta)
                     emotions, chunks = text_chunker.push(delta)
@@ -491,10 +583,12 @@ class OpenAIRealtimeBridge:
                         await send_tts_chunk(chunk, final=False)
                 return
             if event_type == "response.done":
+                self._mark_latency("response_done")
                 await finish_response(doc)
                 return
             if event_type == "response.cancelled":
                 response_done = True
+                self._mark_latency("response_cancelled")
                 await send_event("session_cancelled", reason="response_cancelled")
                 return
 
@@ -524,6 +618,7 @@ class OpenAIRealtimeBridge:
                 await send_event("error", message="Realtime is enabled but OpenAI API key is empty.")
                 return False
             try:
+                connect_started = time.monotonic()
                 timeout = aiohttp.ClientTimeout(total=None, connect=20, sock_read=240)
                 client_session = aiohttp.ClientSession(timeout=timeout)
                 realtime_ws = await client_session.ws_connect(
@@ -531,7 +626,9 @@ class OpenAIRealtimeBridge:
                     headers={"Authorization": f"Bearer {api_key}"},
                     heartbeat=20,
                 )
+                self._mark_latency("openai_connected", connect_ms=int((time.monotonic() - connect_started) * 1000))
                 await send_realtime_json(await self._session_update_payload(config, realtime, target_sample_rate, language))
+                self._mark_latency("session_update_sent")
                 reader_task = asyncio.create_task(reader_loop())
                 self._connected = True
                 self._last_event = "connected"
@@ -547,7 +644,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.72",
+                version="0.1.73",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -557,6 +654,7 @@ class OpenAIRealtimeBridge:
                 llm_enabled=True,
                 tts_enabled=True,
             )
+            self._mark_latency("hello_sent")
             while True:
                 message = await websocket.receive()
                 if message.get("type") == "websocket.disconnect":
@@ -577,6 +675,10 @@ class OpenAIRealtimeBridge:
                         audio_ms = 0
                         buffered_audio_ms = 0
                         input_committed = False
+                        first_audio_marked = False
+                        first_transcript_delta_marked = False
+                        first_llm_delta_marked = False
+                        first_tts_chunk_marked = False
                         transcript_event = asyncio.Event()
                         if response_wait_task is not None and not response_wait_task.done():
                             response_wait_task.cancel()
@@ -585,6 +687,13 @@ class OpenAIRealtimeBridge:
                         language = str(doc.get("language") or language).strip() or "tr"
                         session_id = str(doc.get("session_id") or session_id).strip() or session_id
                         self._session_id = session_id
+                        self._reset_latency(
+                            session_id,
+                            model=self._model,
+                            source_rate=source_sample_rate,
+                            target_rate=target_sample_rate,
+                        )
+                        self._mark_latency("start_received")
                         if await open_realtime():
                             await send_event(
                                 "session_started",
@@ -603,6 +712,7 @@ class OpenAIRealtimeBridge:
                             continue
                         try:
                             if speech_started and buffered_audio_ms >= 100:
+                                self._mark_latency("manual_commit_sent", buffered_audio_ms=buffered_audio_ms)
                                 await send_realtime_json({"type": "input_audio_buffer.commit"})
                                 input_committed = True
                             else:
@@ -619,10 +729,12 @@ class OpenAIRealtimeBridge:
                             await send_event("error", message=f"Realtime commit failed: {safe_exc_message(exc)}")
                         continue
                     if msg_type in {"cancel", "cancel_response"}:
+                        self._mark_latency("client_cancelled", reason=str(doc.get("reason") or "client_cancel"))
                         await self.cancel(str(doc.get("reason") or "client_cancel"))
                         await send_event("session_cancelled", session_id=session_id, reason=str(doc.get("reason") or "client_cancel"))
                         continue
                     if msg_type == "reset":
+                        self._mark_latency("session_reset")
                         await self.cancel("reset")
                         transcript = ""
                         assistant_text = ""
@@ -636,6 +748,10 @@ class OpenAIRealtimeBridge:
                         audio_ms = 0
                         buffered_audio_ms = 0
                         input_committed = False
+                        first_audio_marked = False
+                        first_transcript_delta_marked = False
+                        first_llm_delta_marked = False
+                        first_tts_chunk_marked = False
                         transcript_event = asyncio.Event()
                         if response_wait_task is not None and not response_wait_task.done():
                             response_wait_task.cancel()
@@ -663,6 +779,13 @@ class OpenAIRealtimeBridge:
                         )
                 if not raw:
                     continue
+                if not first_audio_marked:
+                    first_audio_marked = True
+                    self._mark_latency(
+                        "first_audio_chunk",
+                        source_rate=source_sample_rate,
+                        target_rate=target_sample_rate,
+                    )
                 chunk_ms = int((len(raw) / 2) / max(1, source_sample_rate) * 1000)
                 audio_ms += chunk_ms
                 buffered_audio_ms += chunk_ms

@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.72" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.72" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.73" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.73" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.72" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.73" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -24,7 +24,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.72" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.73" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -122,6 +122,7 @@
                   <button id="response-cancel">Cancel response</button>
                   <span id="session-meta">manual session idle</span>
                 </div>
+                <div id="realtime-latency" class="latency-strip"></div>
                 <div class="transcript">
                   <span>User/STT</span>
                   <p id="stt-text" data-autoscroll>No utterance yet</p>
@@ -400,6 +401,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.72"></script>
+  <script src="/app.js?v=0.1.73"></script>
   </body>
 </html>

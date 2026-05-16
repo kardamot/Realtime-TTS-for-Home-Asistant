@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.73` adds OpenAI Realtime latency markers for speech, transcript, response, and first chunk timing without changing audio rate or VAD tuning.
 - Version `0.1.72` keeps OpenAI Realtime and fallback live VAD settings available as separate voice paths while surfacing mic shift/clip metrics.
 - Version `0.1.71` maps the former servo buttons to short N20 motor test controls.
 - Version `0.1.63` makes help buttons more subtle and adds detailed `??` field guides for complex config sections.

@@ -376,6 +376,35 @@ nav a:hover { background: #121a25; color: var(--text); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.latency-strip {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+.latency-chip {
+  min-width: 0;
+  border: 1px solid rgba(100,169,255,.18);
+  border-radius: 8px;
+  background: rgba(15,21,32,.82);
+  padding: 7px 8px;
+}
+.latency-chip span,
+.latency-chip b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.latency-chip span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.latency-chip b {
+  margin-top: 2px;
+  color: #cfe4ff;
+  font-size: 13px;
+}
 
 .commands {
   display: grid;
@@ -670,8 +699,10 @@ label.wide { grid-column: 1 / -1; }
   .log-row span { display: none; }
   .help-detail-list li { grid-template-columns: 1fr; gap: 4px; }
   .mic-debug-actions { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .latency-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 460px) {
   .commands { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .row { flex-direction: column; align-items: stretch; }
+  .latency-strip { grid-template-columns: 1fr; }
 }
