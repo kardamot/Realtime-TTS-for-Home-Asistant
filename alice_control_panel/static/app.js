@@ -30,6 +30,8 @@ let micDebugRefreshTimers = [];
 let micDebug = {};
 const autoScrollState = new WeakMap();
 let helpPopover = null;
+const RADAR_DIRECTION_DEADZONE_MM = 280;
+const RADAR_DEFAULT_MAX_Y_MM = 6000;
 
 const HELP_TEXTS = {
   connections: {
@@ -716,6 +718,38 @@ function radarStateTone(state, fresh, ready) {
   return "warn";
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function radarTargetNumber(target, key) {
+  const value = Number(target?.[key]);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function radarTargetY(target) {
+  const yMm = radarTargetNumber(target, "y_mm");
+  const distanceMm = radarTargetNumber(target, "distance_mm");
+  return Math.max(0, yMm || distanceMm);
+}
+
+function radarAngleDeg(target) {
+  const xMm = radarTargetNumber(target, "x_mm");
+  const yMm = radarTargetY(target);
+  if (!xMm && !yMm) return null;
+  return Math.round(Math.atan2(xMm, Math.max(1, yMm)) * 180 / Math.PI);
+}
+
+function radarScaleMax(values, fallback, min, max, step) {
+  const observed = Math.max(0, ...values.filter((value) => Number.isFinite(value)));
+  const desired = observed > 0 ? observed * 1.35 : fallback;
+  return clamp(Math.ceil(desired / step) * step, min, max);
+}
+
+function radarDistanceLabel(mm) {
+  return mm >= 1000 ? `${(mm / 1000).toFixed(mm >= 3000 ? 0 : 1)}m` : `${Math.round(mm / 10)}cm`;
+}
+
 function renderRadar(info) {
   latestRadar = info || {};
   const ready = Boolean(latestRadar.ready);
@@ -723,6 +757,7 @@ function renderRadar(info) {
   const state = String(latestRadar.state || (ready ? "waiting" : "offline"));
   const targets = Array.isArray(latestRadar.targets) ? latestRadar.targets : [];
   const selected = targets.find((target) => target.selected) || targets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
+  const selectedAngle = selected ? radarAngleDeg(selected) : null;
   setPill("radar-pill", state.toUpperCase(), radarStateTone(state, fresh, ready));
   text("radar-count", String(latestRadar.target_count ?? targets.length ?? 0));
   text("radar-direction", latestRadar.direction || "BELIRSIZ");
@@ -732,13 +767,14 @@ function renderRadar(info) {
       ? `#${selected.id} ${Math.round(Number(selected.distance_mm || 0) / 10)}cm`
       : "-"
   );
+  text("radar-angle", selectedAngle === null ? "-" : `${selectedAngle > 0 ? "+" : ""}${selectedAngle} deg`);
   const age = Number(latestRadar.fresh_ms);
   const detail = !ready
     ? "RD-03D UART hazir degil."
     : !fresh
       ? age >= 0 ? `Son radar frame ${age}ms once; veri eski sayiliyor.` : "RD-03D verisi bekleniyor."
       : selected
-        ? `Secili hedef x=${selected.x_mm}mm y=${selected.y_mm}mm hiz=${selected.speed_cms}cm/s`
+        ? `Secili hedef x=${selected.x_mm}mm y=${selected.y_mm}mm aci=${selectedAngle ?? "-"}deg hiz=${selected.speed_cms}cm/s`
         : "Radar taze, hedef yok.";
   text("radar-detail", detail);
   drawRadarMap(latestRadar);
@@ -763,13 +799,20 @@ function drawRadarMap(info) {
   const cx = width / 2;
   const bottom = height - 24;
   const top = 18;
-  const maxX = 3000;
-  const maxY = 6000;
+  const targets = Array.isArray(info?.targets) ? info.targets : [];
+  const maxY = radarScaleMax(targets.map(radarTargetY), RADAR_DEFAULT_MAX_Y_MM, 1200, 6000, 400);
+  const maxAbsX = radarScaleMax(targets.map((target) => Math.abs(radarTargetNumber(target, "x_mm"))), 1600, 800, 3000, 200);
+  const maxX = Math.max(maxAbsX, Math.round(maxY * 0.35), RADAR_DIRECTION_DEADZONE_MM * 2);
   const mapW = width - 34;
   const mapH = bottom - top;
+  const mapLeft = cx - mapW / 2;
+  const mapRight = cx + mapW / 2;
 
   ctx.fillStyle = "#0b111a";
   ctx.fillRect(0, 0, width, height);
+  const deadzoneHalf = clamp(RADAR_DIRECTION_DEADZONE_MM / maxX, 0, 1) * (mapW / 2);
+  ctx.fillStyle = "rgba(48,209,88,.06)";
+  ctx.fillRect(cx - deadzoneHalf, top, deadzoneHalf * 2, mapH);
   ctx.strokeStyle = "rgba(100,169,255,.16)";
   ctx.lineWidth = 1;
   for (let i = 1; i <= 4; i += 1) {
@@ -786,6 +829,14 @@ function drawRadarMap(info) {
     ctx.lineTo(x, bottom);
     ctx.stroke();
   }
+
+  ctx.strokeStyle = "rgba(48,209,88,.28)";
+  ctx.beginPath();
+  ctx.moveTo(cx - deadzoneHalf, top);
+  ctx.lineTo(cx - deadzoneHalf, bottom);
+  ctx.moveTo(cx + deadzoneHalf, top);
+  ctx.lineTo(cx + deadzoneHalf, bottom);
+  ctx.stroke();
 
   ctx.strokeStyle = "rgba(57,197,187,.28)";
   ctx.beginPath();
@@ -806,14 +857,22 @@ function drawRadarMap(info) {
   ctx.font = "11px ui-sans-serif, system-ui";
   ctx.textAlign = "center";
   ctx.fillText("Alice", cx, bottom + 20);
+  ctx.fillStyle = "rgba(215,236,255,.58)";
+  ctx.textAlign = "left";
+  ctx.fillText(radarDistanceLabel(maxY), mapLeft + 4, top + 12);
+  ctx.fillText(`-${radarDistanceLabel(maxX)}`, mapLeft + 4, bottom - 5);
+  ctx.textAlign = "right";
+  ctx.fillText(`+${radarDistanceLabel(maxX)}`, mapRight - 4, bottom - 5);
+  ctx.textAlign = "center";
+  ctx.fillText("center", cx, top + 12);
 
-  const targets = Array.isArray(info?.targets) ? info.targets : [];
   targets.forEach((target) => {
-    const xMm = Number(target.x_mm || 0);
-    const yMm = Math.max(0, Number(target.y_mm || 0));
-    const x = cx + Math.max(-1, Math.min(1, xMm / maxX)) * (mapW / 2);
-    const y = bottom - Math.max(0, Math.min(1, yMm / maxY)) * mapH;
+    const xMm = radarTargetNumber(target, "x_mm");
+    const yMm = radarTargetY(target);
+    const x = cx + clamp(xMm / maxX, -1, 1) * (mapW / 2);
+    const y = bottom - clamp(yMm / maxY, 0, 1) * mapH;
     const selected = Boolean(target.selected);
+    const angle = radarAngleDeg(target);
     ctx.fillStyle = selected ? "#30d158" : "#64a9ff";
     ctx.strokeStyle = selected ? "rgba(48,209,88,.45)" : "rgba(100,169,255,.34)";
     ctx.lineWidth = selected ? 3 : 2;
@@ -826,6 +885,7 @@ function drawRadarMap(info) {
     ctx.fillStyle = "#c4d0dc";
     ctx.textAlign = "left";
     ctx.fillText(`#${target.id}`, x + 10, y - 8);
+    if (angle !== null) ctx.fillText(`${angle > 0 ? "+" : ""}${angle}deg`, x + 10, y + 7);
   });
 
   if (!info?.fresh) {

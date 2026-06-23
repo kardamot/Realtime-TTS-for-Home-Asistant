@@ -293,7 +293,7 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .radar-meta {
   display: grid;
-  grid-template-columns: repeat(3,minmax(0,1fr));
+  grid-template-columns: repeat(4,minmax(0,1fr));
   gap: 8px;
   flex: 0 0 auto;
 }
