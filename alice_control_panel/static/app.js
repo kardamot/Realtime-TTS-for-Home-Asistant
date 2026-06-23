@@ -17,6 +17,7 @@ let currentConfig = {};
 let currentPrompt = {};
 let latestStatus = {};
 let latestRadar = {};
+let radarUiTrack = { valid: false, direction: "BELIRSIZ" };
 let logs = [];
 let paused = false;
 let configDirty = false;
@@ -31,7 +32,12 @@ let micDebug = {};
 const autoScrollState = new WeakMap();
 let helpPopover = null;
 const RADAR_DIRECTION_DEADZONE_MM = 280;
+const RADAR_DIRECTION_ENTER_MM = 340;
+const RADAR_DIRECTION_EXIT_MM = 190;
 const RADAR_DEFAULT_MAX_Y_MM = 6000;
+const RADAR_UI_FILTER_ALPHA = 0.28;
+const RADAR_UI_RESET_JUMP_MM = 1400;
+const RADAR_UI_RESET_MS = 1800;
 
 const HELP_TEXTS = {
   connections: {
@@ -756,6 +762,60 @@ function radarDistanceLabel(mm) {
   return mm >= 1000 ? `${(mm / 1000).toFixed(mm >= 3000 ? 0 : 1)}m` : `${Math.round(mm / 10)}cm`;
 }
 
+function radarDirectionFromX(xMm, previous = "BELIRSIZ") {
+  if (previous === "SOL") {
+    if (xMm > RADAR_DIRECTION_ENTER_MM) return "SAG";
+    if (xMm > -RADAR_DIRECTION_EXIT_MM) return "ORTA";
+    return "SOL";
+  }
+  if (previous === "SAG") {
+    if (xMm < -RADAR_DIRECTION_ENTER_MM) return "SOL";
+    if (xMm < RADAR_DIRECTION_EXIT_MM) return "ORTA";
+    return "SAG";
+  }
+  if (xMm < -RADAR_DIRECTION_ENTER_MM) return "SOL";
+  if (xMm > RADAR_DIRECTION_ENTER_MM) return "SAG";
+  return "ORTA";
+}
+
+function updateRadarUiTrack(selected, fresh) {
+  if (!fresh || !selected) {
+    radarUiTrack = { valid: false, direction: "BELIRSIZ" };
+    return null;
+  }
+
+  const now = Date.now();
+  const rawX = radarTargetNumber(selected, "x_mm");
+  const rawY = radarTargetY(selected);
+  const lastX = Number(radarUiTrack.x_mm || 0);
+  const lastY = Number(radarUiTrack.y_mm || 0);
+  const jumpMm = radarUiTrack.valid ? Math.sqrt(((rawX - lastX) ** 2) + ((rawY - lastY) ** 2)) : 0;
+  const staleMs = radarUiTrack.updated_at ? now - radarUiTrack.updated_at : 0;
+  const reset = !radarUiTrack.valid ||
+    radarUiTrack.target_id !== selected.id ||
+    staleMs > RADAR_UI_RESET_MS ||
+    jumpMm > RADAR_UI_RESET_JUMP_MM;
+  const alpha = reset ? 1 : RADAR_UI_FILTER_ALPHA;
+  const xMm = Math.round(reset ? rawX : (lastX * (1 - alpha)) + (rawX * alpha));
+  const yMm = Math.round(reset ? rawY : (lastY * (1 - alpha)) + (rawY * alpha));
+  const direction = radarDirectionFromX(xMm, reset ? "BELIRSIZ" : radarUiTrack.direction);
+
+  radarUiTrack = {
+    valid: true,
+    target_id: selected.id,
+    x_mm: xMm,
+    y_mm: yMm,
+    distance_mm: radarTargetDistance({ x_mm: xMm, y_mm: yMm }),
+    angle_deg: radarAngleDeg({ x_mm: xMm, y_mm: yMm }),
+    direction,
+    raw_x_mm: rawX,
+    raw_y_mm: rawY,
+    raw_angle_deg: radarAngleDeg(selected),
+    updated_at: now,
+  };
+  return radarUiTrack;
+}
+
 function renderRadarTargets(targets) {
   const box = $("radar-targets");
   if (!box) return;
@@ -792,12 +852,22 @@ function renderRadar(info) {
   const state = String(latestRadar.state || (ready ? "waiting" : "offline"));
   const targets = Array.isArray(latestRadar.targets) ? latestRadar.targets : [];
   const selected = targets.find((target) => target.selected) || targets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
-  const selectedAngle = selected ? radarAngleDeg(selected) : null;
-  const selectedDistance = selected ? radarTargetDistance(selected) : 0;
+  const firmwareFiltered = latestRadar.filtered?.valid ? {
+    valid: true,
+    target_id: latestRadar.filtered.target_id,
+    x_mm: radarTargetNumber(latestRadar.filtered, "x_mm"),
+    y_mm: radarTargetNumber(latestRadar.filtered, "y_mm"),
+    distance_mm: radarTargetDistance(latestRadar.filtered),
+    angle_deg: radarAngleDeg(latestRadar.filtered),
+    direction: latestRadar.filtered.direction || radarDirectionFromX(radarTargetNumber(latestRadar.filtered, "x_mm")),
+  } : null;
+  const filtered = firmwareFiltered || updateRadarUiTrack(selected, fresh);
+  const selectedAngle = filtered?.valid ? filtered.angle_deg : selected ? radarAngleDeg(selected) : null;
+  const selectedDistance = filtered?.valid ? filtered.distance_mm : selected ? radarTargetDistance(selected) : 0;
   const selectedResolution = selected ? (selected.resolution_mm ?? selected.distance_mm ?? 0) : 0;
   setPill("radar-pill", state.toUpperCase(), radarStateTone(state, fresh, ready));
   text("radar-count", String(latestRadar.target_count ?? targets.length ?? 0));
-  text("radar-direction", latestRadar.direction || "BELIRSIZ");
+  text("radar-direction", filtered?.valid ? filtered.direction : latestRadar.direction || "BELIRSIZ");
   text(
     "radar-selected",
     selected
@@ -811,11 +881,11 @@ function renderRadar(info) {
     : !fresh
       ? age >= 0 ? `Son radar frame ${age}ms once; veri eski sayiliyor.` : "RD-03D verisi bekleniyor."
       : selected
-        ? `Secili hedef d=${radarDistanceLabel(selectedDistance)} x=${selected.x_mm}mm y=${selected.y_mm}mm aci=${selectedAngle ?? "-"}deg hiz=${selected.speed_cms}cm/s res=${selectedResolution}mm`
+        ? `Karar d=${radarDistanceLabel(selectedDistance)} x=${filtered?.x_mm ?? selected.x_mm}mm y=${filtered?.y_mm ?? selected.y_mm}mm aci=${selectedAngle ?? "-"}deg | ham x=${selected.x_mm} y=${selected.y_mm} res=${selectedResolution}mm`
         : "Radar taze, hedef yok.";
   text("radar-detail", detail);
   renderRadarTargets(targets);
-  drawRadarMap(latestRadar);
+  drawRadarMap({ ...latestRadar, ui_filtered: filtered });
 }
 
 function drawRadarMap(info) {
@@ -904,27 +974,51 @@ function drawRadarMap(info) {
   ctx.textAlign = "center";
   ctx.fillText("center", cx, top + 12);
 
+  const projectRadarPoint = (xMm, yMm) => ({
+    x: cx + clamp(xMm / maxX, -1, 1) * (mapW / 2),
+    y: bottom - clamp(yMm / maxY, 0, 1) * mapH,
+  });
+  const filtered = info?.ui_filtered?.valid ? info.ui_filtered : null;
+
   targets.forEach((target) => {
     const xMm = radarTargetNumber(target, "x_mm");
     const yMm = radarTargetY(target);
-    const x = cx + clamp(xMm / maxX, -1, 1) * (mapW / 2);
-    const y = bottom - clamp(yMm / maxY, 0, 1) * mapH;
+    const { x, y } = projectRadarPoint(xMm, yMm);
     const selected = Boolean(target.selected);
+    const filteredSelected = selected && filtered && filtered.target_id === target.id;
     const angle = radarAngleDeg(target);
-    ctx.fillStyle = selected ? "#30d158" : "#64a9ff";
-    ctx.strokeStyle = selected ? "rgba(48,209,88,.45)" : "rgba(100,169,255,.34)";
+    ctx.fillStyle = filteredSelected ? "#ffbd54" : selected ? "#30d158" : "#64a9ff";
+    ctx.strokeStyle = filteredSelected ? "rgba(255,189,84,.42)" : selected ? "rgba(48,209,88,.45)" : "rgba(100,169,255,.34)";
     ctx.lineWidth = selected ? 3 : 2;
     ctx.beginPath();
-    ctx.arc(x, y, selected ? 8 : 6, 0, Math.PI * 2);
+    ctx.arc(x, y, filteredSelected ? 5 : selected ? 8 : 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(x, y, selected ? 15 : 11, 0, Math.PI * 2);
+    ctx.arc(x, y, filteredSelected ? 10 : selected ? 15 : 11, 0, Math.PI * 2);
     ctx.stroke();
     ctx.fillStyle = "#c4d0dc";
     ctx.textAlign = "left";
-    ctx.fillText(`#${target.id}`, x + 10, y - 8);
+    ctx.fillText(`#${target.id}${filteredSelected ? " raw" : ""}`, x + 10, y - 8);
     if (angle !== null) ctx.fillText(`${angle > 0 ? "+" : ""}${angle}deg`, x + 10, y + 7);
   });
+
+  if (filtered) {
+    const { x, y } = projectRadarPoint(filtered.x_mm, filtered.y_mm);
+    ctx.fillStyle = "#30d158";
+    ctx.strokeStyle = "rgba(48,209,88,.5)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, 16, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#d7ecff";
+    ctx.textAlign = "left";
+    ctx.fillText(`#${filtered.target_id} filt`, x + 10, y - 8);
+    const filteredAngle = filtered.angle_deg ?? radarAngleDeg(filtered);
+    if (filteredAngle !== null) ctx.fillText(`${filteredAngle > 0 ? "+" : ""}${filteredAngle}deg`, x + 10, y + 7);
+  }
 
   if (!info?.fresh) {
     ctx.fillStyle = "rgba(11,17,26,.58)";

@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.80` adds radar decision smoothing and hysteresis, drawing raw and filtered target positions separately.
 - Version `0.1.79` shows computed radar distance and per-target raw rows to separate real position from RD-03D resolution data.
 - Version `0.1.78` improves the radar map scale, angle readout, and center dead-zone visualization for close-range tests.
 - Version `0.1.77` adds the RD-03D radar status/event path and a live radar target view in the panel.

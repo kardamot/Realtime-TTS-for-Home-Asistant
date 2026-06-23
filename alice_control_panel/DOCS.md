@@ -227,6 +227,7 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.80` adds radar decision smoothing and hysteresis, drawing raw and filtered target positions separately.
 - `0.1.79` shows computed radar distance and per-target raw rows to separate real position from RD-03D resolution data.
 - `0.1.78` improves the radar map scale, angle readout, and center dead-zone visualization for close-range tests.
 - `0.1.77` adds the RD-03D radar status/event path and a live radar target view in the panel.
