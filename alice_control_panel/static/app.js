@@ -16,6 +16,7 @@ let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
 let latestStatus = {};
+let latestRadar = {};
 let logs = [];
 let paused = false;
 let configDirty = false;
@@ -173,7 +174,7 @@ const HELP_DETAIL_TEXTS = {
       ["Semantic eagerness", "semantic_vad seciliyken modelin konusma bitti demeye ne kadar istekli olacagidir. High hizli, low daha sabirli davranir."],
       ["Idle timeout ms", "Live oturum bos kalirsa ne kadar sure sonra toparlanacagini belirler. Takili kalan oturumlari temizlemeye yarar."],
       ["Live instructions", "Canli oturuma ozel kisilik ve davranis talimatidir. Bos kalirsa LLM system prompt'a, o da bossa aktif Prompt Editor profiline dusulur."],
-      ["Realtime STT prompt", "Transkripsiyon icin ipucu metnidir. Turkce, Alice, yerel isimler veya sik yanlis duyulan kelimeleri buraya yazmak tanimayi iyilestirebilir."],
+      ["Realtime STT prompt", "Transkripsiyon icin ipucu metnidir. Turkce, Alice, yerel isimler veya sik yanlis duyulan kelimeleri buraya yazmak tanimayi iyilestirebilir; OpenAI siniri nedeniyle 1024 karakterle sinirlidir."],
       ["OpenAI Live key/model/base URL", "OpenAI Realtime icin kimlik ve model ayarlaridir. Genelde base URL varsayilan kalir; model ve key doldurulur."],
       ["Gemini Live key/model/voice", "Gelecekteki Gemini live hatti icin saklanan profil bilgileridir. Su an OpenAI Live kadar tamamlanmis bir canli yol degildir."]
     ]
@@ -258,6 +259,7 @@ const HELP_TARGETS = [
   [".connections-panel > header h2", "connections"],
   ["#logs > header h2", "logs"],
   [".hardware-panel > header h2", "hardware"],
+  ["#radar > header h2", "hardware"],
   ["#pipeline > header h2", "pipeline"],
   ["#commands > header h2", "commands"],
   ["#prompts > header h2", "prompts"],
@@ -692,6 +694,7 @@ async function loadStatus() {
   setAutoText("last-error", esp.last_error || esp.last_ws_error || "");
   text("hw-mic", esp.hardware?.mic || "unknown");
   text("hw-speaker", esp.hardware?.speaker || "unknown");
+  text("hw-radar", esp.hardware?.radar || esp.radar?.state || "unknown");
   text("hw-servo", esp.hardware?.servo_position || "center");
   text("hw-amp", esp.hardware?.amp_muted == null ? "unknown" : esp.hardware.amp_muted ? "muted" : "active");
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");
@@ -699,9 +702,140 @@ async function loadStatus() {
   setAutoText("stt-text", pipe.stt_result || pipe.last_user_text || "No utterance yet");
   setAutoText("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
   renderRealtimeLatency(realtime.latency || {});
+  renderRadar(esp.radar || latestRadar || {});
   renderMicDebug(pipe.mic_debug || {});
   renderTimeline(pipe.timeline || [], realtime.latency || {});
   if (!configDirty) fillConfig();
+}
+
+function radarStateTone(state, fresh, ready) {
+  if (!ready) return "bad";
+  if (!fresh && state !== "clear") return "warn";
+  if (state === "tracking") return "good";
+  if (state === "clear") return "info";
+  return "warn";
+}
+
+function renderRadar(info) {
+  latestRadar = info || {};
+  const ready = Boolean(latestRadar.ready);
+  const fresh = Boolean(latestRadar.fresh);
+  const state = String(latestRadar.state || (ready ? "waiting" : "offline"));
+  const targets = Array.isArray(latestRadar.targets) ? latestRadar.targets : [];
+  const selected = targets.find((target) => target.selected) || targets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
+  setPill("radar-pill", state.toUpperCase(), radarStateTone(state, fresh, ready));
+  text("radar-count", String(latestRadar.target_count ?? targets.length ?? 0));
+  text("radar-direction", latestRadar.direction || "BELIRSIZ");
+  text(
+    "radar-selected",
+    selected
+      ? `#${selected.id} ${Math.round(Number(selected.distance_mm || 0) / 10)}cm`
+      : "-"
+  );
+  const age = Number(latestRadar.fresh_ms);
+  const detail = !ready
+    ? "RD-03D UART hazir degil."
+    : !fresh
+      ? age >= 0 ? `Son radar frame ${age}ms once; veri eski sayiliyor.` : "RD-03D verisi bekleniyor."
+      : selected
+        ? `Secili hedef x=${selected.x_mm}mm y=${selected.y_mm}mm hiz=${selected.speed_cms}cm/s`
+        : "Radar taze, hedef yok.";
+  text("radar-detail", detail);
+  drawRadarMap(latestRadar);
+}
+
+function drawRadarMap(info) {
+  const canvas = $("radar-canvas");
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(240, Math.round(rect.width || canvas.width));
+  const height = Math.max(160, Math.round(rect.height || canvas.height));
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const cx = width / 2;
+  const bottom = height - 24;
+  const top = 18;
+  const maxX = 3000;
+  const maxY = 6000;
+  const mapW = width - 34;
+  const mapH = bottom - top;
+
+  ctx.fillStyle = "#0b111a";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "rgba(100,169,255,.16)";
+  ctx.lineWidth = 1;
+  for (let i = 1; i <= 4; i += 1) {
+    const y = bottom - (mapH * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(14, y);
+    ctx.lineTo(width - 14, y);
+    ctx.stroke();
+  }
+  for (let i = -2; i <= 2; i += 1) {
+    const x = cx + (mapW * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "rgba(57,197,187,.28)";
+  ctx.beginPath();
+  ctx.moveTo(cx, bottom);
+  ctx.lineTo(18, top + 18);
+  ctx.moveTo(cx, bottom);
+  ctx.lineTo(width - 18, top + 18);
+  ctx.stroke();
+
+  ctx.fillStyle = "#d7ecff";
+  ctx.beginPath();
+  ctx.moveTo(cx, bottom - 12);
+  ctx.lineTo(cx - 12, bottom + 8);
+  ctx.lineTo(cx + 12, bottom + 8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "rgba(215,236,255,.78)";
+  ctx.font = "11px ui-sans-serif, system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText("Alice", cx, bottom + 20);
+
+  const targets = Array.isArray(info?.targets) ? info.targets : [];
+  targets.forEach((target) => {
+    const xMm = Number(target.x_mm || 0);
+    const yMm = Math.max(0, Number(target.y_mm || 0));
+    const x = cx + Math.max(-1, Math.min(1, xMm / maxX)) * (mapW / 2);
+    const y = bottom - Math.max(0, Math.min(1, yMm / maxY)) * mapH;
+    const selected = Boolean(target.selected);
+    ctx.fillStyle = selected ? "#30d158" : "#64a9ff";
+    ctx.strokeStyle = selected ? "rgba(48,209,88,.45)" : "rgba(100,169,255,.34)";
+    ctx.lineWidth = selected ? 3 : 2;
+    ctx.beginPath();
+    ctx.arc(x, y, selected ? 8 : 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, selected ? 15 : 11, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#c4d0dc";
+    ctx.textAlign = "left";
+    ctx.fillText(`#${target.id}`, x + 10, y - 8);
+  });
+
+  if (!info?.fresh) {
+    ctx.fillStyle = "rgba(11,17,26,.58)";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "#ffbd54";
+    ctx.textAlign = "center";
+    ctx.font = "12px ui-sans-serif, system-ui";
+    ctx.fillText(info?.ready ? "radar waiting" : "radar offline", cx, height / 2);
+  }
 }
 
 function renderMicDebug(info) {
@@ -1139,7 +1273,16 @@ function connectEvents() {
   eventSocket = socket;
   socket.onmessage = (event) => {
     const doc = JSON.parse(event.data);
-    if (doc.type === "snapshot" || doc.type === "esp_status" || doc.type === "pipeline_status" || doc.type === "config_updated" || doc.type === "esp_event") {
+    if (doc.type === "snapshot") {
+      if (doc.payload?.esp?.radar) renderRadar(doc.payload.esp.radar);
+      scheduleStatusRefresh();
+      return;
+    }
+    if (doc.type === "esp_event" && doc.payload?.type === "radar_targets") {
+      renderRadar(doc.payload.payload || {});
+      return;
+    }
+    if (doc.type === "esp_status" || doc.type === "pipeline_status" || doc.type === "config_updated" || doc.type === "esp_event") {
       scheduleStatusRefresh();
     }
   };

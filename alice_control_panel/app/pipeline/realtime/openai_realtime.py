@@ -25,6 +25,7 @@ EMOTION_TAG_RE = re.compile(r"<emotion:\s*([^>]+)>", re.IGNORECASE)
 INCOMPLETE_EMOTION_TAG_RE = re.compile(r"<emotion:\s*[^>]*$", re.IGNORECASE)
 STREAM_CHUNK_MIN_CHARS = 28
 STREAM_CHUNK_HARD_CHARS = 90
+REALTIME_TRANSCRIPTION_PROMPT_MAX_CHARS = 1024
 REALTIME_LATENCY_DELTAS = (
     ("speech_to_commit_ms", "speech_started", "input_committed"),
     ("speech_to_transcript_ms", "speech_started", "transcription_completed"),
@@ -649,7 +650,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.75",
+                version="0.1.77",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -853,6 +854,17 @@ class OpenAIRealtimeBridge:
             transcription = {"model": transcription_model, "language": language}
             transcription_prompt = str(realtime.get("transcription_prompt") or "").strip()
             if transcription_prompt:
+                if len(transcription_prompt) > REALTIME_TRANSCRIPTION_PROMPT_MAX_CHARS:
+                    await self._log_bus.emit(
+                        "WARN",
+                        "PIPELINE",
+                        "OpenAI Realtime STT prompt truncated",
+                        {
+                            "chars": len(transcription_prompt),
+                            "max_chars": REALTIME_TRANSCRIPTION_PROMPT_MAX_CHARS,
+                        },
+                    )
+                    transcription_prompt = transcription_prompt[:REALTIME_TRANSCRIPTION_PROMPT_MAX_CHARS]
                 transcription["prompt"] = transcription_prompt
             audio_input["transcription"] = transcription
         return {

@@ -247,7 +247,8 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 
 .connections-panel,
-.hardware-panel {
+.hardware-panel,
+.radar-panel {
   height: var(--side-stack-panel-h);
   min-height: 0;
   overflow: hidden;
@@ -285,6 +286,61 @@ nav a:hover { background: #121a25; color: var(--text); }
 .hardware { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .hardware div { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .hardware b, .hardware span { display: block; overflow-wrap: anywhere; }
+
+.radar-panel {
+  display: flex;
+  flex-direction: column;
+}
+.radar-meta {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.radar-meta div {
+  min-width: 0;
+  border: 1px solid rgba(100,169,255,.18);
+  border-radius: 8px;
+  background: var(--panel2);
+  padding: 8px;
+}
+.radar-meta span,
+.radar-meta b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.radar-meta span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.radar-meta b {
+  margin-top: 3px;
+  color: #d7ecff;
+  font-size: 13px;
+}
+.radar-map {
+  display: block;
+  width: 100%;
+  height: 178px;
+  flex: 1 1 auto;
+  min-height: 150px;
+  margin-top: 10px;
+  border: 1px solid rgba(100,169,255,.22);
+  border-radius: 8px;
+  background: #0b111a;
+}
+.radar-panel p {
+  flex: 0 0 auto;
+  min-height: 17px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 #pipeline,
 .command-panel {
@@ -655,10 +711,12 @@ label.wide { grid-column: 1 / -1; }
   .span-4, .span-6, .span-8 { grid-column: span 12; }
   .row-span-2 { grid-row: span 1; }
   .connections-panel,
-  .hardware-panel {
+  .hardware-panel,
+  .radar-panel {
     height: auto;
     min-height: 0;
   }
+  .radar-map { height: 220px; }
   .log-panel {
     height: min(62vh, 560px);
     min-height: 360px;
@@ -695,6 +753,7 @@ label.wide { grid-column: 1 / -1; }
   .check-pair { grid-template-columns: 1fr; }
   .log-panel .log-list { min-height: 260px; }
   .hardware { grid-template-columns: 1fr; }
+  .radar-meta { grid-template-columns: 1fr; }
   .log-row { grid-template-columns: 72px 50px minmax(0,1fr); }
   .log-row span { display: none; }
   .help-detail-list li { grid-template-columns: 1fr; gap: 4px; }

@@ -4,16 +4,17 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.75" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.75" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.77" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.77" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.75" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.77" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
+          <a href="#radar">Radar</a>
           <a href="#pipeline">Pipeline</a>
           <a href="#commands">Commands</a>
           <a href="#prompts">Prompts</a>
@@ -24,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.75" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.77" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -93,11 +94,26 @@
             <div class="hardware">
               <div><span>Mic</span><b id="hw-mic">unknown</b></div>
               <div><span>Speaker</span><b id="hw-speaker">unknown</b></div>
+              <div><span>Radar</span><b id="hw-radar">unknown</b></div>
               <div><span>Servo</span><b id="hw-servo">center</b></div>
               <div><span>Amp</span><b id="hw-amp">unknown</b></div>
               <div><span>Wake</span><b id="hw-wake">unknown</b></div>
               <div><span>State</span><b id="hw-state">OFFLINE</b></div>
             </div>
+          </section>
+
+          <section id="radar" class="panel span-4 radar-panel">
+            <header>
+              <h2>Radar</h2>
+              <span id="radar-pill" class="pill info">WAITING</span>
+            </header>
+            <div class="radar-meta">
+              <div><span>Targets</span><b id="radar-count">0</b></div>
+              <div><span>Direction</span><b id="radar-direction">BELIRSIZ</b></div>
+              <div><span>Selected</span><b id="radar-selected">-</b></div>
+            </div>
+            <canvas id="radar-canvas" class="radar-map" width="360" height="250"></canvas>
+            <p id="radar-detail">RD-03D verisi bekleniyor.</p>
           </section>
 
           <section id="pipeline" class="panel span-6">
@@ -233,7 +249,7 @@
                     <label><span>Model</span><input data-path="realtime.providers.openai.model" /></label>
                     <label><span>Realtime WS URL</span><input data-path="realtime.providers.openai.ws_url" /></label>
                     <label><span>Realtime STT model</span><input data-path="realtime.providers.openai.transcription_model" /></label>
-                    <label><span>Realtime STT prompt</span><textarea data-path="realtime.providers.openai.transcription_prompt"></textarea></label>
+                    <label><span>Realtime STT prompt</span><textarea data-path="realtime.providers.openai.transcription_prompt" maxlength="1024"></textarea></label>
                   </section>
                   <section class="provider-card live-provider-card" data-provider-kind="realtime" data-provider-card="gemini">
                     <h4>Gemini Live</h4>
@@ -401,6 +417,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.75"></script>
+  <script src="/app.js?v=0.1.77"></script>
   </body>
 </html>

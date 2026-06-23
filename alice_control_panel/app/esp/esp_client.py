@@ -27,10 +27,21 @@ DEFAULT_STATUS: dict[str, Any] = {
     "hardware": {
         "mic": "unknown",
         "speaker": "unknown",
+        "radar": "unknown",
         "servo_position": "center",
         "amp_muted": None,
         "wake_enabled": None,
         "errors": [],
+    },
+    "radar": {
+        "enabled": False,
+        "ready": False,
+        "fresh": False,
+        "state": "unknown",
+        "direction": "BELIRSIZ",
+        "target_count": 0,
+        "selected_target": -1,
+        "targets": [],
     },
     "last_seen": None,
     "last_error": "",
@@ -422,6 +433,13 @@ class EspClient:
             return
         if msg_type == "mic_error":
             await self._handle_mic_error(doc, payload)
+            return
+        if msg_type == "radar_targets":
+            self._status["radar"] = payload
+            hardware = self._status.setdefault("hardware", {})
+            if isinstance(hardware, dict):
+                hardware["radar"] = str(payload.get("state") or "unknown")
+            await self._ws_hub.publish("esp_event", {"type": "radar_targets", "payload": payload})
             return
         event_payload = {"type": msg_type or "event", "payload": payload}
         await self._ws_hub.publish("esp_event", event_payload)

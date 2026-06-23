@@ -25,6 +25,8 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.77` adds the RD-03D radar status/event path and a live radar target view in the panel.
+- Version `0.1.76` caps OpenAI Realtime STT prompts at the API limit so long hint text cannot break live sessions.
 - Version `0.1.75` routes Home Assistant weather data through the active LLM so Alice can give natural, advice-aware weather replies.
 - Version `0.1.74` equalizes Command Panel button sizing across ESP, server, and Mic Debug sections.
 - Version `0.1.73` adds OpenAI Realtime latency markers for speech, transcript, response, and first chunk timing without changing audio rate or VAD tuning.
