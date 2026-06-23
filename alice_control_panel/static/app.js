@@ -953,14 +953,17 @@ function drawRadarMap(info) {
   ctx.lineTo(width - 18, top + 18);
   ctx.stroke();
 
-  ctx.fillStyle = "#d7ecff";
+  ctx.fillStyle = "#cbb8ff";
   ctx.beginPath();
   ctx.moveTo(cx, bottom - 12);
   ctx.lineTo(cx - 12, bottom + 8);
   ctx.lineTo(cx + 12, bottom + 8);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = "rgba(215,236,255,.78)";
+  ctx.strokeStyle = "rgba(229,221,255,.62)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "rgba(229,221,255,.82)";
   ctx.font = "11px ui-sans-serif, system-ui";
   ctx.textAlign = "center";
   ctx.fillText("Alice", cx, bottom + 20);
@@ -971,7 +974,7 @@ function drawRadarMap(info) {
   ctx.textAlign = "right";
   ctx.fillText(`+${radarDistanceLabel(maxX)}`, mapRight - 4, bottom - 5);
   ctx.textAlign = "center";
-  ctx.fillText("center", cx, top + 12);
+  ctx.fillText("orta", cx, top + 12);
 
   const projectRadarPoint = (xMm, yMm) => ({
     x: cx + clamp(xMm / maxX, -1, 1) * (mapW / 2),
@@ -986,35 +989,47 @@ function drawRadarMap(info) {
     const selected = Boolean(target.selected);
     const filteredSelected = selected && filtered && filtered.target_id === target.id;
     const angle = radarAngleDeg(target);
+    const dotRadius = filteredSelected ? 4.5 : selected ? 6.5 : 5;
+    const ringRadius = filteredSelected ? 8.5 : selected ? 12.5 : 9;
+    const ringColor = filteredSelected ? "rgba(255,189,84,.2)" : selected ? "rgba(48,209,88,.2)" : "rgba(100,169,255,.16)";
+    const glowColor = filteredSelected ? "rgba(255,189,84,.34)" : selected ? "rgba(48,209,88,.34)" : "rgba(100,169,255,.24)";
     ctx.fillStyle = filteredSelected ? "#ffbd54" : selected ? "#30d158" : "#64a9ff";
-    ctx.strokeStyle = filteredSelected ? "rgba(255,189,84,.42)" : selected ? "rgba(48,209,88,.45)" : "rgba(100,169,255,.34)";
-    ctx.lineWidth = selected ? 3 : 2;
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = selected ? 2.5 : 2;
     ctx.beginPath();
-    ctx.arc(x, y, filteredSelected ? 5 : selected ? 8 : 6, 0, Math.PI * 2);
+    ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
     ctx.fill();
+    ctx.save();
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = selected ? 8 : 5;
     ctx.beginPath();
-    ctx.arc(x, y, filteredSelected ? 10 : selected ? 15 : 11, 0, Math.PI * 2);
+    ctx.arc(x, y, ringRadius, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
     ctx.fillStyle = "#c4d0dc";
     ctx.textAlign = "left";
-    ctx.fillText(`#${target.id}${filteredSelected ? " raw" : ""}`, x + 10, y - 8);
+    ctx.fillText(`#${target.id}${filteredSelected ? " ham" : ""}`, x + 10, y - 8);
     if (angle !== null) ctx.fillText(`${angle > 0 ? "+" : ""}${angle}deg`, x + 10, y + 7);
   });
 
   if (filtered) {
     const { x, y } = projectRadarPoint(filtered.x_mm, filtered.y_mm);
     ctx.fillStyle = "#30d158";
-    ctx.strokeStyle = "rgba(48,209,88,.5)";
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(48,209,88,.22)";
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.arc(x, y, 6.5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.save();
+    ctx.shadowColor = "rgba(48,209,88,.38)";
+    ctx.shadowBlur = 9;
     ctx.beginPath();
-    ctx.arc(x, y, 16, 0, Math.PI * 2);
+    ctx.arc(x, y, 13, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
     ctx.fillStyle = "#d7ecff";
     ctx.textAlign = "left";
-    ctx.fillText(`#${filtered.target_id} filt`, x + 10, y - 8);
+    ctx.fillText(`#${filtered.target_id} karar`, x + 10, y - 8);
     const filteredAngle = filtered.angle_deg ?? radarAngleDeg(filtered);
     if (filteredAngle !== null) ctx.fillText(`${filteredAngle > 0 ? "+" : ""}${filteredAngle}deg`, x + 10, y + 7);
   }

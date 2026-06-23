@@ -25,7 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.84` narrows the Connections/Radar column, keeps Connections content visible, and cleans up Radar detail rows on desktop and mobile.
+- Version `0.1.85` slightly relaxes the compact Connections tiles and softens the Radar map markers.
 - Version `0.1.82` widens the left dashboard column and restores Radar summary values to a single compact row.
 - Version `0.1.81` compacts the top status strip, folds hardware state into it, and moves Radar under Connections.
 - Version `0.1.80` adds radar decision smoothing and hysteresis, drawing raw and filtered target positions separately.
