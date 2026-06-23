@@ -12,12 +12,16 @@ const commandLabels = {
   servo_center: "motor stop",
   servo_right: "motor right",
 };
+const RADAR_CALIBRATION_KEY = "alice_radar_calibration";
 let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
 let latestStatus = {};
 let latestRadar = {};
 let radarUiTrack = { valid: false, direction: "BELIRSIZ" };
+let latestRadarDraw = null;
+let radarView = localStorage.getItem("alice_radar_view") || "tech";
+let radarCalibration = readRadarCalibration();
 let logs = [];
 let paused = false;
 let configDirty = false;
@@ -533,6 +537,59 @@ function cacheBustedPath(path) {
   return url.pathname + url.search;
 }
 
+function readRadarCalibration() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(RADAR_CALIBRATION_KEY) || "{}");
+    return {
+      invertX: Boolean(saved.invertX),
+      invertY: Boolean(saved.invertY),
+      rotate180: Boolean(saved.rotate180),
+    };
+  } catch {
+    return { invertX: false, invertY: false, rotate180: false };
+  }
+}
+
+function saveRadarCalibration() {
+  localStorage.setItem(RADAR_CALIBRATION_KEY, JSON.stringify(radarCalibration));
+}
+
+function radarApplyCalibrationXY(xMm, yMm) {
+  let x = Number.isFinite(xMm) ? xMm : 0;
+  let y = Number.isFinite(yMm) ? yMm : 0;
+  if (radarCalibration.invertX) x = -x;
+  if (radarCalibration.invertY) y = -y;
+  if (radarCalibration.rotate180) {
+    x = -x;
+    y = -y;
+  }
+  return { x_mm: x, y_mm: y };
+}
+
+function radarApplyCalibrationTarget(target) {
+  if (!target) return null;
+  const rawX = radarTargetNumber(target, "x_mm");
+  const rawY = radarTargetY(target);
+  const point = radarApplyCalibrationXY(rawX, rawY);
+  return {
+    ...target,
+    raw_x_mm: rawX,
+    raw_y_mm: rawY,
+    x_mm: point.x_mm,
+    y_mm: point.y_mm,
+    distance_mm: radarTargetDistance(point),
+    angle_deg: radarAngleDeg(point),
+  };
+}
+
+function radarCalibrationLabel() {
+  const labels = [];
+  if (radarCalibration.invertX) labels.push("X");
+  if (radarCalibration.invertY) labels.push("Y");
+  if (radarCalibration.rotate180) labels.push("180");
+  return labels.length ? `kal ${labels.join("+")}` : "kal normal";
+}
+
 function getDeep(obj, path) {
   return path.split(".").reduce((acc, key) => acc && acc[key], obj);
 }
@@ -559,9 +616,48 @@ function stripMasked(value) {
   return value;
 }
 
+function syncRadarControls() {
+  document.querySelectorAll("[data-radar-view]").forEach((button) => {
+    const active = button.dataset.radarView === radarView;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll("[data-radar-panel]").forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.radarPanel === radarView);
+  });
+  document.querySelectorAll("[data-radar-cal]").forEach((button) => {
+    const key = button.dataset.radarCal;
+    button.classList.toggle("active", Boolean(radarCalibration[key]));
+    button.setAttribute("aria-pressed", radarCalibration[key] ? "true" : "false");
+  });
+}
+
+function initRadarControls() {
+  if (!["tech", "room"].includes(radarView)) radarView = "tech";
+  document.querySelectorAll("[data-radar-view]").forEach((button) => {
+    button.onclick = () => {
+      radarView = button.dataset.radarView || "tech";
+      localStorage.setItem("alice_radar_view", radarView);
+      syncRadarControls();
+      if (latestRadarDraw) drawRadarViews(latestRadarDraw);
+    };
+  });
+  document.querySelectorAll("[data-radar-cal]").forEach((button) => {
+    button.onclick = () => {
+      const key = button.dataset.radarCal;
+      radarCalibration[key] = !radarCalibration[key];
+      saveRadarCalibration();
+      syncRadarControls();
+      if (latestRadar) renderRadar(latestRadar);
+    };
+  });
+  syncRadarControls();
+}
+
 async function boot() {
   initAutoScrollContainers();
   initHelpBubbles();
+  initRadarControls();
   renderButtons();
   initProviderSwitches();
   $("refresh-btn").onclick = () => guard("Refresh failed", loadStatus);
@@ -599,6 +695,9 @@ async function boot() {
   $("log-search").oninput = () => renderLogs({ forceScroll: true });
   $("log-level").onchange = () => renderLogs({ forceScroll: true });
   $("log-category").onchange = () => renderLogs({ forceScroll: true });
+  window.addEventListener("resize", () => {
+    if (latestRadarDraw) drawRadarViews(latestRadarDraw);
+  });
 
   try {
     const auth = await api("/api/auth/check", {}, "");
@@ -733,9 +832,10 @@ function radarTargetNumber(target, key) {
 }
 
 function radarTargetY(target) {
-  const yMm = radarTargetNumber(target, "y_mm");
+  const hasY = target && target.y_mm !== undefined && target.y_mm !== null && Number.isFinite(Number(target.y_mm));
+  if (hasY) return radarTargetNumber(target, "y_mm");
   const distanceMm = radarTargetNumber(target, "distance_mm");
-  return Math.max(0, yMm || distanceMm);
+  return Math.max(0, distanceMm);
 }
 
 function radarTargetDistance(target) {
@@ -748,7 +848,7 @@ function radarAngleDeg(target) {
   const xMm = radarTargetNumber(target, "x_mm");
   const yMm = radarTargetY(target);
   if (!xMm && !yMm) return null;
-  return Math.round(Math.atan2(xMm, Math.max(1, yMm)) * 180 / Math.PI);
+  return Math.round(Math.atan2(xMm, yMm || 1) * 180 / Math.PI);
 }
 
 function radarScaleMax(values, fallback, min, max, step) {
@@ -849,8 +949,8 @@ function renderRadar(info) {
   const ready = Boolean(latestRadar.ready);
   const fresh = Boolean(latestRadar.fresh);
   const state = String(latestRadar.state || (ready ? "waiting" : "offline"));
-  const targets = Array.isArray(latestRadar.targets) ? latestRadar.targets : [];
-  const selected = targets.find((target) => target.selected) || targets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
+  const rawTargets = Array.isArray(latestRadar.targets) ? latestRadar.targets : [];
+  const rawSelected = rawTargets.find((target) => target.selected) || rawTargets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
   const firmwareFiltered = latestRadar.filtered?.valid ? {
     valid: true,
     target_id: latestRadar.filtered.target_id,
@@ -860,13 +960,24 @@ function renderRadar(info) {
     angle_deg: radarAngleDeg(latestRadar.filtered),
     direction: latestRadar.filtered.direction || radarDirectionFromX(radarTargetNumber(latestRadar.filtered, "x_mm")),
   } : null;
-  const filtered = firmwareFiltered || updateRadarUiTrack(selected, fresh);
+  const rawFiltered = firmwareFiltered || updateRadarUiTrack(rawSelected, fresh);
+  const targets = rawTargets.map(radarApplyCalibrationTarget);
+  const selected = rawSelected ? radarApplyCalibrationTarget(rawSelected) : targets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
+  const filtered = rawFiltered?.valid ? {
+    ...radarApplyCalibrationTarget(rawFiltered),
+    valid: true,
+    target_id: rawFiltered.target_id,
+  } : null;
+  if (filtered) filtered.direction = radarDirectionFromX(filtered.x_mm, rawFiltered.direction || "BELIRSIZ");
   const selectedAngle = filtered?.valid ? filtered.angle_deg : selected ? radarAngleDeg(selected) : null;
   const selectedDistance = filtered?.valid ? filtered.distance_mm : selected ? radarTargetDistance(selected) : 0;
-  const selectedResolution = selected ? (selected.resolution_mm ?? selected.distance_mm ?? 0) : 0;
+  const selectedResolution = rawSelected ? (rawSelected.resolution_mm ?? rawSelected.distance_mm ?? 0) : 0;
+  const direction = filtered?.valid
+    ? filtered.direction
+    : selected ? radarDirectionFromX(selected.x_mm, latestRadar.direction || "BELIRSIZ") : latestRadar.direction || "BELIRSIZ";
   setPill("radar-pill", state.toUpperCase(), radarStateTone(state, fresh, ready));
-  text("radar-count", String(latestRadar.target_count ?? targets.length ?? 0));
-  text("radar-direction", filtered?.valid ? filtered.direction : latestRadar.direction || "BELIRSIZ");
+  text("radar-count", String(latestRadar.target_count ?? rawTargets.length ?? 0));
+  text("radar-direction", direction);
   text(
     "radar-selected",
     selected
@@ -880,11 +991,17 @@ function renderRadar(info) {
     : !fresh
       ? age >= 0 ? `Son radar frame ${age}ms once; veri eski sayiliyor.` : "RD-03D verisi bekleniyor."
       : selected
-        ? `Karar d=${radarDistanceLabel(selectedDistance)} x=${filtered?.x_mm ?? selected.x_mm}mm y=${filtered?.y_mm ?? selected.y_mm}mm aci=${selectedAngle ?? "-"}deg | ham x=${selected.x_mm} y=${selected.y_mm} res=${selectedResolution}mm`
+        ? `Karar d=${radarDistanceLabel(selectedDistance)} x=${filtered?.x_mm ?? selected.x_mm}mm y=${filtered?.y_mm ?? selected.y_mm}mm aci=${selectedAngle ?? "-"}deg | ham x=${rawSelected?.x_mm ?? "-"} y=${rawSelected?.y_mm ?? "-"} res=${selectedResolution}mm | ${radarCalibrationLabel()}`
         : "Radar taze, hedef yok.";
   text("radar-detail", detail);
   renderRadarTargets(targets);
-  drawRadarMap({ ...latestRadar, ui_filtered: filtered });
+  latestRadarDraw = { ...latestRadar, targets, ui_filtered: filtered };
+  drawRadarViews(latestRadarDraw);
+}
+
+function drawRadarViews(info) {
+  drawRadarMap(info);
+  drawRadarRoom(info);
 }
 
 function drawRadarMap(info) {
@@ -1033,6 +1150,167 @@ function drawRadarMap(info) {
     const filteredAngle = filtered.angle_deg ?? radarAngleDeg(filtered);
     if (filteredAngle !== null) ctx.fillText(`${filteredAngle > 0 ? "+" : ""}${filteredAngle}deg`, x + 10, y + 7);
   }
+
+  if (!info?.fresh) {
+    ctx.fillStyle = "rgba(11,17,26,.58)";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "#ffbd54";
+    ctx.textAlign = "center";
+    ctx.font = "12px ui-sans-serif, system-ui";
+    ctx.fillText(info?.ready ? "radar waiting" : "radar offline", cx, height / 2);
+  }
+}
+
+function drawRadarRoom(info) {
+  const canvas = $("radar-room-canvas");
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(240, Math.round(rect.width || canvas.width));
+  const height = Math.max(180, Math.round(rect.height || canvas.height));
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const pad = 18;
+  const cx = width / 2;
+  const robotY = height - 38;
+  const top = 18;
+  const roomLeft = pad;
+  const roomRight = width - pad;
+  const roomBottom = height - 14;
+  const roomW = roomRight - roomLeft;
+  const roomH = roomBottom - top;
+  const targets = Array.isArray(info?.targets) ? info.targets : [];
+  const filtered = info?.ui_filtered?.valid ? info.ui_filtered : null;
+  const yValues = targets.map(radarTargetY);
+  if (filtered) yValues.push(radarTargetY(filtered));
+  const xValues = targets.map((target) => Math.abs(radarTargetNumber(target, "x_mm")));
+  if (filtered) xValues.push(Math.abs(radarTargetNumber(filtered, "x_mm")));
+  const maxY = radarScaleMax(yValues, 2600, 1200, 6000, 400);
+  const maxX = Math.max(radarScaleMax(xValues, 1600, 900, 3600, 300), Math.round(maxY * 0.42));
+  const projectRoomPoint = (xMm, yMm) => ({
+    x: cx + clamp(xMm / maxX, -1, 1) * (roomW / 2),
+    y: robotY - clamp(yMm / maxY, -0.22, 1) * (robotY - top - 8),
+  });
+
+  ctx.fillStyle = "#0d141d";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "rgba(100,169,255,.035)";
+  ctx.fillRect(roomLeft, top, roomW, roomH);
+  ctx.strokeStyle = "rgba(100,169,255,.22)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(roomLeft, top, roomW, roomH);
+
+  ctx.strokeStyle = "rgba(100,169,255,.11)";
+  for (let i = 1; i < 5; i += 1) {
+    const x = roomLeft + (roomW * i) / 5;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, roomBottom);
+    ctx.stroke();
+  }
+  for (let i = 1; i < 5; i += 1) {
+    const y = top + (roomH * i) / 5;
+    ctx.beginPath();
+    ctx.moveTo(roomLeft, y);
+    ctx.lineTo(roomRight, y);
+    ctx.stroke();
+  }
+
+  const coneLeft = projectRoomPoint(-maxY * 0.58, maxY);
+  const coneRight = projectRoomPoint(maxY * 0.58, maxY);
+  const coneGrad = ctx.createLinearGradient(cx, robotY, cx, top);
+  coneGrad.addColorStop(0, "rgba(200,184,255,.16)");
+  coneGrad.addColorStop(1, "rgba(57,197,187,.03)");
+  ctx.fillStyle = coneGrad;
+  ctx.beginPath();
+  ctx.moveTo(cx, robotY);
+  ctx.lineTo(coneLeft.x, coneLeft.y);
+  ctx.lineTo(coneRight.x, coneRight.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(200,184,255,.2)";
+  ctx.beginPath();
+  ctx.moveTo(cx, robotY);
+  ctx.lineTo(coneLeft.x, coneLeft.y);
+  ctx.moveTo(cx, robotY);
+  ctx.lineTo(coneRight.x, coneRight.y);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(215,236,255,.58)";
+  ctx.font = "11px ui-sans-serif, system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText("on", cx, top + 13);
+  ctx.textAlign = "left";
+  ctx.fillText("sol", roomLeft + 8, robotY - 10);
+  ctx.textAlign = "right";
+  ctx.fillText("sag", roomRight - 8, robotY - 10);
+
+  targets.forEach((target) => {
+    const xMm = radarTargetNumber(target, "x_mm");
+    const yMm = radarTargetY(target);
+    const { x, y } = projectRoomPoint(xMm, yMm);
+    const selected = Boolean(target.selected);
+    const filteredSelected = selected && filtered && filtered.target_id === target.id;
+    const dotRadius = filteredSelected ? 4.5 : selected ? 6 : 5;
+    const ringRadius = filteredSelected ? 8.5 : selected ? 11.5 : 9;
+    ctx.fillStyle = filteredSelected ? "#ffbd54" : selected ? "#30d158" : "#64a9ff";
+    ctx.strokeStyle = filteredSelected ? "rgba(255,189,84,.2)" : selected ? "rgba(48,209,88,.2)" : "rgba(100,169,255,.16)";
+    ctx.lineWidth = selected ? 2.4 : 2;
+    ctx.beginPath();
+    ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, ringRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#c4d0dc";
+    ctx.textAlign = "left";
+    ctx.fillText(`#${target.id}${filteredSelected ? " ham" : ""}`, x + 9, y - 8);
+  });
+
+  if (filtered) {
+    const { x, y } = projectRoomPoint(filtered.x_mm, filtered.y_mm);
+    ctx.fillStyle = "#30d158";
+    ctx.strokeStyle = "rgba(48,209,88,.22)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(x, y, 6.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    ctx.shadowColor = "rgba(48,209,88,.38)";
+    ctx.shadowBlur = 9;
+    ctx.beginPath();
+    ctx.arc(x, y, 13, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = "#d7ecff";
+    ctx.textAlign = "left";
+    ctx.fillText(`#${filtered.target_id} karar`, x + 9, y + 7);
+  }
+
+  ctx.fillStyle = "rgba(16,23,32,.95)";
+  ctx.strokeStyle = "rgba(200,184,255,.34)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, robotY, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#cbb8ff";
+  ctx.beginPath();
+  ctx.moveTo(cx, robotY - 22);
+  ctx.lineTo(cx - 11, robotY + 6);
+  ctx.lineTo(cx + 11, robotY + 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "rgba(229,221,255,.84)";
+  ctx.textAlign = "center";
+  ctx.fillText("Alice", cx, robotY + 28);
 
   if (!info?.fresh) {
     ctx.fillStyle = "rgba(11,17,26,.58)";
