@@ -12,7 +12,7 @@ const commandLabels = {
   servo_center: "motor stop",
   servo_right: "motor right",
 };
-const RADAR_CALIBRATION_KEY = "alice_radar_calibration";
+const RADAR_CALIBRATION_KEY = "alice_radar_room_calibration";
 let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
@@ -566,28 +566,8 @@ function radarApplyCalibrationXY(xMm, yMm) {
   return { x_mm: x, y_mm: y };
 }
 
-function radarApplyCalibrationTarget(target) {
-  if (!target) return null;
-  const rawX = radarTargetNumber(target, "x_mm");
-  const rawY = radarTargetY(target);
-  const point = radarApplyCalibrationXY(rawX, rawY);
-  return {
-    ...target,
-    raw_x_mm: rawX,
-    raw_y_mm: rawY,
-    x_mm: point.x_mm,
-    y_mm: point.y_mm,
-    distance_mm: radarTargetDistance(point),
-    angle_deg: radarAngleDeg(point),
-  };
-}
-
-function radarCalibrationLabel() {
-  const labels = [];
-  if (radarCalibration.invertX) labels.push("X");
-  if (radarCalibration.invertY) labels.push("Y");
-  if (radarCalibration.rotate180) labels.push("180");
-  return labels.length ? `kal ${labels.join("+")}` : "kal normal";
+function radarApplyRoomXY(xMm, yMm) {
+  return radarApplyCalibrationXY(-xMm, yMm);
 }
 
 function getDeep(obj, path) {
@@ -617,6 +597,7 @@ function stripMasked(value) {
 }
 
 function syncRadarControls() {
+  $("radar")?.classList.toggle("room-mode", radarView === "room");
   document.querySelectorAll("[data-radar-view]").forEach((button) => {
     const active = button.dataset.radarView === radarView;
     button.classList.toggle("active", active);
@@ -960,15 +941,10 @@ function renderRadar(info) {
     angle_deg: radarAngleDeg(latestRadar.filtered),
     direction: latestRadar.filtered.direction || radarDirectionFromX(radarTargetNumber(latestRadar.filtered, "x_mm")),
   } : null;
-  const rawFiltered = firmwareFiltered || updateRadarUiTrack(rawSelected, fresh);
-  const targets = rawTargets.map(radarApplyCalibrationTarget);
-  const selected = rawSelected ? radarApplyCalibrationTarget(rawSelected) : targets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
-  const filtered = rawFiltered?.valid ? {
-    ...radarApplyCalibrationTarget(rawFiltered),
-    valid: true,
-    target_id: rawFiltered.target_id,
-  } : null;
-  if (filtered) filtered.direction = radarDirectionFromX(filtered.x_mm, rawFiltered.direction || "BELIRSIZ");
+  const filtered = firmwareFiltered || updateRadarUiTrack(rawSelected, fresh);
+  if (filtered?.valid) filtered.direction = filtered.direction || radarDirectionFromX(filtered.x_mm, "BELIRSIZ");
+  const targets = rawTargets;
+  const selected = rawSelected || targets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
   const selectedAngle = filtered?.valid ? filtered.angle_deg : selected ? radarAngleDeg(selected) : null;
   const selectedDistance = filtered?.valid ? filtered.distance_mm : selected ? radarTargetDistance(selected) : 0;
   const selectedResolution = rawSelected ? (rawSelected.resolution_mm ?? rawSelected.distance_mm ?? 0) : 0;
@@ -988,10 +964,10 @@ function renderRadar(info) {
   const age = Number(latestRadar.fresh_ms);
   const detail = !ready
     ? "RD-03D UART hazir degil."
-    : !fresh
-      ? age >= 0 ? `Son radar frame ${age}ms once; veri eski sayiliyor.` : "RD-03D verisi bekleniyor."
+      : !fresh
+        ? age >= 0 ? `Son radar frame ${age}ms once; veri eski sayiliyor.` : "RD-03D verisi bekleniyor."
       : selected
-        ? `Karar d=${radarDistanceLabel(selectedDistance)} x=${filtered?.x_mm ?? selected.x_mm}mm y=${filtered?.y_mm ?? selected.y_mm}mm aci=${selectedAngle ?? "-"}deg | ham x=${rawSelected?.x_mm ?? "-"} y=${rawSelected?.y_mm ?? "-"} res=${selectedResolution}mm | ${radarCalibrationLabel()}`
+        ? `Karar d=${radarDistanceLabel(selectedDistance)} x=${filtered?.x_mm ?? selected.x_mm}mm y=${filtered?.y_mm ?? selected.y_mm}mm aci=${selectedAngle ?? "-"}deg | ham x=${rawSelected?.x_mm ?? "-"} y=${rawSelected?.y_mm ?? "-"} res=${selectedResolution}mm`
         : "Radar taze, hedef yok.";
   text("radar-detail", detail);
   renderRadarTargets(targets);
@@ -1188,16 +1164,19 @@ function drawRadarRoom(info) {
   const roomH = roomBottom - top;
   const targets = Array.isArray(info?.targets) ? info.targets : [];
   const filtered = info?.ui_filtered?.valid ? info.ui_filtered : null;
-  const yValues = targets.map(radarTargetY);
-  if (filtered) yValues.push(radarTargetY(filtered));
-  const xValues = targets.map((target) => Math.abs(radarTargetNumber(target, "x_mm")));
-  if (filtered) xValues.push(Math.abs(radarTargetNumber(filtered, "x_mm")));
+  const roomPoints = targets.map((target) => radarApplyRoomXY(radarTargetNumber(target, "x_mm"), radarTargetY(target)));
+  if (filtered) roomPoints.push(radarApplyRoomXY(filtered.x_mm, radarTargetY(filtered)));
+  const yValues = roomPoints.map((point) => Math.abs(point.y_mm));
+  const xValues = roomPoints.map((point) => Math.abs(point.x_mm));
   const maxY = radarScaleMax(yValues, 2600, 1200, 6000, 400);
   const maxX = Math.max(radarScaleMax(xValues, 1600, 900, 3600, 300), Math.round(maxY * 0.42));
-  const projectRoomPoint = (xMm, yMm) => ({
-    x: cx + clamp(xMm / maxX, -1, 1) * (roomW / 2),
-    y: robotY + clamp(yMm / maxY, -0.12, 1) * (roomBottom - robotY - 8),
-  });
+  const projectRoomPoint = (xMm, yMm) => {
+    const point = radarApplyRoomXY(xMm, yMm);
+    return {
+      x: cx + clamp(point.x_mm / maxX, -1, 1) * (roomW / 2),
+      y: robotY + clamp(point.y_mm / maxY, -0.12, 1) * (roomBottom - robotY - 8),
+    };
+  };
 
   ctx.fillStyle = "#0d141d";
   ctx.fillRect(0, 0, width, height);
@@ -1252,30 +1231,10 @@ function drawRadarRoom(info) {
   ctx.textAlign = "right";
   ctx.fillText("sag", roomRight - 8, robotY + 20);
 
-  targets.forEach((target) => {
-    const xMm = radarTargetNumber(target, "x_mm");
-    const yMm = radarTargetY(target);
-    const { x, y } = projectRoomPoint(xMm, yMm);
-    const selected = Boolean(target.selected);
-    const filteredSelected = selected && filtered && filtered.target_id === target.id;
-    const dotRadius = filteredSelected ? 4.5 : selected ? 6 : 5;
-    const ringRadius = filteredSelected ? 8.5 : selected ? 11.5 : 9;
-    ctx.fillStyle = filteredSelected ? "#ffbd54" : selected ? "#30d158" : "#64a9ff";
-    ctx.strokeStyle = filteredSelected ? "rgba(255,189,84,.2)" : selected ? "rgba(48,209,88,.2)" : "rgba(100,169,255,.16)";
-    ctx.lineWidth = selected ? 2.4 : 2;
-    ctx.beginPath();
-    ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x, y, ringRadius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = "#c4d0dc";
-    ctx.textAlign = "left";
-    ctx.fillText(`#${target.id}${filteredSelected ? " ham" : ""}`, x + 9, y - 8);
-  });
-
-  if (filtered) {
-    const { x, y } = projectRoomPoint(filtered.x_mm, filtered.y_mm);
+  const selected = targets.find((target) => target.selected) || targets.find((target) => Number(target.id) === Number(info?.selected_target));
+  const focus = filtered || selected;
+  if (focus) {
+    const { x, y } = projectRoomPoint(radarTargetNumber(focus, "x_mm"), radarTargetY(focus));
     ctx.fillStyle = "#30d158";
     ctx.strokeStyle = "rgba(48,209,88,.22)";
     ctx.lineWidth = 2.5;
@@ -1289,9 +1248,6 @@ function drawRadarRoom(info) {
     ctx.arc(x, y, 13, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
-    ctx.fillStyle = "#d7ecff";
-    ctx.textAlign = "left";
-    ctx.fillText(`#${filtered.target_id} karar`, x + 9, y + 7);
   }
 
   ctx.fillStyle = "rgba(16,23,32,.95)";

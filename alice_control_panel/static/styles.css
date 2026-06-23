@@ -429,6 +429,14 @@ nav a:hover { background: #121a25; color: var(--text); }
 .radar-room-map {
   background: #0e141d;
 }
+.radar-panel:not(.room-mode) .radar-calibration {
+  visibility: hidden;
+  pointer-events: none;
+}
+.radar-panel.room-mode .radar-targets,
+.radar-panel.room-mode #radar-detail {
+  display: none;
+}
 .radar-targets {
   display: grid;
   gap: 5px;
