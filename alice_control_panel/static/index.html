@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.89" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.89" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.90" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.90" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.89" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.90" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.89" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.90" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -99,24 +99,24 @@
           <section id="radar" class="panel span-4 radar-panel">
             <header>
               <h2>Radar</h2>
-              <span id="radar-pill" class="pill info">WAITING</span>
+              <div class="radar-header-actions">
+                <div class="radar-tabs" role="tablist" aria-label="Radar view">
+                  <button type="button" data-radar-view="tech">Teknik</button>
+                  <button type="button" data-radar-view="room">Oda</button>
+                </div>
+                <div class="radar-calibration" aria-label="Radar calibration">
+                  <button type="button" data-radar-cal="invertX" title="X eksenini ters cevir">X</button>
+                  <button type="button" data-radar-cal="invertY" title="Y eksenini ters cevir">Y</button>
+                  <button type="button" data-radar-cal="rotate180" title="Goruntuyu 180 derece cevir">180</button>
+                </div>
+                <span id="radar-pill" class="pill info">WAITING</span>
+              </div>
             </header>
             <div class="radar-meta">
               <div><span>Targets</span><b id="radar-count">0</b></div>
               <div><span>Direction</span><b id="radar-direction">BELIRSIZ</b></div>
               <div><span>Selected</span><b id="radar-selected">-</b></div>
               <div><span>Angle</span><b id="radar-angle">-</b></div>
-            </div>
-            <div class="radar-toolbar">
-              <div class="radar-tabs" role="tablist" aria-label="Radar view">
-                <button type="button" data-radar-view="tech">Teknik</button>
-                <button type="button" data-radar-view="room">Oda</button>
-              </div>
-              <div class="radar-calibration" aria-label="Radar calibration">
-                <button type="button" data-radar-cal="invertX" title="X eksenini ters cevir">X</button>
-                <button type="button" data-radar-cal="invertY" title="Y eksenini ters cevir">Y</button>
-                <button type="button" data-radar-cal="rotate180" title="Goruntuyu 180 derece cevir">180</button>
-              </div>
             </div>
             <div class="radar-view active" data-radar-panel="tech">
               <canvas id="radar-canvas" class="radar-map" width="360" height="250"></canvas>
@@ -429,6 +429,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.89"></script>
+  <script src="/app.js?v=0.1.90"></script>
   </body>
 </html>

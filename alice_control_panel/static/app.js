@@ -12,7 +12,7 @@ const commandLabels = {
   servo_center: "motor stop",
   servo_right: "motor right",
 };
-const RADAR_CALIBRATION_KEY = "alice_radar_room_calibration";
+const RADAR_CALIBRATION_KEY = "alice_radar_tech_calibration";
 let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
@@ -567,7 +567,7 @@ function radarApplyCalibrationXY(xMm, yMm) {
 }
 
 function radarApplyRoomXY(xMm, yMm) {
-  return radarApplyCalibrationXY(-xMm, yMm);
+  return { x_mm: -xMm, y_mm: yMm };
 }
 
 function getDeep(obj, path) {
@@ -1000,8 +1000,13 @@ function drawRadarMap(info) {
   const bottom = height - 24;
   const top = 18;
   const targets = Array.isArray(info?.targets) ? info.targets : [];
-  const maxY = radarScaleMax(targets.map(radarTargetY), RADAR_DEFAULT_MAX_Y_MM, 1200, 6000, 400);
-  const maxAbsX = radarScaleMax(targets.map((target) => Math.abs(radarTargetNumber(target, "x_mm"))), 1600, 800, 3000, 200);
+  const techPoints = targets.map((target) => radarApplyCalibrationXY(radarTargetNumber(target, "x_mm"), radarTargetY(target)));
+  const filteredForScale = info?.ui_filtered?.valid
+    ? radarApplyCalibrationXY(info.ui_filtered.x_mm, radarTargetY(info.ui_filtered))
+    : null;
+  if (filteredForScale) techPoints.push(filteredForScale);
+  const maxY = radarScaleMax(techPoints.map((point) => Math.max(0, point.y_mm)), RADAR_DEFAULT_MAX_Y_MM, 1200, 6000, 400);
+  const maxAbsX = radarScaleMax(techPoints.map((point) => Math.abs(point.x_mm)), 1600, 800, 3000, 200);
   const maxX = Math.max(maxAbsX, Math.round(maxY * 0.35), RADAR_DIRECTION_DEADZONE_MM * 2);
   const mapW = width - 34;
   const mapH = bottom - top;
@@ -1069,10 +1074,13 @@ function drawRadarMap(info) {
   ctx.textAlign = "center";
   ctx.fillText("orta", cx, top + 12);
 
-  const projectRadarPoint = (xMm, yMm) => ({
-    x: cx + clamp(xMm / maxX, -1, 1) * (mapW / 2),
-    y: bottom - clamp(yMm / maxY, 0, 1) * mapH,
-  });
+  const projectRadarPoint = (xMm, yMm) => {
+    const point = radarApplyCalibrationXY(xMm, yMm);
+    return {
+      x: cx + clamp(point.x_mm / maxX, -1, 1) * (mapW / 2),
+      y: bottom - clamp(point.y_mm / maxY, 0, 1) * mapH,
+    };
+  };
   const filtered = info?.ui_filtered?.valid ? info.ui_filtered : null;
 
   targets.forEach((target) => {
