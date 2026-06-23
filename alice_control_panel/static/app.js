@@ -1179,8 +1179,8 @@ function drawRadarRoom(info) {
 
   const pad = 18;
   const cx = width / 2;
-  const robotY = height - 38;
   const top = 18;
+  const robotY = top + 30;
   const roomLeft = pad;
   const roomRight = width - pad;
   const roomBottom = height - 14;
@@ -1196,7 +1196,7 @@ function drawRadarRoom(info) {
   const maxX = Math.max(radarScaleMax(xValues, 1600, 900, 3600, 300), Math.round(maxY * 0.42));
   const projectRoomPoint = (xMm, yMm) => ({
     x: cx + clamp(xMm / maxX, -1, 1) * (roomW / 2),
-    y: robotY - clamp(yMm / maxY, -0.22, 1) * (robotY - top - 8),
+    y: robotY + clamp(yMm / maxY, -0.12, 1) * (roomBottom - robotY - 8),
   });
 
   ctx.fillStyle = "#0d141d";
@@ -1225,9 +1225,9 @@ function drawRadarRoom(info) {
 
   const coneLeft = projectRoomPoint(-maxY * 0.58, maxY);
   const coneRight = projectRoomPoint(maxY * 0.58, maxY);
-  const coneGrad = ctx.createLinearGradient(cx, robotY, cx, top);
-  coneGrad.addColorStop(0, "rgba(200,184,255,.16)");
-  coneGrad.addColorStop(1, "rgba(57,197,187,.03)");
+  const coneGrad = ctx.createLinearGradient(cx, robotY, cx, roomBottom);
+  coneGrad.addColorStop(0, "rgba(200,184,255,.045)");
+  coneGrad.addColorStop(1, "rgba(57,197,187,.01)");
   ctx.fillStyle = coneGrad;
   ctx.beginPath();
   ctx.moveTo(cx, robotY);
@@ -1235,7 +1235,7 @@ function drawRadarRoom(info) {
   ctx.lineTo(coneRight.x, coneRight.y);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = "rgba(200,184,255,.2)";
+  ctx.strokeStyle = "rgba(200,184,255,.075)";
   ctx.beginPath();
   ctx.moveTo(cx, robotY);
   ctx.lineTo(coneLeft.x, coneLeft.y);
@@ -1246,11 +1246,11 @@ function drawRadarRoom(info) {
   ctx.fillStyle = "rgba(215,236,255,.58)";
   ctx.font = "11px ui-sans-serif, system-ui";
   ctx.textAlign = "center";
-  ctx.fillText("on", cx, top + 13);
+  ctx.fillText("on", cx, roomBottom - 8);
   ctx.textAlign = "left";
-  ctx.fillText("sol", roomLeft + 8, robotY - 10);
+  ctx.fillText("sol", roomLeft + 8, robotY + 20);
   ctx.textAlign = "right";
-  ctx.fillText("sag", roomRight - 8, robotY - 10);
+  ctx.fillText("sag", roomRight - 8, robotY + 20);
 
   targets.forEach((target) => {
     const xMm = radarTargetNumber(target, "x_mm");
@@ -1303,14 +1303,14 @@ function drawRadarRoom(info) {
   ctx.stroke();
   ctx.fillStyle = "#cbb8ff";
   ctx.beginPath();
-  ctx.moveTo(cx, robotY - 22);
-  ctx.lineTo(cx - 11, robotY + 6);
-  ctx.lineTo(cx + 11, robotY + 6);
+  ctx.moveTo(cx, robotY + 22);
+  ctx.lineTo(cx - 11, robotY - 6);
+  ctx.lineTo(cx + 11, robotY - 6);
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = "rgba(229,221,255,.84)";
   ctx.textAlign = "center";
-  ctx.fillText("Alice", cx, robotY + 28);
+  ctx.fillText("Alice", cx, robotY - 13);
 
   if (!info?.fresh) {
     ctx.fillStyle = "rgba(11,17,26,.58)";

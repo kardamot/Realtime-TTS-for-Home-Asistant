@@ -227,7 +227,7 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.87` adds Radar/Oda tabs and UI-only radar orientation calibration controls.
+- `0.1.88` makes the Oda radar view use a separate top-down orientation with Alice at the top.
 - `0.1.82` widens the left dashboard column and restores Radar summary values to a single compact row.
 - `0.1.81` compacts the top status strip, folds hardware state into it, and moves Radar under Connections.
 - `0.1.80` adds radar decision smoothing and hysteresis, drawing raw and filtered target positions separately.
