@@ -832,13 +832,13 @@ function renderRadarTargets(targets) {
     const rawResolution = target.resolution_mm ?? target.distance_mm ?? 0;
     row.className = `radar-target-row${target.selected ? " selected" : ""}`;
     row.innerHTML = `
-      <b>#${target.id}${target.selected ? " selected" : ""}</b>
-      <span>d ${radarDistanceLabel(distanceMm)}</span>
-      <span>x ${radarTargetNumber(target, "x_mm")}mm</span>
-      <span>y ${radarTargetNumber(target, "y_mm")}mm</span>
-      <span>a ${angle === null ? "-" : `${angle > 0 ? "+" : ""}${angle}deg`}</span>
-      <span>v ${radarTargetNumber(target, "speed_cms")}cm/s</span>
-      <span>res ${rawResolution}mm</span>
+      <b class="radar-target-title">#${target.id}${target.selected ? " selected" : ""}</b>
+      <span class="radar-target-stat"><i>d</i><strong>${radarDistanceLabel(distanceMm)}</strong></span>
+      <span class="radar-target-stat"><i>x</i><strong>${radarTargetNumber(target, "x_mm")}mm</strong></span>
+      <span class="radar-target-stat"><i>y</i><strong>${radarTargetNumber(target, "y_mm")}mm</strong></span>
+      <span class="radar-target-stat"><i>a</i><strong>${angle === null ? "-" : `${angle > 0 ? "+" : ""}${angle}deg`}</strong></span>
+      <span class="radar-target-stat"><i>v</i><strong>${radarTargetNumber(target, "speed_cms")}cm/s</strong></span>
+      <span class="radar-target-stat"><i>res</i><strong>${rawResolution}mm</strong></span>
     `;
     box.appendChild(row);
   });

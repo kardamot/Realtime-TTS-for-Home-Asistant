@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.83" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.83" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.84" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.84" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.83" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.84" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.83" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.84" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -65,7 +65,7 @@
         </section>
 
         <section class="grid">
-          <section class="panel span-5 connections-panel">
+          <section class="panel span-4 connections-panel">
             <header><h2>Connections</h2><span id="esp-pill" class="pill warn">MOCK</span></header>
             <div class="kv">
               <div><span>ESP</span><b id="conn-esp">offline</b></div>
@@ -79,7 +79,7 @@
             <p id="last-error" class="error" data-autoscroll></p>
           </section>
 
-          <section id="logs" class="panel span-7 log-panel row-span-2">
+          <section id="logs" class="panel span-8 log-panel row-span-2">
             <header>
               <h2>Logs</h2>
               <div class="actions">
@@ -96,7 +96,7 @@
             <div id="log-list" class="log-list" data-autoscroll></div>
           </section>
 
-          <section id="radar" class="panel span-5 radar-panel">
+          <section id="radar" class="panel span-4 radar-panel">
             <header>
               <h2>Radar</h2>
               <span id="radar-pill" class="pill info">WAITING</span>
@@ -413,6 +413,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.83"></script>
+  <script src="/app.js?v=0.1.84"></script>
   </body>
 </html>
