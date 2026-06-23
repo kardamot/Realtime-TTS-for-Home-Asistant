@@ -552,36 +552,40 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .transcript {
   display: grid;
-  grid-template-rows: auto minmax(40px,1fr) auto minmax(40px,1fr);
-  gap: 4px;
+  grid-template-rows: auto minmax(22px,auto) auto minmax(34px,1fr);
+  gap: 3px;
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: 10px;
+  margin-top: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #0f1520;
-  padding: 12px;
+  padding: 10px 11px;
   overflow: hidden;
 }
+.transcript span { font-size: 11px; }
 .transcript p {
   min-height: 0;
   max-height: none;
-  margin: 0 0 8px;
+  margin: 0 0 3px;
   color: #c4d0dc;
+  font-size: 14px;
+  line-height: 1.35;
   overflow: auto;
   overflow-wrap: anywhere;
 }
+#llm-text { margin-bottom: 0; }
 .timeline {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 4px;
   flex: 0 0 auto;
-  max-height: 64px;
+  max-height: 62px;
   overflow: auto;
 }
-.timeline div { display: grid; grid-template-columns: 68px minmax(0,1fr); gap: 8px; min-height: 30px; align-items: center; }
-.timeline b { font-size: 12px; }
-.timeline span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline div { display: grid; grid-template-columns: 62px minmax(0,1fr); gap: 7px; min-height: 24px; align-items: center; }
+.timeline b { font-size: 11px; }
+.timeline span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .pipeline-actions,
 .session-controls {
