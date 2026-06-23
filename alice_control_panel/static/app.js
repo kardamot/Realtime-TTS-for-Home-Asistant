@@ -733,6 +733,12 @@ function radarTargetY(target) {
   return Math.max(0, yMm || distanceMm);
 }
 
+function radarTargetDistance(target) {
+  const xMm = radarTargetNumber(target, "x_mm");
+  const yMm = radarTargetY(target);
+  return Math.round(Math.sqrt((xMm * xMm) + (yMm * yMm)));
+}
+
 function radarAngleDeg(target) {
   const xMm = radarTargetNumber(target, "x_mm");
   const yMm = radarTargetY(target);
@@ -750,6 +756,35 @@ function radarDistanceLabel(mm) {
   return mm >= 1000 ? `${(mm / 1000).toFixed(mm >= 3000 ? 0 : 1)}m` : `${Math.round(mm / 10)}cm`;
 }
 
+function renderRadarTargets(targets) {
+  const box = $("radar-targets");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!targets.length) {
+    box.classList.add("empty");
+    box.textContent = "No targets";
+    return;
+  }
+  box.classList.remove("empty");
+  targets.forEach((target) => {
+    const row = document.createElement("div");
+    const distanceMm = radarTargetDistance(target);
+    const angle = radarAngleDeg(target);
+    const rawResolution = target.resolution_mm ?? target.distance_mm ?? 0;
+    row.className = `radar-target-row${target.selected ? " selected" : ""}`;
+    row.innerHTML = `
+      <b>#${target.id}${target.selected ? " selected" : ""}</b>
+      <span>d ${radarDistanceLabel(distanceMm)}</span>
+      <span>x ${radarTargetNumber(target, "x_mm")}mm</span>
+      <span>y ${radarTargetNumber(target, "y_mm")}mm</span>
+      <span>a ${angle === null ? "-" : `${angle > 0 ? "+" : ""}${angle}deg`}</span>
+      <span>v ${radarTargetNumber(target, "speed_cms")}cm/s</span>
+      <span>res ${rawResolution}mm</span>
+    `;
+    box.appendChild(row);
+  });
+}
+
 function renderRadar(info) {
   latestRadar = info || {};
   const ready = Boolean(latestRadar.ready);
@@ -758,13 +793,15 @@ function renderRadar(info) {
   const targets = Array.isArray(latestRadar.targets) ? latestRadar.targets : [];
   const selected = targets.find((target) => target.selected) || targets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
   const selectedAngle = selected ? radarAngleDeg(selected) : null;
+  const selectedDistance = selected ? radarTargetDistance(selected) : 0;
+  const selectedResolution = selected ? (selected.resolution_mm ?? selected.distance_mm ?? 0) : 0;
   setPill("radar-pill", state.toUpperCase(), radarStateTone(state, fresh, ready));
   text("radar-count", String(latestRadar.target_count ?? targets.length ?? 0));
   text("radar-direction", latestRadar.direction || "BELIRSIZ");
   text(
     "radar-selected",
     selected
-      ? `#${selected.id} ${Math.round(Number(selected.distance_mm || 0) / 10)}cm`
+      ? `#${selected.id} ${radarDistanceLabel(selectedDistance)}`
       : "-"
   );
   text("radar-angle", selectedAngle === null ? "-" : `${selectedAngle > 0 ? "+" : ""}${selectedAngle} deg`);
@@ -774,9 +811,10 @@ function renderRadar(info) {
     : !fresh
       ? age >= 0 ? `Son radar frame ${age}ms once; veri eski sayiliyor.` : "RD-03D verisi bekleniyor."
       : selected
-        ? `Secili hedef x=${selected.x_mm}mm y=${selected.y_mm}mm aci=${selectedAngle ?? "-"}deg hiz=${selected.speed_cms}cm/s`
+        ? `Secili hedef d=${radarDistanceLabel(selectedDistance)} x=${selected.x_mm}mm y=${selected.y_mm}mm aci=${selectedAngle ?? "-"}deg hiz=${selected.speed_cms}cm/s res=${selectedResolution}mm`
         : "Radar taze, hedef yok.";
   text("radar-detail", detail);
+  renderRadarTargets(targets);
   drawRadarMap(latestRadar);
 }
 

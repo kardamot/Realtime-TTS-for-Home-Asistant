@@ -331,6 +331,42 @@ nav a:hover { background: #121a25; color: var(--text); }
   border-radius: 8px;
   background: #0b111a;
 }
+.radar-targets {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.radar-targets.empty {
+  padding: 7px 8px;
+  border: 1px solid rgba(100,169,255,.14);
+  border-radius: 8px;
+  background: rgba(11,17,26,.55);
+}
+.radar-target-row {
+  display: grid;
+  grid-template-columns: .85fr repeat(6,minmax(0,1fr));
+  gap: 6px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 1px solid rgba(100,169,255,.14);
+  border-radius: 8px;
+  background: rgba(11,17,26,.55);
+}
+.radar-target-row.selected {
+  border-color: rgba(48,209,88,.32);
+  background: rgba(48,209,88,.06);
+}
+.radar-target-row b,
+.radar-target-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.radar-target-row b {
+  color: #d7ecff;
+}
 .radar-panel p {
   flex: 0 0 auto;
   min-height: 17px;
@@ -754,6 +790,7 @@ label.wide { grid-column: 1 / -1; }
   .log-panel .log-list { min-height: 260px; }
   .hardware { grid-template-columns: 1fr; }
   .radar-meta { grid-template-columns: 1fr; }
+  .radar-target-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .log-row { grid-template-columns: 72px 50px minmax(0,1fr); }
   .log-row span { display: none; }
   .help-detail-list li { grid-template-columns: 1fr; gap: 4px; }
