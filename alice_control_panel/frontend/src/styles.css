@@ -527,7 +527,8 @@ textarea {
 .prompt-editor {
   min-height: 378px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .log-tools {
@@ -725,4 +726,3 @@ textarea {
     font-size: 13px;
   }
 }
-
