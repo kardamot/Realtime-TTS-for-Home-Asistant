@@ -106,17 +106,33 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .login p, .error { color: #ffc3bf; overflow-wrap: anywhere; }
 
-.metrics { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(96px,1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .metric, .panel {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
 }
-.metric { padding: 13px; background: var(--panel2); }
+.metric { min-height: 72px; padding: 9px 10px; background: var(--panel2); }
 .metric span, .metric small { display: block; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.metric strong { display: block; min-height: 26px; margin-top: 4px; font-size: 18px; overflow-wrap: anywhere; }
-.metric small { margin-top: 2px; font-size: 12px; }
+.metric strong {
+  display: block;
+  min-height: 22px;
+  margin-top: 3px;
+  font-size: 15px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.metric small { margin-top: 1px; font-size: 11px; }
+.metric.compact { min-height: 58px; }
+.metric.compact strong { min-height: 19px; font-size: 14px; }
 
 .grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: var(--dash-gap); align-items: stretch; }
 .span-4 { grid-column: span 4; }
@@ -247,7 +263,6 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 
 .connections-panel,
-.hardware-panel,
 .radar-panel {
   height: var(--side-stack-panel-h);
   min-height: 0;
@@ -278,14 +293,11 @@ nav a:hover { background: #121a25; color: var(--text); }
 .pill.warn { color: #ffe4b6; background: rgba(255,189,84,.12); border: 1px solid rgba(255,189,84,.28); }
 .pill.info { color: #d7ecff; background: rgba(100,169,255,.12); border: 1px solid rgba(100,169,255,.28); }
 
-.kv, .hardware { display: grid; gap: 8px; }
+.kv { display: grid; gap: 8px; }
 .kv div { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; min-height: 32px; border-bottom: 1px solid rgba(38,50,65,.65); align-items: center; }
 .kv div:last-child { border-bottom: 0; }
-.kv span, .hardware span, label span, .transcript span { color: var(--muted); font-size: 12px; }
+.kv span, label span, .transcript span { color: var(--muted); font-size: 12px; }
 .kv b { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hardware { grid-template-columns: repeat(2,minmax(0,1fr)); }
-.hardware div { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
-.hardware b, .hardware span { display: block; overflow-wrap: anywhere; }
 
 .radar-panel {
   display: flex;
@@ -293,8 +305,8 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .radar-meta {
   display: grid;
-  grid-template-columns: repeat(4,minmax(0,1fr));
-  gap: 8px;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 6px;
   flex: 0 0 auto;
 }
 .radar-meta div {
@@ -302,7 +314,7 @@ nav a:hover { background: #121a25; color: var(--text); }
   border: 1px solid rgba(100,169,255,.18);
   border-radius: 8px;
   background: var(--panel2);
-  padding: 8px;
+  padding: 7px;
 }
 .radar-meta span,
 .radar-meta b {
@@ -323,18 +335,18 @@ nav a:hover { background: #121a25; color: var(--text); }
 .radar-map {
   display: block;
   width: 100%;
-  height: 178px;
+  height: 132px;
   flex: 1 1 auto;
-  min-height: 150px;
-  margin-top: 10px;
+  min-height: 112px;
+  margin-top: 8px;
   border: 1px solid rgba(100,169,255,.22);
   border-radius: 8px;
   background: #0b111a;
 }
 .radar-targets {
   display: grid;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 5px;
+  margin-top: 7px;
   color: var(--muted);
   font-size: 11px;
 }
@@ -346,10 +358,10 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .radar-target-row {
   display: grid;
-  grid-template-columns: .85fr repeat(6,minmax(0,1fr));
-  gap: 6px;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 4px 8px;
   align-items: center;
-  padding: 7px 8px;
+  padding: 6px 7px;
   border: 1px solid rgba(100,169,255,.14);
   border-radius: 8px;
   background: rgba(11,17,26,.55);
@@ -370,7 +382,7 @@ nav a:hover { background: #121a25; color: var(--text); }
 .radar-panel p {
   flex: 0 0 auto;
   min-height: 17px;
-  margin: 8px 0 0;
+  margin: 7px 0 0;
   color: var(--muted);
   font-size: 12px;
   overflow: hidden;
@@ -743,11 +755,10 @@ label.wide { grid-column: 1 / -1; }
 .log-row.info b { color: var(--blue); }
 
 @media (max-width: 1180px) {
-  .metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .metrics { grid-template-columns: repeat(auto-fit,minmax(108px,1fr)); }
   .span-4, .span-6, .span-8 { grid-column: span 12; }
   .row-span-2 { grid-row: span 1; }
   .connections-panel,
-  .hardware-panel,
   .radar-panel {
     height: auto;
     min-height: 0;
@@ -785,11 +796,14 @@ label.wide { grid-column: 1 / -1; }
   .workspace { padding: 14px; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .title-logo { display: block; width: 72px; height: 72px; }
-  .metrics, .pipeline, .config-grid, .log-tools { grid-template-columns: 1fr; }
+  .metrics { grid-template-columns: repeat(2,minmax(92px,1fr)); gap: 7px; }
+  .metric { min-height: 58px; padding: 8px; }
+  .metric strong { min-height: 18px; font-size: 13px; }
+  .metric small { font-size: 10px; }
+  .pipeline, .config-grid, .log-tools { grid-template-columns: 1fr; }
   .check-pair { grid-template-columns: 1fr; }
   .log-panel .log-list { min-height: 260px; }
-  .hardware { grid-template-columns: 1fr; }
-  .radar-meta { grid-template-columns: 1fr; }
+  .radar-meta { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .radar-target-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .log-row { grid-template-columns: 72px 50px minmax(0,1fr); }
   .log-row span { display: none; }

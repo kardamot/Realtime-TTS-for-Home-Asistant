@@ -266,7 +266,6 @@ const HELP_DETAIL_TEXTS = {
 const HELP_TARGETS = [
   [".connections-panel > header h2", "connections"],
   ["#logs > header h2", "logs"],
-  [".hardware-panel > header h2", "hardware"],
   ["#radar > header h2", "hardware"],
   ["#pipeline > header h2", "pipeline"],
   ["#commands > header h2", "commands"],
