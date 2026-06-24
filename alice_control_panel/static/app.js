@@ -1,6 +1,6 @@
 const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off", "servo_left", "servo_center",
-  "servo_right", "amp_mute_on", "amp_mute_off", "reconnect", "reboot"
+  "servo_right", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt", "clear_logs",
@@ -11,6 +11,8 @@ const commandLabels = {
   servo_left: "motor left",
   servo_center: "motor stop",
   servo_right: "motor right",
+  radar_calibrate_empty: "radar empty calib",
+  radar_clear_empty: "radar clear calib",
 };
 const RADAR_CALIBRATION_KEY = "alice_radar_tech_calibration_v3";
 let token = localStorage.getItem("alice_panel_token") || "";
@@ -986,6 +988,17 @@ function renderRadar(info) {
   const direction = filtered?.valid
     ? filtered.direction
     : selected ? radarDirectionFromX(selected.x_mm, latestRadar.direction || "BELIRSIZ") : latestRadar.direction || "BELIRSIZ";
+  const radarMeta = [];
+  const confidence = Number(latestRadar.confidence ?? filtered?.confidence ?? 0);
+  const stableFrames = Number(latestRadar.stable_frames ?? filtered?.stable_frames ?? 0);
+  if (ready) radarMeta.push(`guven ${confidence}%`);
+  if (stableFrames > 0) radarMeta.push(`${stableFrames} frame stabil`);
+  if (latestRadar.last_jump_rejected) radarMeta.push("sicrama reddedildi");
+  if (Number(latestRadar.jump_rejects || 0) > 0) radarMeta.push(`${latestRadar.jump_rejects} sicrama red`);
+  if (latestRadar.background_learning) radarMeta.push(`bos oda ogreniyor ${latestRadar.background_samples || 0}`);
+  else if (latestRadar.background_active) radarMeta.push(`arka plan ${latestRadar.background_points || 0} nokta`);
+  if (Number(latestRadar.background_suppressed || 0) > 0) radarMeta.push(`${latestRadar.background_suppressed} arka plan bastirildi`);
+  const metaText = radarMeta.length ? ` | ${radarMeta.join(" | ")}` : "";
   setPill("radar-pill", state.toUpperCase(), radarStateTone(state, fresh, ready));
   text("radar-count", String(latestRadar.target_count ?? rawTargets.length ?? 0));
   text("radar-direction", direction);
@@ -1000,10 +1013,10 @@ function renderRadar(info) {
   const detail = !ready
     ? "RD-03D UART hazir degil."
       : !fresh
-        ? age >= 0 ? `Son radar frame ${age}ms once; veri eski sayiliyor.` : "RD-03D verisi bekleniyor."
+        ? age >= 0 ? `Son radar frame ${age}ms once; veri eski sayiliyor.${metaText}` : `RD-03D verisi bekleniyor.${metaText}`
       : selected
-        ? `Karar d=${radarDistanceLabel(selectedDistance)} x=${filtered?.x_mm ?? selected.x_mm}mm y=${filtered?.y_mm ?? selected.y_mm}mm aci=${selectedAngle ?? "-"}deg | ham x=${rawSelected?.x_mm ?? "-"} y=${rawSelected?.y_mm ?? "-"} res=${selectedResolution}mm`
-        : "Radar taze, hedef yok.";
+        ? `Karar d=${radarDistanceLabel(selectedDistance)} x=${filtered?.x_mm ?? selected.x_mm}mm y=${filtered?.y_mm ?? selected.y_mm}mm aci=${selectedAngle ?? "-"}deg | ham x=${rawSelected?.x_mm ?? "-"} y=${rawSelected?.y_mm ?? "-"} res=${selectedResolution}mm${metaText}`
+        : `Radar taze, hedef yok.${metaText}`;
   text("radar-detail", detail);
   renderRadarTargets(targets);
   latestRadarDraw = { ...latestRadar, targets, ui_filtered: filtered };

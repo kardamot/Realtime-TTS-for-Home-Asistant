@@ -23,6 +23,7 @@ OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 CARTESIA_WS_URL = "wss://api.cartesia.ai/tts/websocket"
 ELEVENLABS_STREAM_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
 GOOGLE_AI_MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+GOOGLE_AI_INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 GOOGLE_CLOUD_SYNTH_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 DEFAULT_PCM_SAMPLE_RATE = 44100
 OPENAI_PCM_SAMPLE_RATE = 24000
@@ -57,7 +58,7 @@ class TtsRelayConfig:
     elevenlabs_output_format: str = "pcm_16000"
     elevenlabs_latency_mode: int = 3
     google_ai_api_key: str = ""
-    google_ai_model: str = "gemini-2.5-flash-preview-tts"
+    google_ai_model: str = "gemini-3.1-flash-tts-preview"
     google_ai_voice_name: str = "Kore"
     google_ai_prompt_prefix: str = ""
     google_cloud_credentials_json: str = ""
@@ -259,6 +260,34 @@ def extract_inline_audio(doc: dict[str, Any], provider: str) -> bytes:
     raise RuntimeError(f"{provider} did not return audio data.")
 
 
+def extract_interaction_audio(doc: dict[str, Any], provider: str) -> bytes:
+    output_audio = doc.get("output_audio")
+    if isinstance(output_audio, dict) and output_audio.get("data"):
+        return decode_audio_b64(str(output_audio["data"]), provider)
+
+    def walk(value: Any) -> str:
+        if isinstance(value, dict):
+            data = value.get("data")
+            value_type = str(value.get("type") or value.get("mime_type") or value.get("mimeType") or "").lower()
+            if isinstance(data, str) and ("audio" in value_type or value.get("audio") is not None):
+                return data
+            for child in value.values():
+                found = walk(child)
+                if found:
+                    return found
+        elif isinstance(value, list):
+            for child in value:
+                found = walk(child)
+                if found:
+                    return found
+        return ""
+
+    audio_b64 = walk(doc)
+    if audio_b64:
+        return decode_audio_b64(audio_b64, provider)
+    raise RuntimeError(f"{provider} did not return interaction audio data.")
+
+
 def strip_wav_header_if_present(audio: bytes) -> tuple[bytes, int | None, int | None]:
     if len(audio) < 44 or audio[:4] != b"RIFF" or audio[8:12] != b"WAVE":
         return audio, None, None
@@ -381,7 +410,7 @@ def relay_config_from_panel(config: dict[str, Any], provider_override: str = "")
         elevenlabs_output_format=str(elevenlabs.get("output_format") or tts.get("elevenlabs_output_format") or "pcm_16000"),
         elevenlabs_latency_mode=int(elevenlabs.get("latency_mode") or tts.get("elevenlabs_latency_mode") or 3),
         google_ai_api_key=str(google_ai.get("api_key") or tts.get("google_ai_api_key") or ""),
-        google_ai_model=str(google_ai.get("model") or tts.get("google_ai_model") or "gemini-2.5-flash-preview-tts"),
+        google_ai_model=str(google_ai.get("model") or tts.get("google_ai_model") or "gemini-3.1-flash-tts-preview"),
         google_ai_voice_name=str(google_ai.get("voice_name") or tts.get("google_ai_voice_name") or "Kore"),
         google_ai_prompt_prefix=str(google_ai.get("prompt_prefix") or tts.get("google_ai_prompt_prefix") or ""),
         google_cloud_credentials_json=str(google_cloud.get("credentials_json") or tts.get("google_cloud_credentials_json") or ""),
@@ -772,17 +801,35 @@ class TtsRelay:
                 },
             },
         }
-        url = GOOGLE_AI_MODEL_URL.format(model=cfg.google_ai_model)
-        params = {"key": cfg.google_ai_api_key}
+        if cfg.google_ai_model.startswith("gemini-3.1-"):
+            payload = {
+                "model": cfg.google_ai_model,
+                "input": prompt,
+                "response_format": {"type": "audio"},
+                "generation_config": {
+                    "speech_config": [
+                        {"voice": cfg.google_ai_voice_name or "Kore"},
+                    ],
+                },
+            }
+            url = GOOGLE_AI_INTERACTIONS_URL
+            params = {}
+            headers = {"x-goog-api-key": cfg.google_ai_api_key}
+            audio_extractor = extract_interaction_audio
+        else:
+            url = GOOGLE_AI_MODEL_URL.format(model=cfg.google_ai_model)
+            params = {"key": cfg.google_ai_api_key}
+            headers = None
+            audio_extractor = extract_inline_audio
         timeout = aiohttp.ClientTimeout(total=90, connect=15, sock_read=90)
         try:
-            async with session.post(url, params=params, json=payload, timeout=timeout) as resp:
+            async with session.post(url, params=params, headers=headers, json=payload, timeout=timeout) as resp:
                 doc = await resp.json(content_type=None)
                 if resp.status != 200:
                     await self._log_bus.emit("ERROR", "TTS", "Google AI TTS failed", {"status": resp.status, "body": str(doc)[:500]})
                     await output.error(f"Google AI TTS error: {str(doc)[:300]}", resp.status)
                     return
-            audio = extract_inline_audio(doc, "Google AI")
+            audio = audio_extractor(doc, "Google AI")
             pcm, wav_rate, wav_channels = strip_wav_header_if_present(audio)
             sample_rate = wav_rate or GOOGLE_AI_PCM_SAMPLE_RATE
             channels = wav_channels or DEFAULT_PCM_CHANNELS

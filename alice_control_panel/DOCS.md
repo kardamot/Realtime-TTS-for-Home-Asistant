@@ -130,7 +130,7 @@ For streaming text providers:
 
 Google provider notes:
 
-- `google_ai` uses a Google AI Studio / Gemini API key. Set `tts.provider` to `google_ai`, `tts.google_ai.api_key`, model `gemini-2.5-flash-preview-tts`, and a voice such as `Kore`, `Zephyr`, or `Aoede`. Gemini TTS returns 24 kHz PCM.
+- `google_ai` uses a Google AI Studio / Gemini API key. Set `tts.provider` to `google_ai`, `tts.google_ai.api_key`, model `gemini-3.1-flash-tts-preview`, and a voice such as `Kore`, `Zephyr`, or `Aoede`. Gemini TTS returns 24 kHz PCM.
 - `google_cloud` uses a Google Cloud service-account JSON. Enable Cloud Text-to-Speech API in that project, paste the full JSON into `tts.google_cloud.credentials_json`, and use a voice such as `tr-TR-Chirp3-HD-Kore`.
 - For ESP playback stability, `tts.esp_initial_buffer_ms` defaults to `1500` and `tts.esp_silence_prefix_ms` defaults to `450`. Increase these if the first second of playback still underruns or crackles.
 
@@ -227,6 +227,8 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.95` preserves Gemini 3.1 Flash TTS selections and routes 3.1 Google AI TTS through the Interactions endpoint.
+- `0.1.94` adds radar jump rejection, continuity confidence, and empty-room calibration commands.
 - `0.1.93` fixes the RD-03D radar X orientation and makes radar tracking updates more responsive.
 - `0.1.92` compacts the Voice Pipeline transcript and realtime timeline so short RT rows do not create unnecessary scrollbars.
 - `0.1.91` keeps the Radar view switch fixed while technical calibration buttons appear to its left.

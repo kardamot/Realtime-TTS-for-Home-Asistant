@@ -41,6 +41,15 @@ DEFAULT_STATUS: dict[str, Any] = {
         "direction": "BELIRSIZ",
         "target_count": 0,
         "selected_target": -1,
+        "confidence": 0,
+        "stable_frames": 0,
+        "jump_rejects": 0,
+        "last_jump_rejected": False,
+        "background_active": False,
+        "background_learning": False,
+        "background_points": 0,
+        "background_samples": 0,
+        "background_suppressed": 0,
         "targets": [],
     },
     "last_seen": None,
@@ -67,10 +76,12 @@ ESP_COMMANDS = {
     "servo_center",
     "amp_mute_on",
     "amp_mute_off",
+    "radar_calibrate_empty",
+    "radar_clear_empty",
     "reconnect",
     "reboot",
 }
-SAFE_MODE_ALLOWED_COMMANDS = {"reconnect"}
+SAFE_MODE_ALLOWED_COMMANDS = {"reconnect", "radar_calibrate_empty", "radar_clear_empty"}
 MIC_CAPTURE_MAX_BYTES = 768 * 1024
 
 

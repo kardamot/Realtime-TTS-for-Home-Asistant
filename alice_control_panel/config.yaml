@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.93"
+version: "0.1.95"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -147,7 +147,7 @@ options:
       latency_mode: 3
     google_ai:
       api_key: ""
-      model: "gemini-2.5-flash-preview-tts"
+      model: "gemini-3.1-flash-tts-preview"
       voice_name: "Kore"
       prompt_prefix: ""
     google_cloud:
