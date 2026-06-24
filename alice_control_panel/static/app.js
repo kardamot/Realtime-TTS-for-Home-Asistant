@@ -12,7 +12,7 @@ const commandLabels = {
   servo_center: "motor stop",
   servo_right: "motor right",
 };
-const RADAR_CALIBRATION_KEY = "alice_radar_tech_calibration";
+const RADAR_CALIBRATION_KEY = "alice_radar_tech_calibration_v3";
 let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
@@ -39,7 +39,7 @@ const RADAR_DIRECTION_DEADZONE_MM = 280;
 const RADAR_DIRECTION_ENTER_MM = 340;
 const RADAR_DIRECTION_EXIT_MM = 190;
 const RADAR_DEFAULT_MAX_Y_MM = 6000;
-const RADAR_UI_FILTER_ALPHA = 0.28;
+const RADAR_UI_FILTER_ALPHA = 0.56;
 const RADAR_UI_RESET_JUMP_MM = 1400;
 const RADAR_UI_RESET_MS = 1800;
 
@@ -566,8 +566,35 @@ function radarApplyCalibrationXY(xMm, yMm) {
   return { x_mm: x, y_mm: y };
 }
 
+function radarNeedsLegacyXFlip(info) {
+  return info?.axis_x_inverted !== true;
+}
+
+function radarApplyBaseXY(info, xMm, yMm) {
+  return {
+    x_mm: radarNeedsLegacyXFlip(info) ? -xMm : xMm,
+    y_mm: yMm,
+  };
+}
+
+function radarNormalizeTarget(info, target) {
+  if (!target) return null;
+  const rawX = radarTargetNumber(target, "x_mm");
+  const rawY = radarTargetY(target);
+  const point = radarApplyBaseXY(info, rawX, rawY);
+  return {
+    ...target,
+    raw_x_mm: rawX,
+    raw_y_mm: rawY,
+    x_mm: point.x_mm,
+    y_mm: point.y_mm,
+    distance_mm: radarTargetDistance(point),
+    angle_deg: radarAngleDeg(point),
+  };
+}
+
 function radarApplyRoomXY(xMm, yMm) {
-  return { x_mm: -xMm, y_mm: yMm };
+  return { x_mm: xMm, y_mm: yMm };
 }
 
 function getDeep(obj, path) {
@@ -932,7 +959,11 @@ function renderRadar(info) {
   const state = String(latestRadar.state || (ready ? "waiting" : "offline"));
   const rawTargets = Array.isArray(latestRadar.targets) ? latestRadar.targets : [];
   const rawSelected = rawTargets.find((target) => target.selected) || rawTargets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
-  const firmwareFiltered = latestRadar.filtered?.valid ? {
+  const normalizedTargets = rawTargets.map((target) => radarNormalizeTarget(latestRadar, target));
+  const selected = rawSelected
+    ? radarNormalizeTarget(latestRadar, rawSelected)
+    : normalizedTargets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
+  const firmwareFilteredRaw = latestRadar.filtered?.valid ? {
     valid: true,
     target_id: latestRadar.filtered.target_id,
     x_mm: radarTargetNumber(latestRadar.filtered, "x_mm"),
@@ -941,10 +972,14 @@ function renderRadar(info) {
     angle_deg: radarAngleDeg(latestRadar.filtered),
     direction: latestRadar.filtered.direction || radarDirectionFromX(radarTargetNumber(latestRadar.filtered, "x_mm")),
   } : null;
-  const filtered = firmwareFiltered || updateRadarUiTrack(rawSelected, fresh);
-  if (filtered?.valid) filtered.direction = filtered.direction || radarDirectionFromX(filtered.x_mm, "BELIRSIZ");
-  const targets = rawTargets;
-  const selected = rawSelected || targets.find((target) => Number(target.id) === Number(latestRadar.selected_target));
+  const rawFiltered = firmwareFilteredRaw || updateRadarUiTrack(rawSelected, fresh);
+  const filtered = rawFiltered?.valid ? {
+    ...radarNormalizeTarget(latestRadar, rawFiltered),
+    valid: true,
+    target_id: rawFiltered.target_id,
+  } : null;
+  if (filtered?.valid) filtered.direction = radarDirectionFromX(filtered.x_mm, rawFiltered?.direction || "BELIRSIZ");
+  const targets = normalizedTargets;
   const selectedAngle = filtered?.valid ? filtered.angle_deg : selected ? radarAngleDeg(selected) : null;
   const selectedDistance = filtered?.valid ? filtered.distance_mm : selected ? radarTargetDistance(selected) : 0;
   const selectedResolution = rawSelected ? (rawSelected.resolution_mm ?? rawSelected.distance_mm ?? 0) : 0;
