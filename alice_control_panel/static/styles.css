@@ -936,15 +936,36 @@ label.wide { grid-column: 1 / -1; }
   .radar-panel header {
     align-items: flex-start;
     flex-direction: column;
+    gap: 8px;
   }
   .radar-header-actions {
     width: 100%;
     justify-content: flex-start;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: 4px;
+    overflow: hidden;
   }
   .radar-tabs,
   .radar-calibration {
+    flex: 1 1 108px;
     grid-auto-columns: 1fr;
+    padding: 2px;
+  }
+  .radar-calibration {
+    flex-basis: 92px;
+  }
+  .radar-tabs button,
+  .radar-calibration button {
+    min-height: 24px;
+    padding: 0 5px;
+    font-size: 10px;
+  }
+  .radar-header-actions .pill {
+    flex: 0 0 auto;
+    min-height: 24px;
+    padding: 2px 7px;
+    font-size: 10px;
+    white-space: nowrap;
   }
   .radar-target-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .radar-target-title {
