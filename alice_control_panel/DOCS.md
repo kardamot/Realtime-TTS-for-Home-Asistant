@@ -227,6 +227,7 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.96` queues radar empty-room calibration safely so the HTTP command path does not touch radar state directly.
 - `0.1.95` preserves Gemini 3.1 Flash TTS selections and routes 3.1 Google AI TTS through the Interactions endpoint.
 - `0.1.94` adds radar jump rejection, continuity confidence, and empty-room calibration commands.
 - `0.1.93` fixes the RD-03D radar X orientation and makes radar tracking updates more responsive.
