@@ -991,7 +991,16 @@ function renderRadar(info) {
   const radarMeta = [];
   const confidence = Number(latestRadar.confidence ?? filtered?.confidence ?? 0);
   const stableFrames = Number(latestRadar.stable_frames ?? filtered?.stable_frames ?? 0);
-  if (ready) radarMeta.push(`guven ${confidence}%`);
+  const frameCount = Number(latestRadar.frame_count || 0);
+  const errorCount = Number(latestRadar.error_count || 0);
+  const hasUartDiag = Object.prototype.hasOwnProperty.call(latestRadar, "uart_bytes");
+  const uartBytes = hasUartDiag ? Number(latestRadar.uart_bytes || 0) : 0;
+  if (ready && (fresh || confidence > 0)) radarMeta.push(`guven ${confidence}%`);
+  if (!fresh || frameCount === 0 || errorCount > 0) {
+    radarMeta.push(hasUartDiag ? `uart ${uartBytes}B` : "uart diag yok");
+    radarMeta.push(`${frameCount} frame`);
+    if (errorCount > 0) radarMeta.push(`${errorCount} hata`);
+  }
   if (stableFrames > 0) radarMeta.push(`${stableFrames} frame stabil`);
   if (latestRadar.last_jump_rejected) radarMeta.push("sicrama reddedildi");
   if (Number(latestRadar.jump_rejects || 0) > 0) radarMeta.push(`${latestRadar.jump_rejects} sicrama red`);
