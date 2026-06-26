@@ -35,6 +35,7 @@ let statusTimer = null;
 let statusRefreshTimer = null;
 let micDebugRefreshTimers = [];
 let micDebug = {};
+let speakerVolumeEditing = false;
 const autoScrollState = new WeakMap();
 let helpPopover = null;
 const RADAR_DIRECTION_DEADZONE_MM = 280;
@@ -677,6 +678,7 @@ async function boot() {
   $("session-start").onclick = () => guard("Session start failed", startVoiceSession);
   $("session-stop").onclick = () => guard("Session stop failed", stopVoiceSession);
   $("response-cancel").onclick = () => guard("Response cancel failed", cancelResponse);
+  initSpeakerVolumeControl();
   $("mic-record-left").onclick = () => guard("Left mic capture failed", () => recordMicDebug("left"));
   $("mic-record-right").onclick = () => guard("Right mic capture failed", () => recordMicDebug("right"));
   $("mic-play-left").onclick = () => guard("Left mic playback failed", () => playMicDebug("left"));
@@ -810,6 +812,7 @@ async function loadStatus() {
   setAutoText("last-error", esp.last_error || esp.last_ws_error || "");
   text("hw-mic", esp.hardware?.mic || "unknown");
   text("hw-speaker", esp.hardware?.speaker || "unknown");
+  updateSpeakerVolumeUi(esp);
   text("hw-radar", esp.hardware?.radar || esp.radar?.state || "unknown");
   text("hw-servo", esp.hardware?.servo_position || "center");
   text("hw-amp", esp.hardware?.amp_muted == null ? "unknown" : esp.hardware.amp_muted ? "muted" : "active");
@@ -834,6 +837,32 @@ function radarStateTone(state, fresh, ready) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function speakerVolumeFromStatus(esp) {
+  const raw = esp.hardware?.speaker_volume_percent ?? esp.hardware?.speaker_volume ?? null;
+  const volume = Number(raw);
+  return Number.isFinite(volume) ? clamp(Math.round(volume), 0, 100) : null;
+}
+
+function updateSpeakerVolumeText(volume, gainQ12 = null) {
+  text("speaker-volume-value", `${volume}%`);
+  const gain = Number(gainQ12);
+  const gainLabel = Number.isFinite(gain) ? `gain Q12 ${gain} (~${(gain / 4096).toFixed(3)}x)` : "gain waiting";
+  text("speaker-volume-meta", `${gainLabel}; 50% = current quiet baseline`);
+}
+
+function updateSpeakerVolumeUi(esp) {
+  const slider = $("speaker-volume-slider");
+  if (!slider) return;
+  const statusVolume = speakerVolumeFromStatus(esp);
+  const gainQ12 = esp.hardware?.speaker_gain_q12;
+  if (statusVolume == null) {
+    if (!speakerVolumeEditing) updateSpeakerVolumeText(Number(slider.value || 50), null);
+    return;
+  }
+  if (!speakerVolumeEditing) slider.value = String(statusVolume);
+  updateSpeakerVolumeText(Number(slider.value || statusVolume), gainQ12);
 }
 
 function radarTargetNumber(target, key) {
@@ -1508,12 +1537,35 @@ function renderButtons() {
   });
 }
 
-async function sendCommand(command) {
-  const result = await api("/api/command", { method: "POST", body: JSON.stringify({ command, payload: {} }) });
+async function sendCommand(command, payload = {}) {
+  const result = await api("/api/command", { method: "POST", body: JSON.stringify({ command, payload }) });
   if (command === "clear_logs") logs = [];
   notice(result.message || `${command} sent`);
   renderLogs({ forceScroll: command === "clear_logs" });
   await loadStatus();
+}
+
+function initSpeakerVolumeControl() {
+  const slider = $("speaker-volume-slider");
+  if (!slider) return;
+  slider.oninput = () => {
+    speakerVolumeEditing = true;
+    updateSpeakerVolumeText(Number(slider.value || 0), latestStatus.esp?.hardware?.speaker_gain_q12);
+  };
+  slider.onchange = () =>
+    guard("Speaker volume failed", async () => {
+      const volume = clamp(Number(slider.value || 0), 0, 100);
+      try {
+        await sendCommand("speaker_volume_set", { volume });
+      } finally {
+        speakerVolumeEditing = false;
+        updateSpeakerVolumeUi(latestStatus.esp || {});
+      }
+    });
+  slider.onblur = () => {
+    speakerVolumeEditing = false;
+    updateSpeakerVolumeUi(latestStatus.esp || {});
+  };
 }
 
 async function recordMicDebug(channel) {

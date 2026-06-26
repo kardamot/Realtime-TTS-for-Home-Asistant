@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.99" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.99" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.100" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.100" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.99" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.100" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.99" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.100" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -165,6 +165,14 @@
           <section id="commands" class="panel span-6 command-panel">
             <header><h2>Command Panel</h2></header>
             <div id="esp-commands" class="commands"></div>
+            <section class="speaker-volume-control">
+              <div class="speaker-volume-head">
+                <b>Speaker volume</b>
+                <span id="speaker-volume-value">50%</span>
+              </div>
+              <input id="speaker-volume-slider" type="range" min="0" max="100" step="1" value="50" />
+              <small id="speaker-volume-meta">Device gain waiting</small>
+            </section>
             <div id="server-commands" class="commands secondary"></div>
             <section class="mic-debug">
               <div class="mic-debug-head">
@@ -429,6 +437,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.99"></script>
+  <script src="/app.js?v=0.1.100"></script>
   </body>
 </html>

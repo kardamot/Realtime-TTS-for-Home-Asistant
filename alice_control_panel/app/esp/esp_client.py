@@ -27,6 +27,8 @@ DEFAULT_STATUS: dict[str, Any] = {
     "hardware": {
         "mic": "unknown",
         "speaker": "unknown",
+        "speaker_volume_percent": None,
+        "speaker_gain_q12": None,
         "radar": "unknown",
         "servo_position": "center",
         "amp_muted": None,
@@ -69,6 +71,7 @@ ESP_COMMANDS = {
     "capture_mic",
     "capture_mic_left",
     "capture_mic_right",
+    "speaker_volume_set",
     "wake_on",
     "wake_off",
     "servo_left",
@@ -81,7 +84,7 @@ ESP_COMMANDS = {
     "reconnect",
     "reboot",
 }
-SAFE_MODE_ALLOWED_COMMANDS = {"reconnect", "radar_calibrate_empty", "radar_clear_empty"}
+SAFE_MODE_ALLOWED_COMMANDS = {"reconnect", "speaker_volume_set", "radar_calibrate_empty", "radar_clear_empty"}
 MIC_CAPTURE_MAX_BYTES = 768 * 1024
 
 

@@ -663,6 +663,46 @@ nav a:hover { background: #121a25; color: var(--text); }
   align-content: start;
   overflow: auto;
 }
+.speaker-volume-control {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(160px, 1fr) minmax(120px, auto);
+  gap: 8px 12px;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-top: 8px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(100,169,255,.18);
+}
+.speaker-volume-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.speaker-volume-head b {
+  min-width: 0;
+  color: #b9dcff;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.speaker-volume-head span {
+  color: #d7fffb;
+  font-size: 14px;
+  font-weight: 900;
+}
+.speaker-volume-control input[type="range"] {
+  padding: 0;
+  accent-color: var(--cyan);
+}
+.speaker-volume-control small {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .command-panel .commands.secondary {
   flex: 0 0 auto;
   grid-template-columns: repeat(auto-fit,minmax(104px,124px));
@@ -906,6 +946,7 @@ label.wide { grid-column: 1 / -1; }
     height: auto;
     min-height: 260px;
   }
+  .speaker-volume-control { grid-template-columns: 1fr; }
   .mic-debug-actions { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .config-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .live-provider-grid { grid-template-columns: 1fr; }
