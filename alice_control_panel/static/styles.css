@@ -898,7 +898,8 @@ button.danger:hover {
 }
 .mic-debug-head b {
   color: #b9dcff;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 800;
 }
 .mic-debug-head span,
 .mic-debug-meta {

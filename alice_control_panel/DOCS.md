@@ -212,14 +212,15 @@ If ESP audio playback support is not implemented yet, the backend logs the failu
 Supported first-pass commands:
 
 ```text
-test_speaker, test_mic, capture_mic, wake_on, wake_off, servo_left, servo_right,
-servo_center, amp_mute_on, amp_mute_off, reconnect, reboot
+test_speaker, test_mic, capture_mic, wake_on, wake_off,
+amp_mute_on, amp_mute_off, radar_calibrate_empty, radar_clear_empty, reconnect, reboot
 ```
 
 Server commands:
 
 ```text
-restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
+restart_stt, restart_tts, reload_prompt, start_voice_session, stop_voice_session,
+cancel_response, safe_mode_on, safe_mode_off
 ```
 
 ## Notes
@@ -227,7 +228,7 @@ restart_stt, restart_tts, reload_prompt, clear_logs, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.104` simplifies the Daily speaker volume row with a wide slider and one mute toggle.
+- `0.1.105` trims Advanced commands and aligns the Mic Debug heading style.
 - `0.1.98` ends empty-room radar calibration even when no radar frames arrive and tightens the mobile radar header controls.
 - `0.1.97` moves ESP panel API JSON buffers off the HTTP task stack to prevent command-triggered stack overflows.
 - `0.1.96` queues radar empty-room calibration safely so the HTTP command path does not touch radar state directly.
