@@ -388,16 +388,16 @@ nav a:hover { background: #121a25; color: var(--text); }
   gap: 3px;
   min-width: 0;
   padding: 3px;
-  border: 1px solid rgba(100,169,255,.16);
-  border-radius: 8px;
-  background: rgba(11,17,26,.58);
+  border: 1px solid rgba(100,169,255,.22);
+  border-radius: 999px;
+  background: rgba(15,21,32,.72);
 }
 .radar-tabs button,
 .radar-calibration button {
   min-height: 26px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
   background: transparent;
   color: #9eabba;
   font-size: 11px;
@@ -405,9 +405,9 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .radar-tabs button.active,
 .radar-calibration button.active {
-  border-color: rgba(200,156,255,.28);
-  background: rgba(100,169,255,.16);
-  color: #e6edf3;
+  background: rgba(57,197,187,.18);
+  color: #d7fffb;
+  box-shadow: 0 0 0 1px rgba(57,197,187,.22) inset;
 }
 .radar-view {
   display: none;
@@ -684,10 +684,23 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .daily-control-grid {
   display: grid;
-  grid-template-columns: minmax(196px, .9fr) minmax(220px, 1.1fr) minmax(160px, .8fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    "audio audio"
+    "drive system";
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
   min-height: 0;
 }
+.drive-card { grid-area: drive; }
+.audio-card {
+  display: grid;
+  grid-area: audio;
+  grid-template-columns: minmax(112px, .48fr) minmax(240px, 1.6fr) minmax(150px, .62fr);
+  gap: 12px;
+  align-items: center;
+}
+.system-card { grid-area: system; }
 .daily-card {
   display: flex;
   flex-direction: column;
@@ -704,6 +717,9 @@ nav a:hover { background: #121a25; color: var(--text); }
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
+}
+.audio-card .daily-card-head {
+  margin-bottom: 0;
 }
 .daily-card-head b {
   color: #d7fffb;
@@ -811,12 +827,13 @@ button.danger:hover {
 }
 .speaker-volume-control {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
+  grid-template-columns: minmax(112px, 150px) minmax(140px, 1fr) minmax(90px, auto);
+  gap: 8px 10px;
+  align-items: center;
   flex: 0 0 auto;
-  margin: 0 0 9px;
-  padding: 0 0 9px;
-  border-bottom: 1px solid rgba(100,169,255,.14);
+  margin: 0;
+  padding: 0;
+  border-bottom: 0;
 }
 .speaker-volume-head {
   display: flex;
@@ -847,6 +864,9 @@ button.danger:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.audio-card .daily-action-grid {
+  grid-template-columns: repeat(2, minmax(0,1fr));
 }
 .command-panel .commands.secondary,
 .command-panel .commands {
@@ -1138,6 +1158,19 @@ label.wide { grid-column: 1 / -1; }
   }
   .daily-control-grid {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "audio"
+      "drive"
+      "system";
+  }
+  .audio-card {
+    display: flex;
+  }
+  .speaker-volume-control {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding-bottom: 9px;
+    border-bottom: 1px solid rgba(100,169,255,.14);
   }
   .drive-card {
     align-items: center;
@@ -1150,30 +1183,30 @@ label.wide { grid-column: 1 / -1; }
     min-height: 210px;
   }
   .radar-panel header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
+    align-items: center;
+    flex-direction: row;
+    gap: 6px;
   }
   .radar-header-actions {
-    width: 100%;
-    justify-content: flex-start;
+    flex: 1 1 auto;
+    justify-content: flex-end;
     flex-wrap: nowrap;
-    gap: 4px;
-    overflow: hidden;
+    gap: 3px;
+    overflow: visible;
   }
   .radar-tabs,
   .radar-calibration {
-    flex: 1 1 108px;
+    flex: 0 1 auto;
     grid-auto-columns: 1fr;
     padding: 2px;
   }
   .radar-calibration {
-    flex-basis: 92px;
+    flex-basis: auto;
   }
   .radar-tabs button,
   .radar-calibration button {
     min-height: 24px;
-    padding: 0 5px;
+    padding: 0 6px;
     font-size: 10px;
   }
   .radar-header-actions .pill {
@@ -1212,4 +1245,23 @@ label.wide { grid-column: 1 / -1; }
     gap: 6px;
   }
   .dpad-btn b { font-size: 9px; }
+  .radar-header-actions {
+    gap: 2px;
+  }
+  .radar-tabs,
+  .radar-calibration {
+    gap: 1px;
+    padding: 1px;
+  }
+  .radar-tabs button,
+  .radar-calibration button {
+    min-height: 22px;
+    padding: 0 4px;
+    font-size: 9px;
+  }
+  .radar-header-actions .pill {
+    min-height: 22px;
+    padding: 1px 5px;
+    font-size: 9px;
+  }
 }

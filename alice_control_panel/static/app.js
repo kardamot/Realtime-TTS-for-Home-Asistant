@@ -1,6 +1,6 @@
 const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
-  "motor_forward", "motor_backward", "motor_left", "motor_stop", "motor_right",
+  "servo_left", "servo_center", "servo_right",
   "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
 const serverCommands = [
@@ -9,11 +9,9 @@ const serverCommands = [
   "safe_mode_on", "safe_mode_off"
 ];
 const commandLabels = {
-  motor_forward: "motor forward",
-  motor_backward: "motor back",
-  motor_left: "motor left",
-  motor_stop: "motor stop",
-  motor_right: "motor right",
+  servo_left: "left pattern",
+  servo_center: "motor stop",
+  servo_right: "right pattern",
   radar_calibrate_empty: "radar empty calib",
   radar_clear_empty: "radar clear calib",
 };
