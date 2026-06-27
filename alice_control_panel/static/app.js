@@ -36,6 +36,13 @@ let statusRefreshTimer = null;
 let micDebugRefreshTimers = [];
 let micDebug = {};
 let speakerVolumeEditing = false;
+const SPEAKER_VOLUME_STORAGE_KEY = "alice_speaker_volume_percent";
+let rememberedSpeakerVolume = Number(localStorage.getItem(SPEAKER_VOLUME_STORAGE_KEY));
+if (!Number.isFinite(rememberedSpeakerVolume) || rememberedSpeakerVolume < 0 || rememberedSpeakerVolume > 100) {
+  rememberedSpeakerVolume = null;
+} else {
+  rememberedSpeakerVolume = Math.round(rememberedSpeakerVolume);
+}
 const autoScrollState = new WeakMap();
 let helpPopover = null;
 const RADAR_DIRECTION_DEADZONE_MM = 280;
@@ -839,30 +846,55 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function speakerVolumeFromStatus(esp) {
-  const raw = esp.hardware?.speaker_volume_percent ?? esp.hardware?.speaker_volume ?? null;
+function normalizeSpeakerVolume(raw) {
+  if (raw == null || raw === "") return null;
   const volume = Number(raw);
   return Number.isFinite(volume) ? clamp(Math.round(volume), 0, 100) : null;
 }
 
-function updateSpeakerVolumeText(volume, gainQ12 = null) {
+function rememberSpeakerVolume(volume) {
+  const normalized = normalizeSpeakerVolume(volume);
+  if (normalized == null) return null;
+  rememberedSpeakerVolume = normalized;
+  localStorage.setItem(SPEAKER_VOLUME_STORAGE_KEY, String(normalized));
+  return normalized;
+}
+
+function speakerVolumeFromStatus(esp) {
+  return normalizeSpeakerVolume(
+    esp.hardware?.speaker_volume_percent ??
+    esp.hardware?.speaker_volume ??
+    esp.speaker_volume_percent ??
+    esp.speaker_volume ??
+    null
+  );
+}
+
+function speakerGainFromStatus(esp) {
+  const gain = Number(esp.hardware?.speaker_gain_q12 ?? esp.speaker_gain_q12 ?? null);
+  return Number.isFinite(gain) ? gain : null;
+}
+
+function updateSpeakerVolumeText(volume, gainQ12 = null, source = "device") {
   text("speaker-volume-value", `${volume}%`);
   const gain = Number(gainQ12);
   const gainLabel = Number.isFinite(gain) ? `gain Q12 ${gain} (~${(gain / 4096).toFixed(3)}x)` : "gain waiting";
-  text("speaker-volume-meta", `${gainLabel}; 50% = current quiet baseline`);
+  const sourceLabel = source === "remembered" ? "last panel value" : "50% = current quiet baseline";
+  text("speaker-volume-meta", `${gainLabel}; ${sourceLabel}`);
 }
 
 function updateSpeakerVolumeUi(esp) {
   const slider = $("speaker-volume-slider");
   if (!slider) return;
   const statusVolume = speakerVolumeFromStatus(esp);
-  const gainQ12 = esp.hardware?.speaker_gain_q12;
-  if (statusVolume == null) {
-    if (!speakerVolumeEditing) updateSpeakerVolumeText(Number(slider.value || 50), null);
-    return;
+  const gainQ12 = speakerGainFromStatus(esp);
+  const source = statusVolume == null ? "remembered" : "device";
+  const displayVolume = statusVolume ?? rememberedSpeakerVolume ?? normalizeSpeakerVolume(slider.value) ?? 50;
+  if (statusVolume != null) {
+    rememberSpeakerVolume(statusVolume);
   }
-  if (!speakerVolumeEditing) slider.value = String(statusVolume);
-  updateSpeakerVolumeText(Number(slider.value || statusVolume), gainQ12);
+  if (!speakerVolumeEditing) slider.value = String(displayVolume);
+  updateSpeakerVolumeText(Number(slider.value || displayVolume), gainQ12, source);
 }
 
 function radarTargetNumber(target, key) {
@@ -1543,6 +1575,7 @@ async function sendCommand(command, payload = {}) {
   notice(result.message || `${command} sent`);
   renderLogs({ forceScroll: command === "clear_logs" });
   await loadStatus();
+  return result;
 }
 
 function initSpeakerVolumeControl() {
@@ -1550,13 +1583,20 @@ function initSpeakerVolumeControl() {
   if (!slider) return;
   slider.oninput = () => {
     speakerVolumeEditing = true;
-    updateSpeakerVolumeText(Number(slider.value || 0), latestStatus.esp?.hardware?.speaker_gain_q12);
+    updateSpeakerVolumeText(Number(slider.value || 0), speakerGainFromStatus(latestStatus.esp || {}));
   };
   slider.onchange = () =>
     guard("Speaker volume failed", async () => {
       const volume = clamp(Number(slider.value || 0), 0, 100);
+      rememberSpeakerVolume(volume);
       try {
-        await sendCommand("speaker_volume_set", { volume });
+        const result = await sendCommand("speaker_volume_set", { volume });
+        rememberSpeakerVolume(
+          result?.response?.volume_percent ??
+          result?.response?.response?.volume_percent ??
+          result?.volume_percent ??
+          volume
+        );
       } finally {
         speakerVolumeEditing = false;
         updateSpeakerVolumeUi(latestStatus.esp || {});
