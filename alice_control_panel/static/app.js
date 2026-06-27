@@ -705,16 +705,14 @@ function initDailyCommandButtons() {
     button.title = command;
   });
   const mute = $("speaker-mute");
-  const unmute = $("speaker-unmute");
   if (mute) {
-    mute.onclick = () => guard("Speaker mute failed", async () => {
-      const current = normalizeSpeakerVolume($("speaker-volume-slider")?.value) ?? rememberedSpeakerVolume ?? 50;
-      rememberSpeakerVolumeBeforeMute(current);
-      await setSpeakerVolume(0);
-    });
-  }
-  if (unmute) {
-    unmute.onclick = () => guard("Speaker unmute failed", async () => {
+    mute.onclick = () => guard("Speaker mute toggle failed", async () => {
+      const current = normalizeSpeakerVolume($("speaker-volume-slider")?.value) ?? speakerVolumeFromStatus(latestStatus.esp || {}) ?? rememberedSpeakerVolume ?? 50;
+      if (current > 0) {
+        rememberSpeakerVolumeBeforeMute(current);
+        await setSpeakerVolume(0);
+        return;
+      }
       const previous = normalizeSpeakerVolume(localStorage.getItem(SPEAKER_VOLUME_BEFORE_MUTE_KEY)) || 50;
       await setSpeakerVolume(previous);
     });
@@ -954,6 +952,14 @@ function updateSpeakerVolumeText(volume, gainQ12 = null, source = "device") {
   const gainLabel = Number.isFinite(gain) ? `gain Q12 ${gain} (~${(gain / 4096).toFixed(3)}x)` : "gain waiting";
   const sourceLabel = source === "remembered" ? "last panel value" : "50% = current quiet baseline";
   text("speaker-volume-meta", `${gainLabel}; ${sourceLabel}`);
+  const mute = $("speaker-mute");
+  if (mute) {
+    const muted = Number(volume) <= 0;
+    mute.classList.toggle("active", muted);
+    mute.setAttribute("aria-pressed", muted ? "true" : "false");
+    mute.textContent = muted ? "Muted" : "Mute";
+    mute.title = muted ? "Restore previous speaker volume" : "Mute speaker";
+  }
 }
 
 function updateSpeakerVolumeUi(esp) {

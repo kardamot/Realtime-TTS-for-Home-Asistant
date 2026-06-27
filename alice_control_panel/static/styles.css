@@ -696,9 +696,8 @@ nav a:hover { background: #121a25; color: var(--text); }
 .audio-card {
   display: grid;
   grid-area: audio;
-  grid-template-columns: minmax(112px, .48fr) minmax(240px, 1.6fr) minmax(150px, .62fr);
-  gap: 12px;
-  align-items: center;
+  gap: 6px;
+  align-content: center;
 }
 .system-card { grid-area: system; }
 .daily-card {
@@ -717,9 +716,6 @@ nav a:hover { background: #121a25; color: var(--text); }
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
-}
-.audio-card .daily-card-head {
-  margin-bottom: 0;
 }
 .daily-card-head b {
   color: #d7fffb;
@@ -827,46 +823,59 @@ button.danger:hover {
 }
 .speaker-volume-control {
   display: grid;
-  grid-template-columns: minmax(112px, 150px) minmax(140px, 1fr) minmax(90px, auto);
-  gap: 8px 10px;
+  grid-template-columns: 54px minmax(0, 1fr) 64px;
+  gap: 10px;
   align-items: center;
   flex: 0 0 auto;
   margin: 0;
   padding: 0;
   border-bottom: 0;
 }
-.speaker-volume-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-}
-.speaker-volume-head b {
-  min-width: 0;
+.speaker-volume-title {
   color: #b9dcff;
   font-size: 13px;
+  font-weight: 900;
   white-space: nowrap;
 }
-.speaker-volume-head span {
+#speaker-volume-value {
   color: #d7fffb;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 900;
+  white-space: nowrap;
 }
 .speaker-volume-control input[type="range"] {
+  width: 100%;
   padding: 0;
   accent-color: var(--cyan);
 }
-.speaker-volume-control small {
-  min-width: 0;
-  color: var(--muted);
+.speaker-mute-toggle {
+  min-height: 26px;
+  padding: 0 8px;
+  border-color: rgba(100,169,255,.22);
+  border-radius: 7px;
+  background: rgba(31,47,72,.82);
+  color: #d7ecff;
   font-size: 11px;
+  font-weight: 800;
+}
+.speaker-mute-toggle:hover {
+  border-color: rgba(57,197,187,.48);
+  background: rgba(37,56,84,.94);
+}
+.speaker-mute-toggle.active {
+  border-color: rgba(255,189,84,.42);
+  background: rgba(87,61,31,.88);
+  color: #ffdfaa;
+  box-shadow: 0 0 0 1px rgba(255,189,84,.18) inset;
+}
+.speaker-volume-meta {
+  min-width: 0;
+  color: rgba(139,154,170,.64);
+  font-size: 10px;
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.audio-card .daily-action-grid {
-  grid-template-columns: repeat(2, minmax(0,1fr));
 }
 .command-panel .commands.secondary,
 .command-panel .commands {
@@ -1164,13 +1173,11 @@ label.wide { grid-column: 1 / -1; }
       "system";
   }
   .audio-card {
-    display: flex;
+    display: grid;
   }
   .speaker-volume-control {
-    grid-template-columns: 1fr;
+    grid-template-columns: 48px minmax(0, 1fr) 62px;
     gap: 8px;
-    padding-bottom: 9px;
-    border-bottom: 1px solid rgba(100,169,255,.14);
   }
   .drive-card {
     align-items: center;
