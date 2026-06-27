@@ -1,6 +1,7 @@
 const espCommands = [
-  "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off", "servo_left", "servo_center",
-  "servo_right", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
+  "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
+  "motor_forward", "motor_backward", "motor_left", "motor_stop", "motor_right",
+  "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt", "clear_logs",
@@ -8,9 +9,11 @@ const serverCommands = [
   "safe_mode_on", "safe_mode_off"
 ];
 const commandLabels = {
-  servo_left: "motor left",
-  servo_center: "motor stop",
-  servo_right: "motor right",
+  motor_forward: "motor forward",
+  motor_backward: "motor back",
+  motor_left: "motor left",
+  motor_stop: "motor stop",
+  motor_right: "motor right",
   radar_calibrate_empty: "radar empty calib",
   radar_clear_empty: "radar clear calib",
 };
@@ -23,6 +26,7 @@ let latestRadar = {};
 let radarUiTrack = { valid: false, direction: "BELIRSIZ" };
 let latestRadarDraw = null;
 let radarView = localStorage.getItem("alice_radar_view") || "tech";
+let commandTab = localStorage.getItem("alice_command_tab") || "daily";
 let radarCalibration = readRadarCalibration();
 let logs = [];
 let paused = false;
@@ -37,6 +41,7 @@ let micDebugRefreshTimers = [];
 let micDebug = {};
 let speakerVolumeEditing = false;
 const SPEAKER_VOLUME_STORAGE_KEY = "alice_speaker_volume_percent";
+const SPEAKER_VOLUME_BEFORE_MUTE_KEY = "alice_speaker_volume_before_mute";
 let rememberedSpeakerVolume = Number(localStorage.getItem(SPEAKER_VOLUME_STORAGE_KEY));
 if (!Number.isFinite(rememberedSpeakerVolume) || rememberedSpeakerVolume < 0 || rememberedSpeakerVolume > 100) {
   rememberedSpeakerVolume = null;
@@ -672,11 +677,59 @@ function initRadarControls() {
   syncRadarControls();
 }
 
+function syncCommandTabs() {
+  if (!["daily", "advanced"].includes(commandTab)) commandTab = "daily";
+  document.querySelectorAll("[data-command-tab]").forEach((button) => {
+    const active = button.dataset.commandTab === commandTab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll("[data-command-panel]").forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.commandPanel === commandTab);
+  });
+}
+
+function initCommandTabs() {
+  document.querySelectorAll("[data-command-tab]").forEach((button) => {
+    button.onclick = () => {
+      commandTab = button.dataset.commandTab || "daily";
+      localStorage.setItem("alice_command_tab", commandTab);
+      syncCommandTabs();
+    };
+  });
+  syncCommandTabs();
+}
+
+function initDailyCommandButtons() {
+  document.querySelectorAll("[data-daily-command]").forEach((button) => {
+    const command = button.dataset.dailyCommand;
+    button.onclick = () => guard("Command failed", () => sendCommand(command));
+    button.title = command;
+  });
+  const mute = $("speaker-mute");
+  const unmute = $("speaker-unmute");
+  if (mute) {
+    mute.onclick = () => guard("Speaker mute failed", async () => {
+      const current = normalizeSpeakerVolume($("speaker-volume-slider")?.value) ?? rememberedSpeakerVolume ?? 50;
+      rememberSpeakerVolumeBeforeMute(current);
+      await setSpeakerVolume(0);
+    });
+  }
+  if (unmute) {
+    unmute.onclick = () => guard("Speaker unmute failed", async () => {
+      const previous = normalizeSpeakerVolume(localStorage.getItem(SPEAKER_VOLUME_BEFORE_MUTE_KEY)) || 50;
+      await setSpeakerVolume(previous);
+    });
+  }
+}
+
 async function boot() {
   initAutoScrollContainers();
   initHelpBubbles();
   initRadarControls();
+  initCommandTabs();
   renderButtons();
+  initDailyCommandButtons();
   initProviderSwitches();
   $("refresh-btn").onclick = () => guard("Refresh failed", loadStatus);
   $("unlock-btn").onclick = () => guard("Unlock failed", unlock);
@@ -858,6 +911,28 @@ function rememberSpeakerVolume(volume) {
   rememberedSpeakerVolume = normalized;
   localStorage.setItem(SPEAKER_VOLUME_STORAGE_KEY, String(normalized));
   return normalized;
+}
+
+function rememberSpeakerVolumeBeforeMute(volume) {
+  const normalized = normalizeSpeakerVolume(volume);
+  if (normalized == null || normalized <= 0) return;
+  localStorage.setItem(SPEAKER_VOLUME_BEFORE_MUTE_KEY, String(normalized));
+}
+
+async function setSpeakerVolume(volume) {
+  const normalized = normalizeSpeakerVolume(volume);
+  if (normalized == null) return;
+  const slider = $("speaker-volume-slider");
+  if (slider) slider.value = String(normalized);
+  rememberSpeakerVolume(normalized);
+  const result = await sendCommand("speaker_volume_set", { volume: normalized });
+  rememberSpeakerVolume(
+    result?.response?.volume_percent ??
+    result?.response?.response?.volume_percent ??
+    result?.volume_percent ??
+    normalized
+  );
+  updateSpeakerVolumeUi(latestStatus.esp || {});
 }
 
 function speakerVolumeFromStatus(esp) {
@@ -1552,11 +1627,12 @@ function renderTimeline(items, latency = {}) {
 }
 
 function renderButtons() {
+  if (!$("esp-commands") || !$("server-commands")) return;
   $("esp-commands").innerHTML = "";
   espCommands.forEach((cmd) => {
     const btn = document.createElement("button");
     btn.textContent = commandLabels[cmd] || cmd.replaceAll("_", " ");
-    btn.title = cmd.startsWith("servo_") ? `${cmd} firmware komutu; N20 motor testi icin kullaniliyor.` : cmd;
+    btn.title = cmd.startsWith("motor_") ? `${cmd} firmware komutu; N20 motor testi icin kullaniliyor.` : cmd;
     btn.onclick = () => guard("Command failed", () => sendCommand(cmd));
     $("esp-commands").appendChild(btn);
   });
@@ -1588,15 +1664,10 @@ function initSpeakerVolumeControl() {
   slider.onchange = () =>
     guard("Speaker volume failed", async () => {
       const volume = clamp(Number(slider.value || 0), 0, 100);
+      if (volume > 0) rememberSpeakerVolumeBeforeMute(volume);
       rememberSpeakerVolume(volume);
       try {
-        const result = await sendCommand("speaker_volume_set", { volume });
-        rememberSpeakerVolume(
-          result?.response?.volume_percent ??
-          result?.response?.response?.volume_percent ??
-          result?.volume_percent ??
-          volume
-        );
+        await setSpeakerVolume(volume);
       } finally {
         speakerVolumeEditing = false;
         updateSpeakerVolumeUi(latestStatus.esp || {});

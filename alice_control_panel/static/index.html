@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.101" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.101" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.102" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.102" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.101" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.102" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.101" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.102" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -163,33 +163,88 @@
           </section>
 
           <section id="commands" class="panel span-6 command-panel">
-            <header><h2>Command Panel</h2></header>
-            <div id="esp-commands" class="commands"></div>
-            <section class="speaker-volume-control">
-              <div class="speaker-volume-head">
-                <b>Speaker volume</b>
-                <span id="speaker-volume-value">50%</span>
+            <header>
+              <h2>Command Panel</h2>
+              <div class="command-tabs" role="tablist" aria-label="Command panel tabs">
+                <button class="active" data-command-tab="daily" type="button">Daily</button>
+                <button data-command-tab="advanced" type="button">Advanced</button>
               </div>
-              <input id="speaker-volume-slider" type="range" min="0" max="100" step="1" value="50" />
-              <small id="speaker-volume-meta">Device gain waiting</small>
-            </section>
-            <div id="server-commands" class="commands secondary"></div>
-            <section class="mic-debug">
-              <div class="mic-debug-head">
-                <b>Mic Debug</b>
-                <span id="mic-debug-status">No debug capture yet</span>
+            </header>
+            <div class="command-tabs-body">
+              <div class="command-tab-panel active" data-command-panel="daily">
+                <div class="daily-control-grid">
+                  <section class="daily-card drive-card">
+                    <div class="daily-card-head">
+                      <b>Drive</b>
+                      <span>N20 quick test</span>
+                    </div>
+                    <div class="dpad" aria-label="Robot drive controls">
+                      <button class="dpad-btn dpad-up" data-daily-command="motor_forward" type="button"><span>&uarr;</span><b>Forward</b></button>
+                      <button class="dpad-btn dpad-left" data-daily-command="motor_left" type="button"><span>&larr;</span><b>Left</b></button>
+                      <button class="dpad-btn dpad-stop" data-daily-command="motor_stop" type="button"><span>&bull;</span><b>Stop</b></button>
+                      <button class="dpad-btn dpad-right" data-daily-command="motor_right" type="button"><span>&rarr;</span><b>Right</b></button>
+                      <button class="dpad-btn dpad-down" data-daily-command="motor_backward" type="button"><span>&darr;</span><b>Back</b></button>
+                    </div>
+                  </section>
+                  <section class="daily-card audio-card">
+                    <div class="daily-card-head">
+                      <b>Audio</b>
+                      <span>volume + mute</span>
+                    </div>
+                    <section class="speaker-volume-control">
+                      <div class="speaker-volume-head">
+                        <b>Speaker volume</b>
+                        <span id="speaker-volume-value">50%</span>
+                      </div>
+                      <input id="speaker-volume-slider" type="range" min="0" max="100" step="1" value="50" />
+                      <small id="speaker-volume-meta">Device gain waiting</small>
+                    </section>
+                    <div class="daily-action-grid">
+                      <button id="speaker-mute" type="button">Mute</button>
+                      <button id="speaker-unmute" type="button">Unmute</button>
+                    </div>
+                  </section>
+                  <section class="daily-card system-card">
+                    <div class="daily-card-head">
+                      <b>System</b>
+                      <span>quick actions</span>
+                    </div>
+                    <div class="daily-action-grid system-actions">
+                      <button data-daily-command="wake_on" type="button">Wake on</button>
+                      <button data-daily-command="wake_off" type="button">Wake off</button>
+                      <button data-daily-command="reconnect" type="button">Reconnect</button>
+                      <button class="danger" data-daily-command="reboot" type="button">Reboot</button>
+                    </div>
+                  </section>
+                </div>
               </div>
-              <div class="mic-debug-actions">
-                <button id="mic-record-left">Record L</button>
-                <button id="mic-record-right">Record R</button>
-                <button id="mic-play-left">Play L</button>
-                <button id="mic-play-right">Play R</button>
-                <button id="mic-download-left">Download L</button>
-                <button id="mic-download-right">Download R</button>
+              <div class="command-tab-panel" data-command-panel="advanced">
+                <div class="advanced-command-section">
+                  <div class="advanced-command-title">ESP commands</div>
+                  <div id="esp-commands" class="commands"></div>
+                </div>
+                <div class="advanced-command-section">
+                  <div class="advanced-command-title">Server maintenance</div>
+                  <div id="server-commands" class="commands secondary"></div>
+                </div>
+                <section class="mic-debug">
+                  <div class="mic-debug-head">
+                    <b>Mic Debug</b>
+                    <span id="mic-debug-status">No debug capture yet</span>
+                  </div>
+                  <div class="mic-debug-actions">
+                    <button id="mic-record-left">Record L</button>
+                    <button id="mic-record-right">Record R</button>
+                    <button id="mic-play-left">Play L</button>
+                    <button id="mic-play-right">Play R</button>
+                    <button id="mic-download-left">Download L</button>
+                    <button id="mic-download-right">Download R</button>
+                  </div>
+                  <audio id="mic-debug-audio" controls preload="none"></audio>
+                  <div id="mic-debug-meta" class="mic-debug-meta">RMS/peak bilgisi kayıt sonrası görünür.</div>
+                </section>
               </div>
-              <audio id="mic-debug-audio" controls preload="none"></audio>
-              <div id="mic-debug-meta" class="mic-debug-meta">RMS/peak bilgisi kayıt sonrası görünür.</div>
-            </section>
+            </div>
           </section>
 
           <section id="prompts" class="panel span-12 prompt-panel">
@@ -437,6 +492,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.101"></script>
+  <script src="/app.js?v=0.1.102"></script>
   </body>
 </html>
