@@ -739,8 +739,7 @@ nav a:hover { background: #121a25; color: var(--text); }
   align-items: center;
 }
 .daily-title-stack {
-  display: grid;
-  gap: 2px;
+  display: block;
 }
 .daily-title-stack small {
   color: var(--muted);
@@ -749,17 +748,22 @@ nav a:hover { background: #121a25; color: var(--text); }
 }
 .dpad {
   display: grid;
-  grid-template-columns: repeat(3, minmax(48px, 1fr));
-  grid-template-rows: repeat(3, minmax(54px, 1fr));
+  grid-template-columns: repeat(3, minmax(58px, 78px));
+  grid-template-rows: repeat(3, minmax(52px, 58px));
+  justify-content: center;
+  align-content: center;
+  align-self: center;
   gap: 7px;
   flex: 1 1 auto;
-  min-height: 176px;
+  width: 100%;
+  max-width: 286px;
+  min-height: 174px;
 }
 .dpad-btn {
   display: grid;
   place-items: center;
   gap: 2px;
-  min-height: 54px;
+  min-height: 52px;
   padding: 6px;
   border: 1px solid rgba(100,169,255,.22);
   border-radius: 999px;
@@ -805,17 +809,17 @@ nav a:hover { background: #121a25; color: var(--text); }
 .drive-tuning {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 10px;
+  gap: 12px;
+  margin-top: 8px;
+  flex: 0 0 auto;
 }
 .drive-tuning label {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
-  padding: 8px;
-  border: 1px solid rgba(100,169,255,.16);
-  border-radius: 7px;
-  background: rgba(9,14,22,.42);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .drive-tuning label span {
   display: flex;
