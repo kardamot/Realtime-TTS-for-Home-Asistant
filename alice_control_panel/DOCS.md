@@ -166,6 +166,7 @@ Expected `GET /api/status` shape:
   "ip": "192.168.1.50",
   "wifi": {"connected": true, "ssid": "home", "rssi": -55},
   "uptime_sec": 1234,
+  "sleep_mode": false,
   "heap_free": 180000,
   "heap_min": 140000,
   "hardware": {
@@ -180,6 +181,9 @@ Expected `GET /api/status` shape:
     "touch_sensor": "ready",
     "touch_sensor_ready": true,
     "touch_sensor_active": false,
+    "sleep_mode": false,
+    "eyes_expression": "NORMAL",
+    "eyes_sleeping": false,
     "errors": []
   }
 }
@@ -237,7 +241,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.114` renames the Daily eyes toggle to clear Sleep/Wake labels.
+- `0.1.115` adds firmware soft sleep mode, deep-sleep eyes, and Sleep/Wake panel control.
 - `0.1.98` ends empty-room radar calibration even when no radar frames arrive and tightens the mobile radar header controls.
 - `0.1.97` moves ESP panel API JSON buffers off the HTTP task stack to prevent command-triggered stack overflows.
 - `0.1.96` queues radar empty-room calibration safely so the HTTP command path does not touch radar state directly.

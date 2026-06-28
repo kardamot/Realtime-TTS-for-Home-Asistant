@@ -22,6 +22,7 @@ DEFAULT_STATUS: dict[str, Any] = {
     "wifi": {"ssid": "", "rssi": None, "connected": False},
     "uptime_sec": 0,
     "state": "OFFLINE",
+    "sleep_mode": False,
     "heap_free": None,
     "heap_min": None,
     "hardware": {
@@ -44,6 +45,7 @@ DEFAULT_STATUS: dict[str, Any] = {
         "touch_sensor_active": None,
         "eyes_expression": "unknown",
         "eyes_sleeping": None,
+        "sleep_mode": None,
         "errors": [],
     },
     "radar": {
@@ -98,6 +100,8 @@ ESP_COMMANDS = {
     "motor_stop",
     "wake_on",
     "wake_off",
+    "sleep_mode_on",
+    "sleep_mode_off",
     "eyes_sleep_on",
     "eyes_sleep_off",
     "servo_left",
@@ -121,6 +125,8 @@ SAFE_MODE_ALLOWED_COMMANDS = {
     "lift_reactions_off",
     "radar_calibrate_empty",
     "radar_clear_empty",
+    "sleep_mode_on",
+    "sleep_mode_off",
     "eyes_sleep_on",
     "eyes_sleep_off",
 }

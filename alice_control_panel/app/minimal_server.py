@@ -351,7 +351,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.114"
+    server_version = "AliceControlPanel/0.1.115"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -512,7 +512,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-                "version": "0.1.114",
+                "version": "0.1.115",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
@@ -536,6 +536,7 @@ def esp_status() -> dict:
         "wifi": {"ssid": "", "rssi": None, "connected": False},
         "uptime_sec": 0,
         "state": "OFFLINE",
+        "sleep_mode": False,
         "heap_free": None,
         "heap_min": None,
         "hardware": {
@@ -552,6 +553,7 @@ def esp_status() -> dict:
             "touch_sensor_active": None,
             "eyes_expression": "unknown",
             "eyes_sleeping": None,
+            "sleep_mode": None,
             "errors": [],
         },
         "last_seen": None,

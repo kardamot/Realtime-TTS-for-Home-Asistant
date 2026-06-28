@@ -47,7 +47,7 @@ const DAILY_TOGGLE_LABELS = {
   touch_reactions: { on: "Touch on", off: "Touch off" },
   lift_reactions: { on: "Lift on", off: "Lift off" },
   wake: { on: "Wake on", off: "Wake off" },
-  eyes_sleep: { on: "Wake eyes", off: "Sleep eyes" },
+  sleep_mode: { on: "Wake", off: "Sleep" },
 };
 let rememberedSpeakerVolume = Number(localStorage.getItem(SPEAKER_VOLUME_STORAGE_KEY));
 if (!Number.isFinite(rememberedSpeakerVolume) || rememberedSpeakerVolume < 0 || rememberedSpeakerVolume > 100) {
@@ -1122,7 +1122,7 @@ function syncDailyBehaviorButtons(esp, pipe = {}) {
   setDailyToggleState("follow_up", hw.follow_up_enabled);
   setDailyToggleState("touch_reactions", hw.touch_reactions_enabled);
   setDailyToggleState("lift_reactions", hw.lift_reactions_enabled);
-  setDailyToggleState("eyes_sleep", hw.eyes_sleeping);
+  setDailyToggleState("sleep_mode", esp?.sleep_mode ?? hw.sleep_mode ?? hw.eyes_sleeping);
 }
 
 function radarTargetNumber(target, key) {
