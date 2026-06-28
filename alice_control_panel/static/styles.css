@@ -109,8 +109,8 @@ nav a:hover { background: #121a25; color: var(--text); }
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit,minmax(96px,1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit,minmax(82px,1fr));
+  gap: 7px;
   margin-bottom: 12px;
 }
 .metric, .panel {
@@ -132,8 +132,22 @@ nav a:hover { background: #121a25; color: var(--text); }
   white-space: nowrap;
 }
 .metric small { margin-top: 1px; font-size: 11px; }
-.metric.compact { min-height: 58px; }
-.metric.compact strong { min-height: 19px; font-size: 14px; }
+.metric.compact {
+  display: grid;
+  align-content: center;
+  min-height: 52px;
+  padding: 7px 6px;
+  text-align: center;
+}
+.metric.compact span {
+  font-size: 12px;
+}
+.metric.compact strong {
+  min-height: 17px;
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 1.18;
+}
 
 .grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: var(--dash-gap); align-items: stretch; }
 .span-4 { grid-column: span 4; }
@@ -1198,7 +1212,7 @@ label.wide { grid-column: 1 / -1; }
 .log-row.info b { color: var(--blue); }
 
 @media (max-width: 1180px) {
-  .metrics { grid-template-columns: repeat(auto-fit,minmax(108px,1fr)); }
+  .metrics { grid-template-columns: repeat(auto-fit,minmax(76px,1fr)); gap: 6px; }
   .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
   .row-span-2 { grid-row: span 1; }
   .connections-panel,
@@ -1246,10 +1260,28 @@ label.wide { grid-column: 1 / -1; }
   .workspace { padding: 14px; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .title-logo { display: block; width: 72px; height: 72px; }
-  .metrics { grid-template-columns: repeat(2,minmax(92px,1fr)); gap: 7px; }
-  .metric { min-height: 58px; padding: 8px; }
-  .metric strong { min-height: 18px; font-size: 13px; }
-  .metric small { font-size: 10px; }
+  .metrics { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; }
+  .metric {
+    min-height: 50px;
+    padding: 6px 5px;
+    text-align: center;
+  }
+  .metric span { font-size: 11px; }
+  .metric strong {
+    min-height: 16px;
+    margin-top: 1px;
+    font-size: 12px;
+    line-height: 1.16;
+  }
+  .metric small { font-size: 9px; }
+  .metric.compact {
+    min-height: 46px;
+    padding: 5px 4px;
+  }
+  .metric.compact span,
+  .metric.compact strong {
+    font-size: 10px;
+  }
   .pipeline, .config-grid, .log-tools { grid-template-columns: 1fr; }
   .check-pair { grid-template-columns: 1fr; }
   .log-panel .log-list { min-height: 260px; }
