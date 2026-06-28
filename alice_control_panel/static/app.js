@@ -966,6 +966,8 @@ async function loadStatus() {
   text("hw-speaker", esp.hardware?.speaker || "unknown");
   updateSpeakerVolumeUi(esp);
   text("hw-radar", esp.hardware?.radar || esp.radar?.state || "unknown");
+  text("hw-motion", formatMotionSensor(esp.hardware || {}));
+  text("hw-touch", formatTouchSensor(esp.hardware || {}));
   text("hw-servo", esp.hardware?.servo_position || "center");
   text("hw-amp", esp.hardware?.amp_muted == null ? "unknown" : esp.hardware.amp_muted ? "muted" : "active");
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");
@@ -978,6 +980,24 @@ async function loadStatus() {
   renderMicDebug(pipe.mic_debug || {});
   renderTimeline(pipe.timeline || [], realtime.latency || {});
   if (!configDirty) fillConfig();
+}
+
+function formatMotionSensor(hw) {
+  if (hw.motion_sensor_present === false || hw.motion_sensor === "missing") return "missing";
+  if (hw.motion_sensor_ready === false || hw.motion_sensor === "not_ready") return "not ready";
+  if (hw.motion_sensor_ready === true || hw.motion_sensor === "ready") {
+    return hw.lift_reactions_enabled === false ? "ready / off" : "active";
+  }
+  return hw.motion_sensor || "unknown";
+}
+
+function formatTouchSensor(hw) {
+  if (hw.touch_sensor_active === true || hw.touch_sensor === "touching") return "touching";
+  if (hw.touch_sensor_ready === false || hw.touch_sensor === "not_ready") return "not ready";
+  if (hw.touch_sensor_ready === true || hw.touch_sensor === "ready") {
+    return hw.touch_reactions_enabled === false ? "ready / off" : "active";
+  }
+  return hw.touch_sensor || "unknown";
 }
 
 function radarStateTone(state, fresh, ready) {

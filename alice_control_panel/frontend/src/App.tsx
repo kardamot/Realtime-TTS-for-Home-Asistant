@@ -130,6 +130,24 @@ function Metric({ label, value, sub }: { label: string; value: ReactNode; sub?: 
   );
 }
 
+function formatMotionSensor(hw: AnyRecord = {}) {
+  if (hw.motion_sensor_present === false || hw.motion_sensor === "missing") return "missing";
+  if (hw.motion_sensor_ready === false || hw.motion_sensor === "not_ready") return "not ready";
+  if (hw.motion_sensor_ready === true || hw.motion_sensor === "ready") {
+    return hw.lift_reactions_enabled === false ? "ready / off" : "active";
+  }
+  return hw.motion_sensor || "unknown";
+}
+
+function formatTouchSensor(hw: AnyRecord = {}) {
+  if (hw.touch_sensor_active === true || hw.touch_sensor === "touching") return "touching";
+  if (hw.touch_sensor_ready === false || hw.touch_sensor === "not_ready") return "not ready";
+  if (hw.touch_sensor_ready === true || hw.touch_sensor === "ready") {
+    return hw.touch_reactions_enabled === false ? "ready / off" : "active";
+  }
+  return hw.touch_sensor || "unknown";
+}
+
 function Field({
   label,
   children,
@@ -445,6 +463,8 @@ function App() {
             <div className="hardware-grid">
               <Metric label="Mic" value={esp.hardware?.mic || "unknown"} />
               <Metric label="Speaker" value={esp.hardware?.speaker || "unknown"} />
+              <Metric label="Motion" value={formatMotionSensor(esp.hardware)} />
+              <Metric label="Touch" value={formatTouchSensor(esp.hardware)} />
               <Metric label="Servo" value={esp.hardware?.servo_position || "center"} />
               <Metric label="Amp" value={esp.hardware?.amp_muted == null ? "unknown" : esp.hardware?.amp_muted ? "muted" : "active"} />
               <Metric label="Wake" value={esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware?.wake_enabled ? "on" : "off"} />

@@ -36,6 +36,12 @@ DEFAULT_STATUS: dict[str, Any] = {
         "follow_up_enabled": None,
         "touch_reactions_enabled": None,
         "lift_reactions_enabled": None,
+        "motion_sensor": "unknown",
+        "motion_sensor_present": None,
+        "motion_sensor_ready": None,
+        "touch_sensor": "unknown",
+        "touch_sensor_ready": None,
+        "touch_sensor_active": None,
         "errors": [],
     },
     "radar": {
