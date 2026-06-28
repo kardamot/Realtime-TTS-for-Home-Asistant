@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.107" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.107" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.108" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.108" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.107" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.108" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.107" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.108" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -184,6 +184,17 @@
                       <button class="dpad-btn dpad-stop" data-daily-command="motor_stop" type="button"><span>&bull;</span><b>Stop</b></button>
                       <button class="dpad-btn dpad-right" data-daily-command="motor_right" type="button"><span>&rarr;</span><b>Right</b></button>
                       <button class="dpad-btn dpad-down" data-daily-command="motor_backward" type="button"><span>&darr;</span><b>Back</b></button>
+                    </div>
+                    <div class="drive-tuning">
+                      <label>
+                        <span>Speed <b id="drive-speed-label">Normal</b></span>
+                        <input id="drive-speed" type="range" min="0" max="2" step="1" value="1" />
+                      </label>
+                      <label>
+                        <span>Step <b id="drive-step-label">Medium</b></span>
+                        <input id="drive-step" type="range" min="0" max="2" step="1" value="1" />
+                      </label>
+                      <button id="motion-lock" class="motion-lock-toggle" type="button" aria-pressed="false">Motion lock off</button>
                     </div>
                   </section>
                   <section class="daily-card audio-card">
@@ -486,6 +497,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.107"></script>
+  <script src="/app.js?v=0.1.108"></script>
   </body>
 </html>

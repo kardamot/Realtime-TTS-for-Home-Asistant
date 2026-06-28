@@ -688,18 +688,24 @@ nav a:hover { background: #121a25; color: var(--text); }
   grid-template-areas:
     "audio audio"
     "drive controls";
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(286px, 1fr);
   gap: 10px;
   min-height: 0;
 }
-.drive-card { grid-area: drive; }
+.drive-card {
+  grid-area: drive;
+  justify-content: space-between;
+}
 .audio-card {
   display: grid;
   grid-area: audio;
   gap: 6px;
   align-content: center;
 }
-.controls-card { grid-area: controls; }
+.controls-card {
+  grid-area: controls;
+  justify-content: space-between;
+}
 .daily-card {
   display: flex;
   flex-direction: column;
@@ -732,16 +738,16 @@ nav a:hover { background: #121a25; color: var(--text); }
 .dpad {
   display: grid;
   grid-template-columns: repeat(3, minmax(48px, 1fr));
-  grid-template-rows: repeat(3, minmax(48px, 1fr));
+  grid-template-rows: repeat(3, minmax(54px, 1fr));
   gap: 7px;
   flex: 1 1 auto;
-  min-height: 156px;
+  min-height: 176px;
 }
 .dpad-btn {
   display: grid;
   place-items: center;
   gap: 2px;
-  min-height: 48px;
+  min-height: 54px;
   padding: 6px;
   border: 1px solid rgba(100,169,255,.22);
   border-radius: 999px;
@@ -750,6 +756,14 @@ nav a:hover { background: #121a25; color: var(--text); }
 .dpad-btn:hover {
   border-color: rgba(57,197,187,.55);
   background: linear-gradient(180deg, rgba(43,61,89,1), rgba(32,48,70,1));
+}
+.drive-card.motion-locked .dpad-btn:not(.dpad-stop) {
+  opacity: .46;
+  filter: grayscale(.25);
+}
+.drive-card.motion-locked .dpad-btn:not(.dpad-stop):hover {
+  border-color: rgba(100,169,255,.22);
+  background: linear-gradient(180deg, rgba(34,48,71,1), rgba(28,39,58,1));
 }
 .dpad-btn span {
   color: #d7fffb;
@@ -770,18 +784,69 @@ nav a:hover { background: #121a25; color: var(--text); }
 .dpad-stop {
   grid-column: 2;
   grid-row: 2;
-  border-color: rgba(255,189,84,.36);
+  border-color: rgba(255,189,84,.68);
   background: linear-gradient(180deg, rgba(80,58,34,.9), rgba(56,43,31,.95));
+  box-shadow: 0 0 0 1px rgba(255,189,84,.16) inset, 0 12px 24px rgba(0,0,0,.18);
 }
 .dpad-right { grid-column: 3; grid-row: 2; }
 .dpad-down { grid-column: 2; grid-row: 3; }
+.drive-tuning {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.drive-tuning label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(100,169,255,.16);
+  border-radius: 7px;
+  background: rgba(9,14,22,.42);
+}
+.drive-tuning label span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #9db8d8;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.drive-tuning label b {
+  color: #d7fffb;
+  font-size: 10px;
+  text-transform: none;
+}
+.drive-tuning input[type="range"] {
+  width: 100%;
+  padding: 0;
+  accent-color: var(--cyan);
+}
+.motion-lock-toggle {
+  grid-column: 1 / -1;
+  min-height: 36px;
+  border-color: rgba(100,169,255,.24);
+  background: rgba(31,47,72,.82);
+  color: #d7ecff;
+  font-size: 11px;
+  font-weight: 900;
+}
+.motion-lock-toggle.active {
+  border-color: rgba(255,189,84,.55);
+  background: rgba(87,61,31,.88);
+  color: #ffdfaa;
+  box-shadow: 0 0 0 1px rgba(255,189,84,.16) inset;
+}
 .daily-action-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0,1fr));
   gap: 7px;
 }
 .daily-action-grid button {
-  min-height: 34px;
+  min-height: 38px;
   padding: 0 9px;
   font-size: 12px;
 }
@@ -792,11 +857,12 @@ nav a:hover { background: #121a25; color: var(--text); }
   box-shadow: 0 0 0 1px rgba(57,197,187,.18) inset;
 }
 .compact-actions {
-  grid-template-columns: repeat(3, minmax(0,1fr));
-  align-content: start;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  align-content: stretch;
+  flex: 1 1 auto;
 }
 .compact-actions button {
-  min-height: 30px;
+  min-height: 40px;
   font-size: 11px;
 }
 .daily-action-grid .danger,
@@ -1183,6 +1249,7 @@ label.wide { grid-column: 1 / -1; }
       "audio"
       "drive"
       "controls";
+    grid-template-rows: auto auto auto;
   }
   .audio-card {
     display: grid;
@@ -1198,6 +1265,9 @@ label.wide { grid-column: 1 / -1; }
     align-items: center;
   }
   .drive-card .daily-card-head {
+    width: 100%;
+  }
+  .drive-tuning {
     width: 100%;
   }
   .dpad {

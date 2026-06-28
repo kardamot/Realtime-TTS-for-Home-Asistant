@@ -36,6 +36,11 @@ let micDebug = {};
 let speakerVolumeEditing = false;
 const SPEAKER_VOLUME_STORAGE_KEY = "alice_speaker_volume_percent";
 const SPEAKER_VOLUME_BEFORE_MUTE_KEY = "alice_speaker_volume_before_mute";
+const DRIVE_SPEED_KEY = "alice_drive_speed_index";
+const DRIVE_STEP_KEY = "alice_drive_step_index";
+const MOTION_LOCK_KEY = "alice_motion_lock";
+const DRIVE_SPEED_LABELS = ["Slow", "Normal", "Fast"];
+const DRIVE_STEP_LABELS = ["Short", "Medium", "Long"];
 const DAILY_TOGGLE_LABELS = {
   listen: { on: "Stop listening", off: "Start listening" },
   follow_up: { on: "Follow-up on", off: "Follow-up off" },
@@ -49,6 +54,9 @@ if (!Number.isFinite(rememberedSpeakerVolume) || rememberedSpeakerVolume < 0 || 
 } else {
   rememberedSpeakerVolume = Math.round(rememberedSpeakerVolume);
 }
+let driveSpeedIndex = readStoredIndex(DRIVE_SPEED_KEY, 1);
+let driveStepIndex = readStoredIndex(DRIVE_STEP_KEY, 1);
+let motionLocked = localStorage.getItem(MOTION_LOCK_KEY) === "1";
 const autoScrollState = new WeakMap();
 let helpPopover = null;
 const RADAR_DIRECTION_DEADZONE_MM = 280;
@@ -701,10 +709,88 @@ function initCommandTabs() {
   syncCommandTabs();
 }
 
+function readStoredIndex(key, fallback) {
+  const value = Number(localStorage.getItem(key));
+  return Number.isFinite(value) ? Math.max(0, Math.min(2, Math.round(value))) : fallback;
+}
+
+function syncDriveControls() {
+  const speed = $("drive-speed");
+  const step = $("drive-step");
+  const lock = $("motion-lock");
+  const driveCard = document.querySelector(".drive-card");
+  if (speed) speed.value = String(driveSpeedIndex);
+  if (step) step.value = String(driveStepIndex);
+  text("drive-speed-label", DRIVE_SPEED_LABELS[driveSpeedIndex] || DRIVE_SPEED_LABELS[1]);
+  text("drive-step-label", DRIVE_STEP_LABELS[driveStepIndex] || DRIVE_STEP_LABELS[1]);
+  if (driveCard) driveCard.classList.toggle("motion-locked", motionLocked);
+  if (lock) {
+    lock.classList.toggle("active", motionLocked);
+    lock.setAttribute("aria-pressed", motionLocked ? "true" : "false");
+    lock.textContent = motionLocked ? "Motion locked" : "Motion lock off";
+    lock.title = motionLocked ? "Panel drive commands are blocked" : "Panel drive commands are allowed";
+  }
+}
+
+function initDriveControls() {
+  const speed = $("drive-speed");
+  const step = $("drive-step");
+  const lock = $("motion-lock");
+  if (speed) {
+    speed.oninput = () => {
+      driveSpeedIndex = readStoredIndexFromValue(speed.value, 1);
+      localStorage.setItem(DRIVE_SPEED_KEY, String(driveSpeedIndex));
+      syncDriveControls();
+    };
+  }
+  if (step) {
+    step.oninput = () => {
+      driveStepIndex = readStoredIndexFromValue(step.value, 1);
+      localStorage.setItem(DRIVE_STEP_KEY, String(driveStepIndex));
+      syncDriveControls();
+    };
+  }
+  if (lock) {
+    lock.onclick = () => {
+      motionLocked = !motionLocked;
+      localStorage.setItem(MOTION_LOCK_KEY, motionLocked ? "1" : "0");
+      syncDriveControls();
+    };
+  }
+  syncDriveControls();
+}
+
+function readStoredIndexFromValue(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(2, Math.round(parsed))) : fallback;
+}
+
+function isDriveMoveCommand(command) {
+  return ["motor_forward", "motor_backward", "motor_left", "motor_right"].includes(command);
+}
+
+function driveCommandPayload() {
+  return {
+    speed_index: driveSpeedIndex,
+    speed: DRIVE_SPEED_LABELS[driveSpeedIndex]?.toLowerCase() || "normal",
+    step_index: driveStepIndex,
+    step: DRIVE_STEP_LABELS[driveStepIndex]?.toLowerCase() || "medium",
+  };
+}
+
 function initDailyCommandButtons() {
   document.querySelectorAll("[data-daily-command]").forEach((button) => {
     const command = button.dataset.dailyCommand;
-    button.onclick = () => guard("Command failed", () => sendCommand(command));
+    button.onclick = () => guard("Command failed", () => {
+      if (isDriveMoveCommand(command)) {
+        if (motionLocked) {
+          notice("Motion lock is on; unlock Drive before moving.");
+          return null;
+        }
+        return sendCommand(command, driveCommandPayload());
+      }
+      return sendCommand(command);
+    });
     button.title = command;
   });
   document.querySelectorAll("[data-daily-toggle]").forEach((button) => {
@@ -733,6 +819,7 @@ async function boot() {
   initHelpBubbles();
   initRadarControls();
   initCommandTabs();
+  initDriveControls();
   renderButtons();
   initDailyCommandButtons();
   initProviderSwitches();
