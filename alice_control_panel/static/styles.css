@@ -687,10 +687,8 @@ nav a:hover { background: #121a25; color: var(--text); }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-areas:
     "audio audio"
-    "drive voice"
-    "drive reactions"
-    "drive system";
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+    "drive controls";
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
   min-height: 0;
 }
@@ -701,9 +699,7 @@ nav a:hover { background: #121a25; color: var(--text); }
   gap: 6px;
   align-content: center;
 }
-.system-card { grid-area: system; }
-.voice-card { grid-area: voice; }
-.reactions-card { grid-area: reactions; }
+.controls-card { grid-area: controls; }
 .daily-card {
   display: flex;
   flex-direction: column;
@@ -795,7 +791,11 @@ nav a:hover { background: #121a25; color: var(--text); }
   color: #d7fffb;
   box-shadow: 0 0 0 1px rgba(57,197,187,.18) inset;
 }
-.behavior-actions button {
+.compact-actions {
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  align-content: start;
+}
+.compact-actions button {
   min-height: 30px;
   font-size: 11px;
 }
@@ -806,9 +806,6 @@ button.danger {
 .daily-action-grid .danger:hover,
 button.danger:hover {
   background: rgba(160,55,58,.95);
-}
-.system-actions {
-  margin-top: auto;
 }
 .commands {
   display: grid;
@@ -1185,9 +1182,7 @@ label.wide { grid-column: 1 / -1; }
     grid-template-areas:
       "audio"
       "drive"
-      "voice"
-      "reactions"
-      "system";
+      "controls";
   }
   .audio-card {
     display: grid;
@@ -1195,6 +1190,9 @@ label.wide { grid-column: 1 / -1; }
   .speaker-volume-control {
     grid-template-columns: 48px minmax(0, 1fr) 62px;
     gap: 8px;
+  }
+  .compact-actions {
+    grid-template-columns: repeat(2,minmax(0,1fr));
   }
   .drive-card {
     align-items: center;

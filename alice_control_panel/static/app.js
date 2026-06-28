@@ -36,6 +36,13 @@ let micDebug = {};
 let speakerVolumeEditing = false;
 const SPEAKER_VOLUME_STORAGE_KEY = "alice_speaker_volume_percent";
 const SPEAKER_VOLUME_BEFORE_MUTE_KEY = "alice_speaker_volume_before_mute";
+const DAILY_TOGGLE_LABELS = {
+  listen: { on: "Stop listening", off: "Start listening" },
+  follow_up: { on: "Follow-up on", off: "Follow-up off" },
+  touch_reactions: { on: "Touch on", off: "Touch off" },
+  lift_reactions: { on: "Lift on", off: "Lift off" },
+  wake: { on: "Wake on", off: "Wake off" },
+};
 let rememberedSpeakerVolume = Number(localStorage.getItem(SPEAKER_VOLUME_STORAGE_KEY));
 if (!Number.isFinite(rememberedSpeakerVolume) || rememberedSpeakerVolume < 0 || rememberedSpeakerVolume > 100) {
   rememberedSpeakerVolume = null;
@@ -700,6 +707,12 @@ function initDailyCommandButtons() {
     button.onclick = () => guard("Command failed", () => sendCommand(command));
     button.title = command;
   });
+  document.querySelectorAll("[data-daily-toggle]").forEach((button) => {
+    button.onclick = () => guard("Command failed", () => {
+      const command = button.dataset.currentCommand || button.dataset.onCommand;
+      return sendCommand(command);
+    });
+  });
   const mute = $("speaker-mute");
   if (mute) {
     mute.onclick = () => guard("Speaker mute toggle failed", async () => {
@@ -980,25 +993,27 @@ function setDailyCommandActive(command, active) {
   });
 }
 
-function setDailyCommandPair(onCommand, offCommand, enabled) {
-  if (enabled == null) {
-    setDailyCommandActive(onCommand, false);
-    setDailyCommandActive(offCommand, false);
-    return;
-  }
-  setDailyCommandActive(onCommand, Boolean(enabled));
-  setDailyCommandActive(offCommand, !enabled);
+function setDailyToggleState(key, enabled) {
+  const labels = DAILY_TOGGLE_LABELS[key] || { on: key, off: key };
+  document.querySelectorAll(`[data-daily-toggle="${key}"]`).forEach((button) => {
+    const known = enabled != null;
+    const active = Boolean(enabled);
+    button.classList.toggle("active", known && active);
+    button.setAttribute("aria-pressed", known && active ? "true" : "false");
+    button.dataset.currentCommand = active ? button.dataset.offCommand : button.dataset.onCommand;
+    button.textContent = active ? labels.on : labels.off;
+    button.title = active ? button.dataset.offCommand : button.dataset.onCommand;
+  });
 }
 
 function syncDailyBehaviorButtons(esp, pipe = {}) {
   const hw = esp?.hardware || {};
-  setDailyCommandPair("wake_on", "wake_off", hw.wake_enabled);
-  setDailyCommandPair("follow_up_on", "follow_up_off", hw.follow_up_enabled);
-  setDailyCommandPair("touch_reactions_on", "touch_reactions_off", hw.touch_reactions_enabled);
-  setDailyCommandPair("lift_reactions_on", "lift_reactions_off", hw.lift_reactions_enabled);
   const listening = Boolean(pipe?.session?.active || pipe?.live_mic?.clients || String(esp?.hardware?.mic || "").includes("streaming"));
-  setDailyCommandActive("listen_start", false);
-  setDailyCommandActive("listen_stop", listening);
+  setDailyToggleState("listen", listening);
+  setDailyToggleState("wake", hw.wake_enabled);
+  setDailyToggleState("follow_up", hw.follow_up_enabled);
+  setDailyToggleState("touch_reactions", hw.touch_reactions_enabled);
+  setDailyToggleState("lift_reactions", hw.lift_reactions_enabled);
 }
 
 function radarTargetNumber(target, key) {

@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.106" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.106" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.107" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.107" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.106" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.107" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.106" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.107" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -195,38 +195,17 @@
                     </section>
                     <small id="speaker-volume-meta" class="speaker-volume-meta">Device gain waiting</small>
                   </section>
-                  <section class="daily-card voice-card">
+                  <section class="daily-card controls-card">
                     <div class="daily-card-head">
-                      <b>Voice</b>
-                      <span>listening flow</span>
+                      <b>Controls</b>
+                      <span>voice + reactions</span>
                     </div>
-                    <div class="daily-action-grid behavior-actions">
-                      <button data-daily-command="listen_start" type="button">Start listening</button>
-                      <button data-daily-command="listen_stop" type="button">Stop listening</button>
-                      <button data-daily-command="follow_up_on" type="button">Follow-up on</button>
-                      <button data-daily-command="follow_up_off" type="button">Follow-up off</button>
-                    </div>
-                  </section>
-                  <section class="daily-card reactions-card">
-                    <div class="daily-card-head">
-                      <b>Reactions</b>
-                      <span>touch + lift</span>
-                    </div>
-                    <div class="daily-action-grid behavior-actions">
-                      <button data-daily-command="touch_reactions_on" type="button">Touch on</button>
-                      <button data-daily-command="touch_reactions_off" type="button">Touch off</button>
-                      <button data-daily-command="lift_reactions_on" type="button">Lift on</button>
-                      <button data-daily-command="lift_reactions_off" type="button">Lift off</button>
-                    </div>
-                  </section>
-                  <section class="daily-card system-card">
-                    <div class="daily-card-head">
-                      <b>System</b>
-                      <span>quick actions</span>
-                    </div>
-                    <div class="daily-action-grid system-actions">
-                      <button data-daily-command="wake_on" type="button">Wake on</button>
-                      <button data-daily-command="wake_off" type="button">Wake off</button>
+                    <div class="daily-action-grid compact-actions">
+                      <button data-daily-toggle="listen" data-on-command="listen_start" data-off-command="listen_stop" type="button">Listen</button>
+                      <button data-daily-toggle="follow_up" data-on-command="follow_up_on" data-off-command="follow_up_off" type="button">Follow-up</button>
+                      <button data-daily-toggle="touch_reactions" data-on-command="touch_reactions_on" data-off-command="touch_reactions_off" type="button">Touch</button>
+                      <button data-daily-toggle="lift_reactions" data-on-command="lift_reactions_on" data-off-command="lift_reactions_off" type="button">Lift</button>
+                      <button data-daily-toggle="wake" data-on-command="wake_on" data-off-command="wake_off" type="button">Wake</button>
                       <button data-daily-command="reconnect" type="button">Reconnect</button>
                       <button class="danger" data-daily-command="reboot" type="button">Reboot</button>
                     </div>
@@ -507,6 +486,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.106"></script>
+  <script src="/app.js?v=0.1.107"></script>
   </body>
 </html>

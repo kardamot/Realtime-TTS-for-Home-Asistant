@@ -231,7 +231,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
-- `0.1.106` adds Daily voice and reaction controls for listening, follow-up, touch, and lift behavior.
+- `0.1.107` compacts Daily controls into single toggle buttons for listening, follow-up, touch, lift, and wake.
 - `0.1.98` ends empty-room radar calibration even when no radar frames arrive and tightens the mobile radar header controls.
 - `0.1.97` moves ESP panel API JSON buffers off the HTTP task stack to prevent command-triggered stack overflows.
 - `0.1.96` queues radar empty-room calibration safely so the HTTP command path does not touch radar state directly.
