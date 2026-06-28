@@ -47,7 +47,7 @@ const DAILY_TOGGLE_LABELS = {
   touch_reactions: { on: "Touch on", off: "Touch off" },
   lift_reactions: { on: "Lift on", off: "Lift off" },
   wake: { on: "Wake on", off: "Wake off" },
-  eyes_sleep: { on: "Eyes sleeping", off: "Eyes awake" },
+  eyes_sleep: { on: "Wake eyes", off: "Sleep eyes" },
 };
 let rememberedSpeakerVolume = Number(localStorage.getItem(SPEAKER_VOLUME_STORAGE_KEY));
 if (!Number.isFinite(rememberedSpeakerVolume) || rememberedSpeakerVolume < 0 || rememberedSpeakerVolume > 100) {
