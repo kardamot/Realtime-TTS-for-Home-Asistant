@@ -33,6 +33,9 @@ DEFAULT_STATUS: dict[str, Any] = {
         "servo_position": "center",
         "amp_muted": None,
         "wake_enabled": None,
+        "follow_up_enabled": None,
+        "touch_reactions_enabled": None,
+        "lift_reactions_enabled": None,
         "errors": [],
     },
     "radar": {
@@ -72,6 +75,14 @@ ESP_COMMANDS = {
     "capture_mic_left",
     "capture_mic_right",
     "speaker_volume_set",
+    "listen_start",
+    "listen_stop",
+    "follow_up_on",
+    "follow_up_off",
+    "touch_reactions_on",
+    "touch_reactions_off",
+    "lift_reactions_on",
+    "lift_reactions_off",
     "motor_forward",
     "motor_backward",
     "motor_left",
@@ -89,7 +100,18 @@ ESP_COMMANDS = {
     "reconnect",
     "reboot",
 }
-SAFE_MODE_ALLOWED_COMMANDS = {"reconnect", "speaker_volume_set", "radar_calibrate_empty", "radar_clear_empty"}
+SAFE_MODE_ALLOWED_COMMANDS = {
+    "reconnect",
+    "speaker_volume_set",
+    "follow_up_on",
+    "follow_up_off",
+    "touch_reactions_on",
+    "touch_reactions_off",
+    "lift_reactions_on",
+    "lift_reactions_off",
+    "radar_calibrate_empty",
+    "radar_clear_empty",
+}
 MIC_CAPTURE_MAX_BYTES = 768 * 1024
 
 

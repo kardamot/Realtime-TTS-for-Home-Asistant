@@ -870,6 +870,7 @@ async function loadStatus() {
   text("hw-amp", esp.hardware?.amp_muted == null ? "unknown" : esp.hardware.amp_muted ? "muted" : "active");
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");
   text("hw-state", esp.state || "OFFLINE");
+  syncDailyBehaviorButtons(esp, pipe);
   setAutoText("stt-text", pipe.stt_result || pipe.last_user_text || "No utterance yet");
   setAutoText("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
   renderRealtimeLatency(realtime.latency || {});
@@ -970,6 +971,34 @@ function updateSpeakerVolumeUi(esp) {
   }
   if (!speakerVolumeEditing) slider.value = String(displayVolume);
   updateSpeakerVolumeText(Number(slider.value || displayVolume), gainQ12, source);
+}
+
+function setDailyCommandActive(command, active) {
+  document.querySelectorAll(`[data-daily-command="${command}"]`).forEach((button) => {
+    button.classList.toggle("active", Boolean(active));
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+function setDailyCommandPair(onCommand, offCommand, enabled) {
+  if (enabled == null) {
+    setDailyCommandActive(onCommand, false);
+    setDailyCommandActive(offCommand, false);
+    return;
+  }
+  setDailyCommandActive(onCommand, Boolean(enabled));
+  setDailyCommandActive(offCommand, !enabled);
+}
+
+function syncDailyBehaviorButtons(esp, pipe = {}) {
+  const hw = esp?.hardware || {};
+  setDailyCommandPair("wake_on", "wake_off", hw.wake_enabled);
+  setDailyCommandPair("follow_up_on", "follow_up_off", hw.follow_up_enabled);
+  setDailyCommandPair("touch_reactions_on", "touch_reactions_off", hw.touch_reactions_enabled);
+  setDailyCommandPair("lift_reactions_on", "lift_reactions_off", hw.lift_reactions_enabled);
+  const listening = Boolean(pipe?.session?.active || pipe?.live_mic?.clients || String(esp?.hardware?.mic || "").includes("streaming"));
+  setDailyCommandActive("listen_start", false);
+  setDailyCommandActive("listen_stop", listening);
 }
 
 function radarTargetNumber(target, key) {
