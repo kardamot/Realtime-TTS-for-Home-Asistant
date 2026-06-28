@@ -735,6 +735,18 @@ nav a:hover { background: #121a25; color: var(--text); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.drive-card-head {
+  align-items: center;
+}
+.daily-title-stack {
+  display: grid;
+  gap: 2px;
+}
+.daily-title-stack small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
 .dpad {
   display: grid;
   grid-template-columns: repeat(3, minmax(48px, 1fr));
@@ -826,13 +838,15 @@ nav a:hover { background: #121a25; color: var(--text); }
   accent-color: var(--cyan);
 }
 .motion-lock-toggle {
-  grid-column: 1 / -1;
-  min-height: 36px;
+  min-height: 28px;
+  padding: 0 10px;
   border-color: rgba(100,169,255,.24);
+  border-radius: 7px;
   background: rgba(31,47,72,.82);
   color: #d7ecff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
+  white-space: nowrap;
 }
 .motion-lock-toggle.active {
   border-color: rgba(255,189,84,.55);

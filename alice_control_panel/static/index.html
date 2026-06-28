@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.108" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.108" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.109" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.109" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.108" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.109" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.108" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.109" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -174,9 +174,12 @@
               <div class="command-tab-panel active" data-command-panel="daily">
                 <div class="daily-control-grid">
                   <section class="daily-card drive-card">
-                    <div class="daily-card-head">
-                      <b>Drive</b>
-                      <span>N20 quick test</span>
+                    <div class="daily-card-head drive-card-head">
+                      <span class="daily-title-stack">
+                        <b>Drive</b>
+                        <small>N20 quick test</small>
+                      </span>
+                      <button id="motion-lock" class="motion-lock-toggle" type="button" aria-pressed="false">Motion lock off</button>
                     </div>
                     <div class="dpad" aria-label="Robot drive controls">
                       <button class="dpad-btn dpad-up" data-daily-command="motor_forward" type="button"><span>&uarr;</span><b>Forward</b></button>
@@ -194,7 +197,6 @@
                         <span>Step <b id="drive-step-label">Medium</b></span>
                         <input id="drive-step" type="range" min="0" max="2" step="1" value="1" />
                       </label>
-                      <button id="motion-lock" class="motion-lock-toggle" type="button" aria-pressed="false">Motion lock off</button>
                     </div>
                   </section>
                   <section class="daily-card audio-card">
@@ -497,6 +499,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.108"></script>
+  <script src="/app.js?v=0.1.109"></script>
   </body>
 </html>
