@@ -42,6 +42,8 @@ DEFAULT_STATUS: dict[str, Any] = {
         "touch_sensor": "unknown",
         "touch_sensor_ready": None,
         "touch_sensor_active": None,
+        "eyes_expression": "unknown",
+        "eyes_sleeping": None,
         "errors": [],
     },
     "radar": {
@@ -96,6 +98,8 @@ ESP_COMMANDS = {
     "motor_stop",
     "wake_on",
     "wake_off",
+    "eyes_sleep_on",
+    "eyes_sleep_off",
     "servo_left",
     "servo_right",
     "servo_center",
@@ -117,6 +121,8 @@ SAFE_MODE_ALLOWED_COMMANDS = {
     "lift_reactions_off",
     "radar_calibrate_empty",
     "radar_clear_empty",
+    "eyes_sleep_on",
+    "eyes_sleep_off",
 }
 MIC_CAPTURE_MAX_BYTES = 768 * 1024
 

@@ -119,25 +119,44 @@ nav a:hover { background: #121a25; color: var(--text); }
   border-radius: 8px;
   background: var(--panel);
 }
-.metric { min-height: 72px; padding: 9px 10px; background: var(--panel2); }
-.metric span, .metric small { display: block; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.metric strong {
-  display: block;
-  min-height: 22px;
-  margin-top: 3px;
-  font-size: 15px;
-  line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.metric small { margin-top: 1px; font-size: 11px; }
-.metric.compact {
+.metric {
   display: grid;
   align-content: center;
   min-height: 52px;
   padding: 7px 6px;
+  background: var(--panel2);
   text-align: center;
+}
+.metric span, .metric small {
+  display: block;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+.metric span {
+  font-size: 12px;
+}
+.metric strong {
+  display: block;
+  min-height: 17px;
+  margin-top: 1px;
+  font-size: 12px;
+  line-height: 1.18;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+.metric small {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.15;
+}
+.metric.compact {
+  min-height: 52px;
+  padding: 7px 6px;
 }
 .metric.compact span {
   font-size: 12px;
