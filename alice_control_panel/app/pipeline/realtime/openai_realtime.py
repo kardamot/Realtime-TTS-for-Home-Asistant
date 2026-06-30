@@ -220,6 +220,9 @@ class OpenAIRealtimeBridge:
         self._last_error = ""
         self._session_id = ""
         self._model = ""
+        self._last_transcript = ""
+        self._last_assistant_text = ""
+        self._last_tts_text = ""
         self._started_at: float | None = None
         self._latency_session_id = ""
         self._latency_started_monotonic: float | None = None
@@ -244,11 +247,15 @@ class OpenAIRealtimeBridge:
             "enabled": bool(realtime.get("enabled", False)),
             "provider": str(realtime.get("provider") or "openai"),
             "model": str(realtime.get("model") or "gpt-realtime-mini"),
+            "transcription_model": str(realtime.get("transcription_model") or ""),
             "active": self._active,
             "connected": self._connected,
             "session_id": self._session_id,
             "last_event": self._last_event,
             "last_error": self._last_error,
+            "last_transcript": self._last_transcript,
+            "last_assistant_text": self._last_assistant_text,
+            "last_tts_text": self._last_tts_text,
             "uptime_sec": int(time.time() - self._started_at) if self._started_at else 0,
             "latency": self._latency_snapshot(),
         }
@@ -371,6 +378,7 @@ class OpenAIRealtimeBridge:
             if stt_result_sent:
                 return
             stt_result_sent = True
+            self._last_transcript = transcript.strip()
             self._mark_latency("stt_result_sent", reason=reason)
             await send_event("stt_result", text=transcript.strip(), provider="openai_realtime", reason=reason)
 
@@ -386,6 +394,7 @@ class OpenAIRealtimeBridge:
             nonlocal first_tts_chunk_marked, tts_chunk_started
             if text.strip():
                 tts_chunk_started = True
+                self._last_tts_text = (self._last_tts_text + text).strip()
                 if not first_tts_chunk_marked:
                     first_tts_chunk_marked = True
                     self._mark_latency("first_tts_chunk", chars=len(text))
@@ -434,6 +443,10 @@ class OpenAIRealtimeBridge:
             if spoken_text:
                 assistant_text = spoken_text
 
+            self._last_transcript = transcript.strip()
+            self._last_assistant_text = assistant_text.strip()
+            if assistant_text.strip():
+                self._last_tts_text = assistant_text.strip()
             chunks_to_send = [*ready_chunks, *final_chunks]
             if chunks_to_send:
                 for chunk in chunks_to_send[:-1]:
@@ -562,6 +575,7 @@ class OpenAIRealtimeBridge:
                 text = str(doc.get("transcript") or "").strip()
                 if text:
                     transcript = text
+                self._last_transcript = transcript.strip()
                 self._mark_latency("transcription_completed", chars=len(transcript))
                 transcript_event.set()
                 if stt_result_sent:
@@ -581,6 +595,7 @@ class OpenAIRealtimeBridge:
                         first_llm_delta_marked = True
                         self._mark_latency("first_llm_delta", chars=len(delta))
                     assistant_text += delta
+                    self._last_assistant_text = assistant_text.strip()
                     await send_event("llm_delta", text=delta)
                     emotions, chunks = text_chunker.push(delta)
                     for emotion in emotions:
@@ -650,7 +665,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.119",
+                version="0.1.120",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -671,6 +686,9 @@ class OpenAIRealtimeBridge:
                     if msg_type == "start":
                         transcript = ""
                         assistant_text = ""
+                        self._last_transcript = ""
+                        self._last_assistant_text = ""
+                        self._last_tts_text = ""
                         text_chunker = RealtimeTextChunker()
                         tts_chunk_started = False
                         response_requested = False
@@ -744,6 +762,9 @@ class OpenAIRealtimeBridge:
                         await self.cancel("reset")
                         transcript = ""
                         assistant_text = ""
+                        self._last_transcript = ""
+                        self._last_assistant_text = ""
+                        self._last_tts_text = ""
                         text_chunker = RealtimeTextChunker()
                         tts_chunk_started = False
                         response_requested = False

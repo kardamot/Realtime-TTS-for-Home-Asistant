@@ -1004,9 +1004,11 @@ async function loadStatus() {
   text("heap-min", esp.heap_min ? `min ${esp.heap_min}` : "offline");
   text("server-uptime", fmtSeconds(health.uptime_sec));
   text("esp-uptime", `ESP ${fmtSeconds(esp.uptime_sec)}`);
+  const liveMode = Boolean(realtime.enabled || realtime.active || realtime.connected);
+  const liveProvider = `${realtime.provider || "openai"} realtime`;
   text("conn-esp", esp.online ? "online" : "offline");
-  text("conn-stt", data.stt?.provider || "faster_whisper");
-  text("conn-llm", `${data.llm?.provider || "openai"} / ${data.llm?.model || "n/a"}`);
+  text("conn-stt", liveMode ? `${liveProvider} / ${realtime.transcription_model || "stt n/a"}` : data.stt?.provider || "faster_whisper");
+  text("conn-llm", liveMode ? `${liveProvider} / ${realtime.model || "model n/a"}` : `${data.llm?.provider || "openai"} / ${data.llm?.model || "n/a"}`);
   text("conn-tts", `${data.tts?.provider || "openai"} / ${data.tts?.pcm_sample_rate || "n/a"}`);
   text(
     "conn-ha",
@@ -1802,10 +1804,15 @@ function renderPipelineTrace(pipe, realtime, statusData = {}) {
   const session = pipe.session || {};
   const liveMic = pipe.live_mic || {};
   const capture = pipe.last_audio_capture || {};
-  const sttText = compactPipelineText(pipe.stt_result || pipe.last_user_text, "No utterance yet");
-  const llmText = compactPipelineText(pipe.llm_response, "No assistant response yet");
-  const ttsText = compactPipelineText(pipe.last_tts_text, pipe.tts_status ? `No TTS text captured; status is ${pipe.tts_status}.` : "No TTS text yet");
-  const llmProvider = `${statusData.llm?.provider || "LLM"} / ${statusData.llm?.model || "model n/a"}`;
+  const realtimeMode = Boolean(realtime.enabled || realtime.active || realtime.connected || realtime.last_transcript || realtime.last_assistant_text);
+  const realtimeProvider = `${realtime.provider || "openai"} realtime`;
+  const sttText = compactPipelineText(pipe.stt_result || pipe.last_user_text || realtime.last_transcript, "No utterance yet");
+  const llmText = compactPipelineText(pipe.llm_response || realtime.last_assistant_text, "No assistant response yet");
+  const ttsText = compactPipelineText(
+    pipe.last_tts_text || realtime.last_tts_text || realtime.last_assistant_text,
+    pipe.tts_status ? `No TTS text captured; status is ${pipe.tts_status}.` : "No TTS text yet"
+  );
+  const llmProvider = realtimeMode ? `${realtimeProvider} / ${realtime.model || "model n/a"}` : `${statusData.llm?.provider || "LLM"} / ${statusData.llm?.model || "model n/a"}`;
   const ttsProvider = `${statusData.tts?.provider || "TTS"} / ${statusData.tts?.pcm_sample_rate || "rate n/a"}`;
   const rows = [
     {
@@ -1823,7 +1830,9 @@ function renderPipelineTrace(pipe, realtime, statusData = {}) {
       label: "STT",
       meta: capture.duration_sec
         ? `audio ${capture.duration_sec}s / ${capture.bytes_buffered || 0} bytes / rms ${capture.rms || 0}`
-        : "incoming user text or transcript",
+        : realtimeMode
+          ? `${realtimeProvider} / ${realtime.transcription_model || "stt n/a"}`
+          : "incoming user text or transcript",
       text: sttText,
     },
     {
