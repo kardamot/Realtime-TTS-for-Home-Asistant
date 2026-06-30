@@ -24,6 +24,8 @@ let commandTab = localStorage.getItem("alice_command_tab") || "daily";
 let radarCalibration = readRadarCalibration();
 let logs = [];
 let paused = false;
+let logPreset = localStorage.getItem("alice_log_preset") || "all";
+let logFocusMode = localStorage.getItem("alice_log_focus") === "1";
 let configDirty = false;
 let logSocket = null;
 let logSocketSeq = 0;
@@ -67,6 +69,28 @@ const RADAR_DEFAULT_MAX_Y_MM = 6000;
 const RADAR_UI_FILTER_ALPHA = 0.56;
 const RADAR_UI_RESET_JUMP_MM = 1400;
 const RADAR_UI_RESET_MS = 1800;
+const LOG_PRESETS = {
+  all: {},
+  errors: { level: "ERROR" },
+  warns: { level: "WARN" },
+  voice: { categories: ["STT", "LLM", "TTS", "PIPELINE", "RT"] },
+  esp: { categories: ["ESP"] },
+  ha: { categories: ["HA"] },
+};
+const LOG_FOCUS_NOISE = [
+  "Alice Control Panel backend starting",
+  "Alice Control Panel backend stopped",
+  "ESP manager started",
+  "ESP WebSocket connected",
+  "ESP WebSocket disconnected",
+  "ESP command sent",
+  "OpenAI Realtime connected",
+  "OpenAI Realtime client disconnected",
+  "OpenAI Realtime mic packet header stripped",
+  "TTS relay websocket started",
+  "TTS relay websocket disconnected",
+  "Configuration updated",
+];
 
 const HELP_TEXTS = {
   connections: {
@@ -860,6 +884,15 @@ async function boot() {
   $("log-search").oninput = () => renderLogs({ forceScroll: true });
   $("log-level").onchange = () => renderLogs({ forceScroll: true });
   $("log-category").onchange = () => renderLogs({ forceScroll: true });
+  document.querySelectorAll("[data-log-preset]").forEach((button) => {
+    button.onclick = () => setLogPreset(button.dataset.logPreset || "all");
+  });
+  $("log-focus-toggle").onclick = () => {
+    logFocusMode = !logFocusMode;
+    localStorage.setItem("alice_log_focus", logFocusMode ? "1" : "0");
+    renderLogControls();
+    renderLogs({ forceScroll: true });
+  };
   window.addEventListener("resize", () => {
     if (latestRadarDraw) drawRadarViews(latestRadarDraw);
   });
@@ -2120,6 +2153,54 @@ function renderLogCategories() {
   const cats = ["ALL", ...Array.from(new Set(logs.map((entry) => entry.category))).sort()];
   select.innerHTML = cats.map((cat) => `<option>${cat}</option>`).join("");
   select.value = cats.includes(old) ? old : "ALL";
+  renderLogControls();
+  renderLogSummary();
+}
+
+function setLogPreset(preset) {
+  logPreset = LOG_PRESETS[preset] ? preset : "all";
+  localStorage.setItem("alice_log_preset", logPreset);
+  renderLogControls();
+  renderLogs({ forceScroll: true });
+}
+
+function renderLogControls() {
+  document.querySelectorAll("[data-log-preset]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.logPreset === logPreset);
+  });
+  const focus = $("log-focus-toggle");
+  if (focus) {
+    focus.classList.toggle("active", logFocusMode);
+    focus.textContent = logFocusMode ? "Focus on" : "Focus";
+  }
+}
+
+function renderLogSummary() {
+  const total = logs.length;
+  const errors = logs.filter((entry) => entry.level === "ERROR").length;
+  const warns = logs.filter((entry) => entry.level === "WARN").length;
+  const last = logs[logs.length - 1];
+  $("log-total").textContent = String(total);
+  $("log-errors").textContent = String(errors);
+  $("log-warns").textContent = String(warns);
+  $("log-last").textContent = last ? `${last.category || "-"} ${new Date(last.ts * 1000).toLocaleTimeString()}` : "-";
+}
+
+function isRoutineLog(entry) {
+  if (!logFocusMode) return false;
+  if (entry.level === "ERROR" || entry.level === "WARN") return false;
+  const message = String(entry.message || "");
+  if (LOG_FOCUS_NOISE.some((pattern) => message.includes(pattern))) return true;
+  if (entry.category === "ESP" && /^(panel audio stream|ESP audio start|ESP audio stream acknowledged)/i.test(message)) return true;
+  if (entry.category === "PIPELINE" && /session completed|completed without assistant text/i.test(message)) return true;
+  return false;
+}
+
+function logMatchesPreset(entry) {
+  const preset = LOG_PRESETS[logPreset] || LOG_PRESETS.all;
+  if (preset.level && entry.level !== preset.level) return false;
+  if (preset.categories && !preset.categories.includes(entry.category)) return false;
+  return true;
 }
 
 function renderLogs(options = {}) {
@@ -2127,21 +2208,37 @@ function renderLogs(options = {}) {
   const level = $("log-level").value;
   const cat = $("log-category").value;
   const rows = logs.filter((entry) => {
+    if (!logMatchesPreset(entry)) return false;
+    if (isRoutineLog(entry)) return false;
     if (level !== "ALL" && entry.level !== level) return false;
     if (cat !== "ALL" && entry.category !== cat) return false;
     if (!q) return true;
     return `${entry.level} ${entry.category} ${entry.message} ${JSON.stringify(entry.details || {})}`.toLowerCase().includes(q);
   }).slice(-220);
   const list = $("log-list");
+  renderLogSummary();
+  renderLogControls();
   keepAutoScrolled(list, () => {
     list.innerHTML = "";
     rows.forEach((entry) => {
       const row = document.createElement("div");
       row.className = `log-row ${String(entry.level || "").toLowerCase()}`;
-      row.innerHTML = `<time>${new Date(entry.ts * 1000).toLocaleTimeString()}</time><b>${entry.level}</b><span>${entry.category}</span><p></p>`;
+      const details = entry.details && Object.keys(entry.details).length ? JSON.stringify(entry.details, null, 2) : "";
+      row.innerHTML = `<time>${new Date(entry.ts * 1000).toLocaleTimeString()}</time><b>${entry.level}</b><span>${entry.category}</span><p></p>${details ? "<pre></pre>" : ""}`;
       row.querySelector("p").textContent = entry.message || "";
+      if (details) {
+        row.classList.add("has-details");
+        row.querySelector("pre").textContent = details;
+        row.onclick = () => row.classList.toggle("expanded");
+      }
       list.appendChild(row);
     });
+    if (!rows.length) {
+      const empty = document.createElement("div");
+      empty.className = "log-empty";
+      empty.textContent = "No logs match the current filters.";
+      list.appendChild(empty);
+    }
   }, Boolean(options.forceScroll));
 }
 
