@@ -21,6 +21,7 @@ let radarUiTrack = { valid: false, direction: "BELIRSIZ" };
 let latestRadarDraw = null;
 let radarView = localStorage.getItem("alice_radar_view") || "tech";
 let commandTab = localStorage.getItem("alice_command_tab") || "daily";
+let pipelineView = localStorage.getItem("alice_pipeline_view") || "trace";
 let radarCalibration = readRadarCalibration();
 let logs = [];
 let paused = false;
@@ -734,6 +735,29 @@ function initCommandTabs() {
   syncCommandTabs();
 }
 
+function syncPipelineTabs() {
+  if (!["trace", "timing"].includes(pipelineView)) pipelineView = "trace";
+  document.querySelectorAll("[data-pipeline-tab]").forEach((button) => {
+    const active = button.dataset.pipelineTab === pipelineView;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll("[data-pipeline-panel]").forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.pipelinePanel === pipelineView);
+  });
+}
+
+function initPipelineTabs() {
+  document.querySelectorAll("[data-pipeline-tab]").forEach((button) => {
+    button.onclick = () => {
+      pipelineView = button.dataset.pipelineTab || "trace";
+      localStorage.setItem("alice_pipeline_view", pipelineView);
+      syncPipelineTabs();
+    };
+  });
+  syncPipelineTabs();
+}
+
 function readStoredIndex(key, fallback) {
   const value = Number(localStorage.getItem(key));
   return Number.isFinite(value) ? Math.max(0, Math.min(2, Math.round(value))) : fallback;
@@ -844,6 +868,7 @@ async function boot() {
   initHelpBubbles();
   initRadarControls();
   initCommandTabs();
+  initPipelineTabs();
   initDriveControls();
   renderButtons();
   initDailyCommandButtons();
@@ -1007,8 +1032,7 @@ async function loadStatus() {
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");
   text("hw-state", esp.state || "OFFLINE");
   syncDailyBehaviorButtons(esp, pipe);
-  setAutoText("stt-text", pipe.stt_result || pipe.last_user_text || "No utterance yet");
-  setAutoText("llm-text", pipe.llm_response || "FastAPI backend ready. Send a text test or configure providers.");
+  renderPipelineTrace(pipe, realtime, data);
   renderRealtimeLatency(realtime.latency || {});
   renderRadar(esp.radar || latestRadar || {});
   renderMicDebug(pipe.mic_debug || {});
@@ -1765,6 +1789,76 @@ async function selectProvider(kind, provider) {
   configDirty = true;
   renderProviderSwitches();
   await saveConfig();
+}
+
+function compactPipelineText(value, fallback) {
+  const textValue = String(value || "").trim();
+  return textValue || fallback;
+}
+
+function renderPipelineTrace(pipe, realtime, statusData = {}) {
+  const box = $("pipeline-feed");
+  if (!box) return;
+  const session = pipe.session || {};
+  const liveMic = pipe.live_mic || {};
+  const capture = pipe.last_audio_capture || {};
+  const sttText = compactPipelineText(pipe.stt_result || pipe.last_user_text, "No utterance yet");
+  const llmText = compactPipelineText(pipe.llm_response, "No assistant response yet");
+  const ttsText = compactPipelineText(pipe.last_tts_text, pipe.tts_status ? `No TTS text captured; status is ${pipe.tts_status}.` : "No TTS text yet");
+  const llmProvider = `${statusData.llm?.provider || "LLM"} / ${statusData.llm?.model || "model n/a"}`;
+  const ttsProvider = `${statusData.tts?.provider || "TTS"} / ${statusData.tts?.pcm_sample_rate || "rate n/a"}`;
+  const rows = [
+    {
+      kind: "state",
+      label: "State",
+      meta: `${pipe.state || "IDLE"} / tts ${pipe.tts_status || "idle"} / live ws ${liveMic.clients || 0}`,
+      text: session.active
+        ? `${session.mode || "manual"} session, ${session.turns || 0} turns, ${session.last_event || "active"}`
+        : realtime.active
+          ? `Realtime ${realtime.connected ? "connected" : "active"}; ${realtime.model || "model n/a"}; ${realtime.last_event || "active"}`
+          : "Waiting for text, wake word, or mic stream.",
+    },
+    {
+      kind: "stt",
+      label: "STT",
+      meta: capture.duration_sec
+        ? `audio ${capture.duration_sec}s / ${capture.bytes_buffered || 0} bytes / rms ${capture.rms || 0}`
+        : "incoming user text or transcript",
+      text: sttText,
+    },
+    {
+      kind: "llm",
+      label: "LLM",
+      meta: llmProvider,
+      text: llmText,
+    },
+    {
+      kind: "tts",
+      label: "TTS",
+      meta: `${ttsProvider} / ${pipe.stream_active ? "stream active" : pipe.tts_status || "idle"}`,
+      text: ttsText,
+    },
+  ];
+  keepAutoScrolled(box, () => {
+    box.innerHTML = "";
+    rows.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = `pipeline-feed-row ${item.kind || "state"}${item.text.startsWith("No ") ? " idle" : ""}`;
+      const label = document.createElement("b");
+      const body = document.createElement("div");
+      const meta = document.createElement("span");
+      const textBlock = document.createElement("p");
+      body.className = "pipeline-feed-body";
+      meta.className = "pipeline-feed-meta";
+      textBlock.className = "pipeline-feed-text";
+      label.textContent = item.label;
+      meta.textContent = item.meta;
+      textBlock.textContent = item.text;
+      body.append(meta, textBlock);
+      row.append(label, body);
+      box.appendChild(row);
+    });
+  });
 }
 
 function renderRealtimeLatency(latency) {

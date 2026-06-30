@@ -76,6 +76,7 @@ class VoicePipeline:
         self._last_user_text = ""
         self._stt_result = ""
         self._llm_response = ""
+        self._last_tts_text = ""
         self._tts_status = "idle"
         self._stream_active = False
         self._last_audio_capture: dict[str, Any] = {}
@@ -97,6 +98,7 @@ class VoicePipeline:
             "last_user_text": self._last_user_text,
             "stt_result": self._stt_result,
             "llm_response": self._llm_response,
+            "last_tts_text": self._last_tts_text,
             "tts_status": self._tts_status,
             "stream_active": self._stream_active,
             "last_audio_capture": self._last_audio_capture,
@@ -201,7 +203,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.117",
+                "version": "0.1.118",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -359,6 +361,7 @@ class VoicePipeline:
         self._last_user_text = text
         self._stt_result = text
         self._llm_response = ""
+        self._last_tts_text = ""
         self._state = "LLM"
         self._stream_active = True
         self._mark("STT", "text input accepted")
@@ -404,6 +407,7 @@ class VoicePipeline:
         self._last_user_text = text
         self._stt_result = text
         self._llm_response = text
+        self._last_tts_text = text
         self._state = "TTS"
         self._stream_active = True
         self._tts_status = "queued"
@@ -556,6 +560,7 @@ class VoicePipeline:
         self._state = "IDLE"
 
     async def _stream_tts_to_esp(self, text: str, config: dict[str, Any], cancel_event: asyncio.Event) -> None:
+        self._last_tts_text = text
         if not config.get("pipeline", {}).get("stream_to_esp", True):
             self._tts_status = "stream_to_esp_disabled"
             await self._log_bus.emit("INFO", "TTS", "TTS stream-to-ESP is disabled")
