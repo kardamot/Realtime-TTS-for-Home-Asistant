@@ -1041,7 +1041,7 @@ async function loadStatus() {
   renderRealtimeLatency(realtime.latency || {});
   renderRadar(esp.radar || latestRadar || {});
   renderMicDebug(pipe.mic_debug || {});
-  renderTimeline(pipe.timeline || [], realtime.latency || {});
+  renderTurnTiming(realtime.latency || {}, pipe.timeline || []);
   if (!configDirty) fillConfig();
 }
 
@@ -1923,13 +1923,13 @@ function renderRealtimeLatency(latency) {
   const box = $("realtime-latency");
   if (!box) return;
   const summary = latency.summary || {};
-  const events = latency.events || [];
-  const latest = events.length ? events[events.length - 1] : null;
   const chips = [
-    ["speech -> LLM", summary.speech_to_first_delta_ms],
-    ["stop -> LLM", summary.speech_stop_to_first_delta_ms],
-    ["commit -> LLM", summary.commit_to_first_delta_ms],
-    ["response -> LLM", summary.response_to_first_delta_ms],
+    ["Wake -> mic", summary.wake_to_first_audio_ms],
+    ["Speech -> STT", summary.speech_stop_to_transcript_ms ?? summary.speech_to_transcript_ms],
+    ["STT -> LLM", summary.transcript_to_first_delta_ms],
+    ["LLM -> TTS", summary.first_delta_to_first_chunk_ms],
+    ["Wake -> TTS text", summary.wake_to_first_tts_ms],
+    ["Turn total", summary.wake_to_complete_ms ?? summary.total_ms],
   ];
   box.innerHTML = "";
   chips.forEach(([label, value]) => {
@@ -1942,26 +1942,145 @@ function renderRealtimeLatency(latency) {
     chip.append(title, metric);
     box.appendChild(chip);
   });
-  if (latest && !Object.keys(summary).length) {
-    box.firstElementChild.querySelector("b").textContent = `${String(latest.name || "event").replaceAll("_", " ")} +${fmtMs(latest.ms)}`;
+}
+
+function compactSnippet(value, fallback = "-") {
+  const textValue = String(value || "").replace(/\s+/g, " ").trim();
+  if (!textValue) return fallback;
+  return textValue.length > 86 ? `${textValue.slice(0, 83)}...` : textValue;
+}
+
+function formatStageDetail(stage) {
+  const detail = String(stage.detail || "").trim();
+  return detail || "pending detail";
+}
+
+function fallbackLatencyStages(events) {
+  const labels = {
+    client_connected: "Client linked",
+    start_received: "Turn start",
+    openai_connected: "OpenAI connected",
+    first_audio_chunk: "First mic packet",
+    speech_started: "Speech started",
+    speech_stopped: "Speech stopped",
+    input_committed: "Audio committed",
+    transcription_completed: "STT completed",
+    stt_result_sent: "Transcript sent",
+    response_requested: "LLM requested",
+    first_llm_delta: "First LLM text",
+    first_tts_chunk: "TTS text queued",
+    response_done: "LLM done",
+    session_completed: "Turn completed",
+  };
+  return (events || [])
+    .filter((event) => labels[event.name])
+    .map((event) => ({
+      key: event.name,
+      label: labels[event.name],
+      ms: event.ms,
+      detail: formatEventFallbackDetail(event),
+    }));
+}
+
+function formatEventFallbackDetail(event) {
+  const parts = [];
+  if (event.reason) parts.push(String(event.reason).replaceAll("_", " "));
+  if (event.chars != null) parts.push(`${event.chars} chars`);
+  if (event.audio_ms != null) parts.push(`audio ${event.audio_ms}ms`);
+  if (event.audio_ts != null) parts.push(`audioTs ${event.audio_ts}ms`);
+  if (event.source_rate && event.target_rate) parts.push(`${event.source_rate}Hz -> ${event.target_rate}Hz`);
+  return parts.join("; ") || String(event.name || "event").replaceAll("_", " ");
+}
+
+function renderTurnSummary(latency, latestTurn) {
+  const box = $("turn-summary");
+  if (!box) return;
+  const note = latency.speaker_first_audio?.available === false
+    ? "Speaker first PCM is not reported by ESP yet; Wake -> TTS text is the current proxy."
+    : "";
+  const source = latestTurn || {};
+  const summary = source.summary || latency.summary || {};
+  const textParts = [
+    source.transcript ? `STT: ${compactSnippet(source.transcript, "")}` : "",
+    source.assistant_text ? `LLM: ${compactSnippet(source.assistant_text, "")}` : "",
+    summary.wake_to_first_tts_ms != null ? `Wake -> TTS text ${fmtMs(summary.wake_to_first_tts_ms)}` : "",
+    summary.wake_to_complete_ms != null ? `Total ${fmtMs(summary.wake_to_complete_ms)}` : "",
+  ].filter(Boolean);
+  box.innerHTML = "";
+  const main = document.createElement("p");
+  main.textContent = textParts.length ? textParts.join(" | ") : "No completed voice turn timing yet.";
+  box.appendChild(main);
+  if (note) {
+    const small = document.createElement("small");
+    small.textContent = note;
+    box.appendChild(small);
   }
 }
 
-function renderTimeline(items, latency = {}) {
+function renderTurnHistory(history) {
+  const box = $("turn-history");
+  if (!box) return;
+  const rows = Array.isArray(history) ? history.slice(-3).reverse() : [];
+  box.innerHTML = "";
+  if (!rows.length) return;
+  const title = document.createElement("b");
+  title.textContent = "Recent turns";
+  box.appendChild(title);
+  rows.forEach((turn) => {
+    const row = document.createElement("div");
+    const summary = turn.summary || {};
+    const when = Number(turn.ended_at || 0);
+    const timeText = Number.isFinite(when) && when > 0 ? new Date(when * 1000).toLocaleTimeString() : "--:--:--";
+    const meta = document.createElement("span");
+    const textLine = document.createElement("p");
+    meta.textContent = `${timeText} | TTS ${fmtMs(summary.wake_to_first_tts_ms)} | total ${fmtMs(summary.wake_to_complete_ms ?? summary.total_ms)}`;
+    textLine.textContent = compactSnippet(turn.transcript || turn.assistant_text, "completed turn");
+    row.append(meta, textLine);
+    box.appendChild(row);
+  });
+}
+
+function renderTurnTiming(latency = {}, items = []) {
   const box = $("timeline");
-  const realtimeRows = (latency.events || []).slice(-8).map((event) => ({
-    category: "RT",
-    message: `${String(event.name || "event").replaceAll("_", " ")} +${fmtMs(event.ms)}`,
-  }));
-  const list = [...items.slice(-3), ...realtimeRows].slice(-8);
-  keepAutoScrolled(box, () => {
-    box.innerHTML = list.length ? "" : "<div><b>IDLE</b><span>Waiting for audio/text</span></div>";
-    list.forEach((item) => {
+  if (!box) return;
+  const history = Array.isArray(latency.history) ? latency.history : [];
+  const latestTurn = history.length ? history[history.length - 1] : null;
+  const stages = (latency.stages && latency.stages.length)
+    ? latency.stages
+    : latestTurn?.stages?.length
+      ? latestTurn.stages
+      : fallbackLatencyStages(latency.events || []);
+  renderTurnSummary(latency, latestTurn);
+  renderTurnHistory(history);
+  box.innerHTML = "";
+  const visibleStages = stages.slice(-10);
+  if (!visibleStages.length) {
+    const idle = document.createElement("div");
+    idle.className = "turn-stage-row idle";
+    idle.innerHTML = "<b>Idle</b><span>No timing data yet.</span><em>Wake the robot or start a session.</em>";
+    box.appendChild(idle);
+    return;
+  }
+  visibleStages.forEach((stage) => {
+    const row = document.createElement("div");
+    row.className = `turn-stage-row ${stage.key || "step"}`;
+    const timeEl = document.createElement("b");
+    const labelEl = document.createElement("span");
+    const detailEl = document.createElement("em");
+    timeEl.textContent = `+${fmtMs(stage.ms)}`;
+    labelEl.textContent = stage.label || String(stage.key || "Step").replaceAll("_", " ");
+    detailEl.textContent = formatStageDetail(stage);
+    row.append(timeEl, labelEl, detailEl);
+    box.appendChild(row);
+  });
+  if (Array.isArray(items) && items.length && visibleStages.length < 5) {
+    items.slice(-2).forEach((item) => {
       const row = document.createElement("div");
-      row.innerHTML = `<b>${item.category || "STEP"}</b><span>${item.message || ""}</span>`;
+      row.className = "turn-stage-row pipe";
+      row.innerHTML = `<b>--</b><span>${item.category || "PIPE"}</span><em>${item.message || ""}</em>`;
       box.appendChild(row);
     });
-  });
+  }
 }
 
 function renderButtons() {

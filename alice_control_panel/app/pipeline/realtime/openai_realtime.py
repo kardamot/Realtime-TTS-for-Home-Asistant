@@ -27,15 +27,53 @@ STREAM_CHUNK_MIN_CHARS = 28
 STREAM_CHUNK_HARD_CHARS = 90
 REALTIME_TRANSCRIPTION_PROMPT_MAX_CHARS = 1024
 REALTIME_LATENCY_DELTAS = (
+    ("wake_to_openai_ms", "start_received", "openai_connected"),
+    ("wake_to_first_audio_ms", "start_received", "first_audio_chunk"),
+    ("wake_to_speech_start_ms", "start_received", "speech_started"),
+    ("speech_duration_ms", "speech_started", "speech_stopped"),
     ("speech_to_commit_ms", "speech_started", "input_committed"),
     ("speech_to_transcript_ms", "speech_started", "transcription_completed"),
+    ("speech_stop_to_commit_ms", "speech_stopped", "input_committed"),
+    ("speech_stop_to_transcript_ms", "speech_stopped", "transcription_completed"),
+    ("commit_to_transcript_ms", "input_committed", "transcription_completed"),
+    ("transcript_to_response_request_ms", "transcription_completed", "response_requested"),
+    ("transcript_to_first_delta_ms", "transcription_completed", "first_llm_delta"),
+    ("transcript_to_first_tts_ms", "transcription_completed", "first_tts_chunk"),
     ("speech_to_response_request_ms", "speech_started", "response_requested"),
     ("speech_to_first_delta_ms", "speech_started", "first_llm_delta"),
     ("speech_stop_to_first_delta_ms", "speech_stopped", "first_llm_delta"),
     ("commit_to_first_delta_ms", "input_committed", "first_llm_delta"),
     ("response_to_first_delta_ms", "response_requested", "first_llm_delta"),
     ("first_delta_to_first_chunk_ms", "first_llm_delta", "first_tts_chunk"),
+    ("wake_to_first_tts_ms", "start_received", "first_tts_chunk"),
+    ("wake_to_response_done_ms", "start_received", "response_done"),
+    ("wake_to_complete_ms", "start_received", "session_completed"),
     ("total_ms", "start_received", "session_completed"),
+)
+REALTIME_STAGE_DEFINITIONS = (
+    ("client_connected", "Client linked", "ESP voice WebSocket reached the add-on"),
+    ("start_received", "Turn start", "Wake/manual session reached backend"),
+    ("openai_connected", "OpenAI connected", "Realtime socket ready"),
+    ("session_update_sent", "Session configured", "Realtime model/VAD/STT settings sent"),
+    ("hello_sent", "Hello sent", "Protocol handshake sent to ESP"),
+    ("first_audio_chunk", "First mic packet", "First microphone PCM reached OpenAI path"),
+    ("speech_started", "Speech started", "Realtime VAD detected speech"),
+    ("speech_stopped", "Speech stopped", "Realtime VAD detected end of speech"),
+    ("manual_commit_sent", "Manual commit", "ESP/add-on forced audio commit"),
+    ("input_committed", "Audio committed", "Input audio buffer accepted for STT"),
+    ("first_stt_delta", "First STT text", "Partial transcript started"),
+    ("transcription_completed", "STT completed", "Final transcript is available"),
+    ("stt_result_sent", "Transcript sent", "Transcript forwarded to the agent step"),
+    ("ha_route_completed", "HA route done", "Home Assistant handled the request"),
+    ("response_requested", "LLM requested", "Assistant response requested"),
+    ("response_created", "LLM started", "OpenAI started the response"),
+    ("first_llm_delta", "First LLM text", "First assistant text token arrived"),
+    ("first_tts_chunk", "TTS text queued", "First text chunk sent toward the firmware TTS player"),
+    ("response_done", "LLM done", "Assistant response completed"),
+    ("session_completed", "Turn completed", "Add-on finished the voice turn"),
+    ("response_cancelled", "Cancelled", "Assistant response was cancelled"),
+    ("client_cancelled", "Client cancel", "ESP/client cancelled the turn"),
+    ("transcript_wait_timeout", "Transcript wait timeout", "LLM path continued after STT wait limit"),
 )
 
 
@@ -242,6 +280,7 @@ class OpenAIRealtimeBridge:
         self._latency_events: list[dict[str, Any]] = []
         self._latency_summary: dict[str, int] = {}
         self._latency_updated_at: float | None = None
+        self._latency_history: list[dict[str, Any]] = []
         self._cancel_event = asyncio.Event()
 
     async def should_handle_voice_ws(self) -> bool:
@@ -331,12 +370,86 @@ class OpenAIRealtimeBridge:
                 summary[field] = max(0, first_by_name[end] - first_by_name[start])
         return summary
 
+    def _latency_event_detail(self, event: dict[str, Any], fallback: str = "") -> str:
+        parts: list[str] = []
+        if event.get("reason"):
+            parts.append(str(event["reason"]).replace("_", " "))
+        if event.get("connect_ms") is not None:
+            parts.append(f"connect {int(event['connect_ms'])}ms")
+        if event.get("audio_ms") is not None:
+            parts.append(f"audio {int(event['audio_ms'])}ms")
+        if event.get("audio_ts") is not None:
+            parts.append(f"audioTs {int(event['audio_ts'])}ms")
+        if event.get("buffered_audio_ms") is not None:
+            parts.append(f"buffer {int(event['buffered_audio_ms'])}ms")
+        if event.get("chars") is not None:
+            parts.append(f"{int(event['chars'])} chars")
+        if event.get("wait_ms") is not None:
+            parts.append(f"wait {int(event['wait_ms'])}ms")
+        if event.get("source_rate") is not None and event.get("target_rate") is not None:
+            parts.append(f"{int(event['source_rate'])}Hz -> {int(event['target_rate'])}Hz")
+        if event.get("model"):
+            parts.append(str(event["model"]))
+        return "; ".join(parts) or fallback
+
+    def _latency_stages(self, events: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+        selected = events if events is not None else self._latency_events
+        first_by_name: dict[str, dict[str, Any]] = {}
+        for event in selected:
+            name = str(event.get("name") or "")
+            if name and name not in first_by_name:
+                first_by_name[name] = event
+        stages: list[dict[str, Any]] = []
+        for key, label, fallback in REALTIME_STAGE_DEFINITIONS:
+            event = first_by_name.get(key)
+            if not event:
+                continue
+            stages.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "ms": int(event.get("ms") or 0),
+                    "detail": self._latency_event_detail(event, fallback),
+                    "at": event.get("at"),
+                }
+            )
+        return stages
+
+    def _remember_latency_turn(self, reason: str, transcript: str, assistant_text: str, audio_ms: int) -> None:
+        if not self._latency_events:
+            return
+        events = [dict(event) for event in self._latency_events]
+        first_event = events[0] if events else {}
+        turn = {
+            "session_id": self._latency_session_id,
+            "started_at": first_event.get("at"),
+            "ended_at": time.time(),
+            "reason": reason,
+            "transcript": str(transcript or "").strip(),
+            "assistant_text": str(assistant_text or "").strip(),
+            "audio_ms": int(audio_ms or 0),
+            "summary": dict(self._latency_summary),
+            "stages": self._latency_stages(events),
+            "events": events[-32:],
+        }
+        if self._latency_history and self._latency_history[-1].get("session_id") == self._latency_session_id:
+            self._latency_history[-1] = turn
+        else:
+            self._latency_history.append(turn)
+        self._latency_history = self._latency_history[-12:]
+
     def _latency_snapshot(self) -> dict[str, Any]:
         return {
             "session_id": self._latency_session_id,
             "events": [dict(event) for event in self._latency_events],
             "summary": dict(self._latency_summary),
+            "stages": self._latency_stages(),
+            "history": [dict(item) for item in self._latency_history[-12:]],
             "updated_at": self._latency_updated_at,
+            "speaker_first_audio": {
+                "available": False,
+                "note": "ESP does not report first speaker PCM yet; first_tts_chunk is the current proxy.",
+            },
         }
 
     async def websocket_session(self, websocket: WebSocket) -> None:
@@ -504,6 +617,7 @@ class OpenAIRealtimeBridge:
                     assistant_message_sent = True
                 await send_event("llm_result", text=assistant_text)
             self._mark_latency("session_completed", reason=reason, audio_ms=audio_ms)
+            self._remember_latency_turn(reason, transcript, assistant_text, audio_ms)
             await send_event(
                 "session_completed",
                 reason=reason,
@@ -713,7 +827,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.122",
+                version="0.1.123",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",

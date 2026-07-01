@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.122" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.122" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.123" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.123" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.122" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.123" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.122" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.123" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -183,7 +183,9 @@
                 </div>
                 <div class="pipeline-tab-panel" data-pipeline-panel="timing">
                   <div id="realtime-latency" class="latency-strip"></div>
-                  <div id="timeline" class="timeline" data-autoscroll></div>
+                  <div id="turn-summary" class="turn-summary"></div>
+                  <div id="timeline" class="turn-timeline"></div>
+                  <div id="turn-history" class="turn-history"></div>
                 </div>
               </div>
             </div>
@@ -526,6 +528,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.122"></script>
+  <script src="/app.js?v=0.1.123"></script>
   </body>
 </html>
