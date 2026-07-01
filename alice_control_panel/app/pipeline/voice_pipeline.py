@@ -81,6 +81,8 @@ class VoicePipeline:
         self._stream_active = False
         self._last_audio_capture: dict[str, Any] = {}
         self._timeline: list[dict[str, Any]] = []
+        self._message_history: list[dict[str, Any]] = []
+        self._message_seq = 0
         self._cancel_event = asyncio.Event()
         self._session_active = False
         self._session_id = ""
@@ -93,6 +95,7 @@ class VoicePipeline:
         self._mic_debug_captures: dict[str, dict[str, Any]] = {}
 
     async def status(self) -> dict[str, Any]:
+        realtime_status = await self._realtime_bridge.status() if self._realtime_bridge else {}
         return {
             "state": self._state,
             "last_user_text": self._last_user_text,
@@ -103,6 +106,7 @@ class VoicePipeline:
             "stream_active": self._stream_active,
             "last_audio_capture": self._last_audio_capture,
             "timeline": self._timeline[-20:],
+            "messages": self._combined_messages(realtime_status),
             "session": {
                 "active": self._session_active,
                 "session_id": self._session_id,
@@ -118,8 +122,53 @@ class VoicePipeline:
                 "last": self._last_live_mic,
             },
             "mic_debug": self.mic_debug_status(),
-            "realtime": await self._realtime_bridge.status() if self._realtime_bridge else {},
+            "realtime": realtime_status,
         }
+
+    def _combined_messages(self, realtime_status: dict[str, Any]) -> list[dict[str, Any]]:
+        messages = [dict(item) for item in self._message_history]
+        realtime_messages = realtime_status.get("messages", []) if isinstance(realtime_status, dict) else []
+        if isinstance(realtime_messages, list):
+            messages.extend(dict(item) for item in realtime_messages if isinstance(item, dict))
+        return sorted(messages, key=lambda item: float(item.get("ts") or 0))[-120:]
+
+    def _remember_message(self, role: str, source: str, text: str, meta: dict[str, Any] | None = None) -> None:
+        clean = str(text or "").strip()
+        if not clean:
+            return
+        last = self._message_history[-1] if self._message_history else {}
+        if last.get("role") == role and last.get("text") == clean and last.get("source") == source:
+            return
+        self._message_seq += 1
+        self._message_history.append(
+            {
+                "id": f"classic-{self._message_seq}",
+                "ts": time.time(),
+                "role": role,
+                "source": source,
+                "text": clean,
+                "meta": meta or {},
+            }
+        )
+        self._message_history = self._message_history[-120:]
+
+    async def clear_message_history(self) -> dict[str, Any]:
+        self._message_history.clear()
+        if self._realtime_bridge and hasattr(self._realtime_bridge, "clear_message_history"):
+            self._realtime_bridge.clear_message_history()
+        await self._ws_hub.publish("pipeline_status", await self.status())
+        return await self.status()
+
+    async def message_history_text(self) -> str:
+        status = await self.status()
+        lines: list[str] = []
+        for item in status.get("messages", []):
+            ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(float(item.get("ts") or time.time())))
+            role = str(item.get("role") or "message").upper()
+            source = str(item.get("source") or "-")
+            text = str(item.get("text") or "")
+            lines.append(f"[{ts}] {role} {source}: {text}")
+        return "\n".join(lines) + ("\n" if lines else "")
 
     def mic_debug_status(self) -> dict[str, Any]:
         return {
@@ -203,7 +252,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.120",
+                "version": "0.1.121",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -362,6 +411,7 @@ class VoicePipeline:
         self._stt_result = text
         self._llm_response = ""
         self._last_tts_text = ""
+        self._remember_message("user", "text", text)
         self._state = "LLM"
         self._stream_active = True
         self._mark("STT", "text input accepted")
@@ -371,6 +421,7 @@ class VoicePipeline:
             ha_response = await self._try_home_assistant_route(text, run_cancel_event)
             if ha_response is not None:
                 self._llm_response = ha_response
+                self._remember_message("assistant", "ha", ha_response)
                 self._state = "TTS"
                 self._tts_status = "queued"
                 self._mark("HA", "Home Assistant command completed")
@@ -384,6 +435,7 @@ class VoicePipeline:
             self._state = "TTS"
             self._tts_status = "queued"
             self._mark("LLM", "response completed")
+            self._remember_message("assistant", "llm", self._llm_response)
             await self._log_bus.emit("INFO", "PIPELINE", "LLM response completed", {"chars": len(self._llm_response)})
             await self._stream_tts_to_esp(self._llm_response, config, run_cancel_event)
             self._state = "IDLE" if not run_cancel_event.is_set() else "CANCELLED"
@@ -408,6 +460,7 @@ class VoicePipeline:
         self._stt_result = text
         self._llm_response = text
         self._last_tts_text = text
+        self._remember_message("tts", "tts_test", text)
         self._state = "TTS"
         self._stream_active = True
         self._tts_status = "queued"
@@ -464,6 +517,8 @@ class VoicePipeline:
             text = str(result.get("text") or "").strip()
             self._stt_result = text or str(result.get("message") or "Audio captured; no transcript yet.")
             self._last_user_text = text
+            if text:
+                self._remember_message("user", "stt_capture", text, {"sample_rate": sample_rate})
             self._last_audio_capture["stt"] = result
             if result.get("ok") and text:
                 mode = str(config.get("pipeline", {}).get("mic_response_mode") or "assistant").lower()
@@ -552,6 +607,7 @@ class VoicePipeline:
     async def _echo_transcript(self, text: str, config: dict[str, Any], cancel_event: asyncio.Event) -> None:
         self._state = "TTS"
         self._llm_response = text
+        self._remember_message("assistant", "transcript_echo", text)
         self._tts_status = "queued"
         self._mark("STT", "transcript echo queued")
         await self._log_bus.emit("INFO", "PIPELINE", "STT transcript echo queued", {"text": text})
@@ -761,6 +817,8 @@ class VoicePipeline:
             text = str(result.get("text") or "").strip()
             self._stt_result = text or str(result.get("message") or "Audio captured; no transcript yet.")
             self._last_user_text = text
+            if text:
+                self._remember_message("user", "live_stt", text, {"session_id": session_id})
             self._last_audio_capture["stt"] = result
             suppress_reason = self._live_transcript_suppress_reason(text, metadata, pipeline_cfg)
             await self._log_bus.emit("INFO", "STT", "STT transcription completed", {"text": text})
@@ -853,6 +911,7 @@ class VoicePipeline:
         if self._llm_response.strip():
             await websocket.send_json({"type": "llm_chunk", "session_id": session_id, "text": "", "final": True})
             await websocket.send_json({"type": "llm_result", "session_id": session_id, "text": self._llm_response})
+            self._remember_message("assistant", provider, self._llm_response, {"model": model})
         await self._log_bus.emit("INFO", "PIPELINE", "LLM response completed", {"chars": len(self._llm_response)})
 
     async def _send_live_llm_text(
@@ -865,6 +924,7 @@ class VoicePipeline:
     ) -> None:
         self._state = "LLM"
         self._llm_response = text
+        self._remember_message("assistant", provider, text, {"model": model})
         await websocket.send_json({"type": "llm_started", "session_id": session_id, "provider": provider, "model": model})
         await websocket.send_json({"type": "llm_chunk", "session_id": session_id, "text": text, "final": True})
         await websocket.send_json({"type": "llm_result", "session_id": session_id, "text": text})

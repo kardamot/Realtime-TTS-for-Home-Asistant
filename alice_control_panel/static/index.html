@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.120" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.120" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.121" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.121" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.120" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.121" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.120" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.121" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -151,6 +151,7 @@
               <div class="pipeline-actions">
                 <div class="pipeline-tabs" role="tablist" aria-label="Pipeline view">
                   <button class="active" data-pipeline-tab="trace" type="button">Trace</button>
+                  <button data-pipeline-tab="messages" type="button">Messages</button>
                   <button data-pipeline-tab="timing" type="button">Timing</button>
                 </div>
                 <span id="session-pill" class="pill info">SESSION OFF</span>
@@ -159,8 +160,7 @@
             </header>
             <div class="pipeline">
               <div class="pipeline-main">
-                <label>Text test</label>
-                <div class="row">
+                <div class="row pipeline-test-row">
                   <input id="pipeline-input" placeholder="Pipeline'a test metni gonder" />
                   <button id="pipeline-send">LLM + TTS</button>
                   <button id="pipeline-tts-send">TTS only</button>
@@ -173,6 +173,13 @@
                 </div>
                 <div class="pipeline-tab-panel active" data-pipeline-panel="trace">
                   <div id="pipeline-feed" class="pipeline-feed" data-autoscroll></div>
+                </div>
+                <div class="pipeline-tab-panel" data-pipeline-panel="messages">
+                  <div class="pipeline-message-actions">
+                    <button id="pipeline-messages-download" type="button">Download</button>
+                    <button id="pipeline-messages-clear" type="button">Clear</button>
+                  </div>
+                  <div id="pipeline-messages" class="pipeline-messages" data-autoscroll></div>
                 </div>
                 <div class="pipeline-tab-panel" data-pipeline-panel="timing">
                   <div id="realtime-latency" class="latency-strip"></div>
@@ -519,6 +526,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.120"></script>
+  <script src="/app.js?v=0.1.121"></script>
   </body>
 </html>

@@ -736,7 +736,7 @@ function initCommandTabs() {
 }
 
 function syncPipelineTabs() {
-  if (!["trace", "timing"].includes(pipelineView)) pipelineView = "trace";
+  if (!["trace", "messages", "timing"].includes(pipelineView)) pipelineView = "trace";
   document.querySelectorAll("[data-pipeline-tab]").forEach((button) => {
     const active = button.dataset.pipelineTab === pipelineView;
     button.classList.toggle("active", active);
@@ -877,6 +877,8 @@ async function boot() {
   $("unlock-btn").onclick = () => guard("Unlock failed", unlock);
   $("pipeline-send").onclick = () => guard("Pipeline failed", runPipeline);
   $("pipeline-tts-send").onclick = () => guard("TTS test failed", runTtsTest);
+  $("pipeline-messages-download").onclick = () => guard("Pipeline message download failed", downloadPipelineMessages);
+  $("pipeline-messages-clear").onclick = () => guard("Clear pipeline messages failed", clearPipelineMessages);
   $("session-start").onclick = () => guard("Session start failed", startVoiceSession);
   $("session-stop").onclick = () => guard("Session stop failed", stopVoiceSession);
   $("response-cancel").onclick = () => guard("Response cancel failed", cancelResponse);
@@ -1035,6 +1037,7 @@ async function loadStatus() {
   text("hw-state", esp.state || "OFFLINE");
   syncDailyBehaviorButtons(esp, pipe);
   renderPipelineTrace(pipe, realtime, data);
+  renderPipelineMessages(pipe.messages || []);
   renderRealtimeLatency(realtime.latency || {});
   renderRadar(esp.radar || latestRadar || {});
   renderMicDebug(pipe.mic_debug || {});
@@ -1798,18 +1801,32 @@ function compactPipelineText(value, fallback) {
   return textValue || fallback;
 }
 
+function lastPipelineMessage(messages, roles) {
+  const list = Array.isArray(messages) ? messages : [];
+  const accepted = Array.isArray(roles) ? roles : [roles];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const item = list[index] || {};
+    if (accepted.includes(item.role) && String(item.text || "").trim()) return item;
+  }
+  return null;
+}
+
 function renderPipelineTrace(pipe, realtime, statusData = {}) {
   const box = $("pipeline-feed");
   if (!box) return;
   const session = pipe.session || {};
   const liveMic = pipe.live_mic || {};
   const capture = pipe.last_audio_capture || {};
+  const messages = Array.isArray(pipe.messages) ? pipe.messages : [];
+  const lastUser = lastPipelineMessage(messages, "user");
+  const lastAssistant = lastPipelineMessage(messages, "assistant");
+  const lastTts = lastPipelineMessage(messages, "tts");
   const realtimeMode = Boolean(realtime.enabled || realtime.active || realtime.connected || realtime.last_transcript || realtime.last_assistant_text);
   const realtimeProvider = `${realtime.provider || "openai"} realtime`;
-  const sttText = compactPipelineText(pipe.stt_result || pipe.last_user_text || realtime.last_transcript, "No utterance yet");
-  const llmText = compactPipelineText(pipe.llm_response || realtime.last_assistant_text, "No assistant response yet");
+  const sttText = compactPipelineText(pipe.stt_result || pipe.last_user_text || realtime.last_transcript || lastUser?.text, "No utterance yet");
+  const llmText = compactPipelineText(pipe.llm_response || realtime.last_assistant_text || lastAssistant?.text, "No assistant response yet");
   const ttsText = compactPipelineText(
-    pipe.last_tts_text || realtime.last_tts_text || realtime.last_assistant_text,
+    pipe.last_tts_text || realtime.last_tts_text || realtime.last_assistant_text || lastTts?.text || lastAssistant?.text,
     pipe.tts_status ? `No TTS text captured; status is ${pipe.tts_status}.` : "No TTS text yet"
   );
   const llmProvider = realtimeMode ? `${realtimeProvider} / ${realtime.model || "model n/a"}` : `${statusData.llm?.provider || "LLM"} / ${statusData.llm?.model || "model n/a"}`;
@@ -1865,6 +1882,38 @@ function renderPipelineTrace(pipe, realtime, statusData = {}) {
       textBlock.textContent = item.text;
       body.append(meta, textBlock);
       row.append(label, body);
+      box.appendChild(row);
+    });
+  });
+}
+
+function renderPipelineMessages(messages) {
+  const box = $("pipeline-messages");
+  if (!box) return;
+  const rows = Array.isArray(messages) ? messages.slice(-120) : [];
+  keepAutoScrolled(box, () => {
+    box.innerHTML = "";
+    if (!rows.length) {
+      const empty = document.createElement("div");
+      empty.className = "pipeline-message-empty";
+      empty.textContent = "No pipeline messages yet.";
+      box.appendChild(empty);
+      return;
+    }
+    rows.forEach((item) => {
+      const row = document.createElement("div");
+      const role = String(item.role || "message").toLowerCase();
+      row.className = `pipeline-message-row ${role}`;
+      const timeEl = document.createElement("time");
+      const roleEl = document.createElement("b");
+      const sourceEl = document.createElement("span");
+      const textEl = document.createElement("p");
+      const ts = Number(item.ts || 0);
+      timeEl.textContent = Number.isFinite(ts) && ts > 0 ? new Date(ts * 1000).toLocaleTimeString() : "--:--:--";
+      roleEl.textContent = role.toUpperCase();
+      sourceEl.textContent = String(item.source || "-").replaceAll("_", " ");
+      textEl.textContent = String(item.text || "");
+      row.append(timeEl, roleEl, sourceEl, textEl);
       box.appendChild(row);
     });
   });
@@ -2059,6 +2108,25 @@ async function downloadLogs() {
   const a = document.createElement("a");
   a.href = url;
   a.download = "alice_logs.txt";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+async function clearPipelineMessages() {
+  await api("/api/pipeline/messages", { method: "DELETE" });
+  notice("Pipeline messages cleared");
+  await loadStatus();
+}
+
+async function downloadPipelineMessages() {
+  const body = await api("/api/pipeline/messages/download");
+  const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "alice_pipeline_messages.txt";
   document.body.appendChild(a);
   a.click();
   a.remove();

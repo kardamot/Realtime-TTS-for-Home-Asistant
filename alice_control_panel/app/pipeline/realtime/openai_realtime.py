@@ -223,6 +223,8 @@ class OpenAIRealtimeBridge:
         self._last_transcript = ""
         self._last_assistant_text = ""
         self._last_tts_text = ""
+        self._message_history: list[dict[str, Any]] = []
+        self._message_seq = 0
         self._started_at: float | None = None
         self._latency_session_id = ""
         self._latency_started_monotonic: float | None = None
@@ -256,9 +258,33 @@ class OpenAIRealtimeBridge:
             "last_transcript": self._last_transcript,
             "last_assistant_text": self._last_assistant_text,
             "last_tts_text": self._last_tts_text,
+            "messages": [dict(item) for item in self._message_history[-120:]],
             "uptime_sec": int(time.time() - self._started_at) if self._started_at else 0,
             "latency": self._latency_snapshot(),
         }
+
+    def _remember_message(self, role: str, source: str, text: str, meta: dict[str, Any] | None = None) -> None:
+        clean = str(text or "").strip()
+        if not clean:
+            return
+        last = self._message_history[-1] if self._message_history else {}
+        if last.get("role") == role and last.get("text") == clean and last.get("source") == source:
+            return
+        self._message_seq += 1
+        self._message_history.append(
+            {
+                "id": f"rt-{self._message_seq}",
+                "ts": time.time(),
+                "role": role,
+                "source": source,
+                "text": clean,
+                "meta": meta or {},
+            }
+        )
+        self._message_history = self._message_history[-120:]
+
+    def clear_message_history(self) -> None:
+        self._message_history.clear()
 
     def _reset_latency(self, session_id: str, **data: Any) -> None:
         self._latency_session_id = session_id
@@ -318,6 +344,8 @@ class OpenAIRealtimeBridge:
         response_requested = False
         response_done = False
         stt_result_sent = False
+        stt_message_sent = False
+        assistant_message_sent = False
         llm_started_sent = False
         speech_started = False
         audio_ms = 0
@@ -374,11 +402,14 @@ class OpenAIRealtimeBridge:
             await self._log_bus.emit("INFO", "PIPELINE", "OpenAI Realtime response requested", {"session_id": session_id})
 
         async def send_stt_result_once(reason: str) -> None:
-            nonlocal stt_result_sent
+            nonlocal stt_result_sent, stt_message_sent
             if stt_result_sent:
                 return
             stt_result_sent = True
             self._last_transcript = transcript.strip()
+            if self._last_transcript and not stt_message_sent:
+                self._remember_message("user", "openai_realtime_stt", self._last_transcript, {"reason": reason, "model": self._model})
+                stt_message_sent = True
             self._mark_latency("stt_result_sent", reason=reason)
             await send_event("stt_result", text=transcript.strip(), provider="openai_realtime", reason=reason)
 
@@ -422,7 +453,7 @@ class OpenAIRealtimeBridge:
             await request_response()
 
         async def finish_response(doc: dict[str, Any] | None = None, reason: str = "openai_realtime_done") -> None:
-            nonlocal response_done, assistant_text, text_chunker, tts_chunk_started
+            nonlocal response_done, assistant_text, text_chunker, tts_chunk_started, assistant_message_sent
             if response_done:
                 return
             response_done = True
@@ -457,6 +488,9 @@ class OpenAIRealtimeBridge:
             else:
                 await self._log_bus.emit("INFO", "PIPELINE", "OpenAI Realtime completed without assistant text", {"session_id": session_id, "reason": reason})
             if assistant_text.strip():
+                if not assistant_message_sent:
+                    self._remember_message("assistant", "openai_realtime", assistant_text.strip(), {"reason": reason, "model": self._model})
+                    assistant_message_sent = True
                 await send_event("llm_result", text=assistant_text)
             self._mark_latency("session_completed", reason=reason, audio_ms=audio_ms)
             await send_event(
@@ -529,7 +563,7 @@ class OpenAIRealtimeBridge:
                 return False
 
         async def handle_realtime_event(doc: dict[str, Any]) -> None:
-            nonlocal first_llm_delta_marked, first_transcript_delta_marked, input_committed, response_requested, response_done, response_wait_task, speech_started, text_chunker, transcript, assistant_text
+            nonlocal first_llm_delta_marked, first_transcript_delta_marked, input_committed, response_requested, response_done, response_wait_task, speech_started, text_chunker, transcript, assistant_text, stt_message_sent
             event_type = str(doc.get("type") or "")
             if not event_type:
                 return
@@ -576,6 +610,9 @@ class OpenAIRealtimeBridge:
                 if text:
                     transcript = text
                 self._last_transcript = transcript.strip()
+                if self._last_transcript and not stt_message_sent:
+                    self._remember_message("user", "openai_realtime_stt", self._last_transcript, {"reason": "transcription_completed", "model": self._model})
+                    stt_message_sent = True
                 self._mark_latency("transcription_completed", chars=len(transcript))
                 transcript_event.set()
                 if stt_result_sent:
@@ -665,7 +702,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.120",
+                version="0.1.121",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -686,14 +723,13 @@ class OpenAIRealtimeBridge:
                     if msg_type == "start":
                         transcript = ""
                         assistant_text = ""
-                        self._last_transcript = ""
-                        self._last_assistant_text = ""
-                        self._last_tts_text = ""
                         text_chunker = RealtimeTextChunker()
                         tts_chunk_started = False
                         response_requested = False
                         response_done = False
                         stt_result_sent = False
+                        stt_message_sent = False
+                        assistant_message_sent = False
                         llm_started_sent = False
                         speech_started = False
                         audio_ms = 0
@@ -762,14 +798,13 @@ class OpenAIRealtimeBridge:
                         await self.cancel("reset")
                         transcript = ""
                         assistant_text = ""
-                        self._last_transcript = ""
-                        self._last_assistant_text = ""
-                        self._last_tts_text = ""
                         text_chunker = RealtimeTextChunker()
                         tts_chunk_started = False
                         response_requested = False
                         response_done = False
                         stt_result_sent = False
+                        stt_message_sent = False
+                        assistant_message_sent = False
                         llm_started_sent = False
                         speech_started = False
                         audio_ms = 0

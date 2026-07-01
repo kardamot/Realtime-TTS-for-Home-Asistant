@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request, WebSocket
+from fastapi.responses import PlainTextResponse
 
 from app.core.auth import require_request_auth, require_websocket_auth
 
@@ -13,6 +14,22 @@ router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 @router.get("")
 async def pipeline_status(request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
     return await request.app.state.voice_pipeline.status()
+
+
+@router.delete("/messages")
+async def clear_pipeline_messages(request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
+    status = await request.app.state.voice_pipeline.clear_message_history()
+    return {"ok": True, "pipeline": status, "messages": status.get("messages", [])}
+
+
+@router.get("/messages/download")
+async def download_pipeline_messages(request: Request, _: None = Depends(require_request_auth)) -> PlainTextResponse:
+    body = await request.app.state.voice_pipeline.message_history_text()
+    return PlainTextResponse(
+        body,
+        media_type="text/plain",
+        headers={"Content-Disposition": 'attachment; filename="alice_pipeline_messages.txt"'},
+    )
 
 
 @router.post("/text")
