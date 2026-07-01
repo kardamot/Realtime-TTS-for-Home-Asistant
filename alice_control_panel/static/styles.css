@@ -611,6 +611,7 @@ nav a:hover { background: #121a25; color: var(--text); }
 .pipeline-feed {
   display: grid;
   align-content: start;
+  grid-template-rows: minmax(56px, auto) repeat(3, minmax(58px, 1fr));
   gap: 5px;
   flex: 1 1 auto;
   min-height: 0;
@@ -621,12 +622,15 @@ nav a:hover { background: #121a25; color: var(--text); }
   display: grid;
   grid-template-columns: 54px minmax(0,1fr);
   gap: 7px;
-  min-height: 47px;
+  min-height: 0;
   padding: 6px 9px;
   border: 1px solid rgba(100,169,255,.14);
   border-left: 3px solid rgba(100,169,255,.32);
   border-radius: 8px;
   background: rgba(15,21,32,.78);
+}
+.pipeline-feed-row.state {
+  min-height: 56px;
 }
 .pipeline-feed-row.stt { border-left-color: rgba(57,197,187,.72); }
 .pipeline-feed-row.llm { border-left-color: rgba(190,126,255,.72); }
@@ -654,7 +658,7 @@ nav a:hover { background: #121a25; color: var(--text); }
   white-space: nowrap;
 }
 .pipeline-feed-text {
-  max-height: 34px;
+  max-height: 100%;
   color: #c4d0dc;
   font-size: 11px;
   line-height: 1.28;

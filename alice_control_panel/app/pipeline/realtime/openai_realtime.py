@@ -112,6 +112,17 @@ def extract_realtime_response_text(doc: dict[str, Any]) -> str:
     return "".join(parts).strip()
 
 
+def append_display_text(current: str, next_text: str) -> str:
+    current_clean = str(current or "").rstrip()
+    next_clean = str(next_text or "").strip()
+    if not next_clean:
+        return current_clean
+    if not current_clean:
+        return next_clean
+    needs_space = next_clean[0] not in ".,;:!?)]}%"
+    return f"{current_clean}{' ' if needs_space else ''}{next_clean}".strip()
+
+
 class RealtimeTextChunker:
     def __init__(self) -> None:
         self._raw_pending = ""
@@ -425,7 +436,7 @@ class OpenAIRealtimeBridge:
             nonlocal first_tts_chunk_marked, tts_chunk_started
             if text.strip():
                 tts_chunk_started = True
-                self._last_tts_text = (self._last_tts_text + text).strip()
+                self._last_tts_text = append_display_text(self._last_tts_text, text)
                 if not first_tts_chunk_marked:
                     first_tts_chunk_marked = True
                     self._mark_latency("first_tts_chunk", chars=len(text))
@@ -476,8 +487,6 @@ class OpenAIRealtimeBridge:
 
             self._last_transcript = transcript.strip()
             self._last_assistant_text = assistant_text.strip()
-            if assistant_text.strip():
-                self._last_tts_text = assistant_text.strip()
             chunks_to_send = [*ready_chunks, *final_chunks]
             if chunks_to_send:
                 for chunk in chunks_to_send[:-1]:
@@ -487,6 +496,8 @@ class OpenAIRealtimeBridge:
                 await send_tts_chunk("", final=True)
             else:
                 await self._log_bus.emit("INFO", "PIPELINE", "OpenAI Realtime completed without assistant text", {"session_id": session_id, "reason": reason})
+            if assistant_text.strip() and not self._last_tts_text.strip():
+                self._last_tts_text = assistant_text.strip()
             if assistant_text.strip():
                 if not assistant_message_sent:
                     self._remember_message("assistant", "openai_realtime", assistant_text.strip(), {"reason": reason, "model": self._model})
@@ -702,7 +713,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.121",
+                version="0.1.122",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -723,6 +734,7 @@ class OpenAIRealtimeBridge:
                     if msg_type == "start":
                         transcript = ""
                         assistant_text = ""
+                        self._last_tts_text = ""
                         text_chunker = RealtimeTextChunker()
                         tts_chunk_started = False
                         response_requested = False
@@ -798,6 +810,7 @@ class OpenAIRealtimeBridge:
                         await self.cancel("reset")
                         transcript = ""
                         assistant_text = ""
+                        self._last_tts_text = ""
                         text_chunker = RealtimeTextChunker()
                         tts_chunk_started = False
                         response_requested = False
