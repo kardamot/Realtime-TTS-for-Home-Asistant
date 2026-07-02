@@ -750,6 +750,12 @@ function syncPipelineTabs() {
   const pipeline = $("pipeline");
   pipeline?.classList.toggle("timing-expanded", pipelineView === "timing");
   pipeline?.classList.toggle("messages-view", pipelineView === "messages");
+  if (pipelineView === "messages") {
+    window.requestAnimationFrame(() => {
+      const messages = $("pipeline-messages");
+      if (messages) messages.scrollTop = messages.scrollHeight;
+    });
+  }
 }
 
 function initPipelineTabs() {
