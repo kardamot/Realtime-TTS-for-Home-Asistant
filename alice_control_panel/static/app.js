@@ -375,17 +375,19 @@ function keepAutoScrolled(el, mutate, force = false) {
 function keepChildVisible(scroller, child, padding = 12) {
   if (!scroller || !child) return;
   window.requestAnimationFrame(() => {
-    const scrollerRect = scroller.getBoundingClientRect();
-    const childRect = child.getBoundingClientRect();
-    const bottomOverflow = childRect.bottom - scrollerRect.bottom + padding;
-    const topOverflow = scrollerRect.top - childRect.top + padding;
-    if (bottomOverflow > 0) {
-      scroller.scrollTop += bottomOverflow;
-    } else if (topOverflow > 0) {
-      scroller.scrollTop = Math.max(0, scroller.scrollTop - topOverflow);
-    }
-    const state = autoScrollState.get(scroller);
-    if (state) state.pinned = isNearBottom(scroller);
+    window.requestAnimationFrame(() => {
+      const scrollerRect = scroller.getBoundingClientRect();
+      const childRect = child.getBoundingClientRect();
+      const bottomOverflow = childRect.bottom - scrollerRect.bottom + padding;
+      const topOverflow = scrollerRect.top - childRect.top + padding;
+      if (bottomOverflow > 0) {
+        scroller.scrollTop += bottomOverflow;
+      } else if (topOverflow > 0) {
+        scroller.scrollTop = Math.max(0, scroller.scrollTop - topOverflow);
+      }
+      const state = autoScrollState.get(scroller);
+      if (state) state.pinned = isNearBottom(scroller);
+    });
   });
 }
 
@@ -2576,6 +2578,7 @@ function logMatchesPreset(entry) {
 }
 
 function logEntryKey(entry, index) {
+  if (entry?.id) return `id:${entry.id}`;
   const detailText = entry?.details ? JSON.stringify(entry.details) : "";
   return `${index}|${entry?.ts || 0}|${entry?.level || ""}|${entry?.category || ""}|${entry?.message || ""}|${detailText}`;
 }
@@ -2613,16 +2616,11 @@ function renderLogs(options = {}) {
         detailBlock.addEventListener("click", (event) => event.stopPropagation());
         row.addEventListener("click", () => {
           expandedLogKey = expandedLogKey === key ? "" : key;
-          list.querySelectorAll(".log-row.expanded").forEach((openRow) => {
-            openRow.classList.toggle("expanded", openRow.dataset.logKey === expandedLogKey);
-          });
-          if (expandedLogKey === key) {
-            keepChildVisible(list, detailBlock, 18);
-          }
+          renderLogs({ revealExpanded: true });
         });
         if (expandedLogKey === key) {
           row.classList.add("expanded");
-          expandedTarget = detailBlock;
+          expandedTarget = row;
         }
       }
       list.appendChild(row);
@@ -2634,7 +2632,7 @@ function renderLogs(options = {}) {
       list.appendChild(empty);
     }
   }, Boolean(options.forceScroll));
-  if (expandedTarget) {
+  if (expandedTarget && options.revealExpanded !== false) {
     window.requestAnimationFrame(() => keepChildVisible(list, expandedTarget, 18));
   }
 }

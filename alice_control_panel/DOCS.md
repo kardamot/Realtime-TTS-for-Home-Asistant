@@ -244,6 +244,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.147` makes log detail clicks trigger their own render so expanded details open immediately instead of waiting for the next log update.
 - `0.1.146` refreshes add-on metadata so Home Assistant can surface the latest log panel update as a new package.
 - `0.1.144` keeps expanded log details visible when the Logs panel is full or scrolled to the bottom.
 - `0.1.143` refreshes add-on metadata so Home Assistant can surface the latest HA control reply changes as an update.
