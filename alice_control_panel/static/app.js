@@ -745,7 +745,9 @@ function syncPipelineTabs() {
   document.querySelectorAll("[data-pipeline-panel]").forEach((panel) => {
     panel.classList.toggle("active", panel.dataset.pipelinePanel === pipelineView);
   });
-  $("pipeline")?.classList.toggle("timing-expanded", pipelineView === "timing");
+  const pipeline = $("pipeline");
+  pipeline?.classList.toggle("timing-expanded", pipelineView === "timing");
+  pipeline?.classList.toggle("messages-view", pipelineView === "messages");
 }
 
 function initPipelineTabs() {

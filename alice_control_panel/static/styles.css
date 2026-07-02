@@ -677,10 +677,13 @@ nav a:hover { background: #121a25; color: var(--text); }
   overflow-wrap: anywhere;
 }
 .pipeline-message-actions {
-  display: flex;
+  display: none;
   justify-content: flex-end;
   gap: 6px;
-  margin-top: 7px;
+  margin-top: 2px;
+}
+#pipeline.messages-view .pipeline-message-actions {
+  display: flex;
 }
 .pipeline-message-actions button {
   min-height: 28px;
@@ -1862,8 +1865,17 @@ label.wide { grid-column: 1 / -1; }
   }
   .pipeline-test-row input {
     grid-column: 1 / -1;
+    grid-row: 1;
     min-height: 31px;
     font-size: 12px;
+  }
+  .pipeline-test-row button:nth-of-type(1) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .pipeline-test-row button:nth-of-type(2) {
+    grid-column: 2;
+    grid-row: 2;
   }
   .pipeline-test-row button,
   .session-controls button {
@@ -1878,34 +1890,50 @@ label.wide { grid-column: 1 / -1; }
   .session-controls {
     display: contents;
   }
+  .session-controls button:nth-of-type(1) {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  .session-controls button:nth-of-type(2) {
+    grid-column: 4;
+    grid-row: 2;
+  }
+  .session-controls button:nth-of-type(3) {
+    grid-column: 5;
+    grid-row: 2;
+  }
   .session-controls span {
     grid-column: 1 / -1;
+    grid-row: 3;
     max-width: 100%;
     min-height: 15px;
-    padding-right: 142px;
+    padding-right: 0;
     font-size: 11px;
     line-height: 1.2;
   }
-  .pipeline-tab-panel.active {
-    grid-column: 1 / -1;
-  }
-  .pipeline-feed {
-    overflow: visible;
-  }
-  .pipeline-tab-panel[data-pipeline-panel="messages"].active {
-    position: relative;
+  #pipeline.messages-view .session-controls span {
+    grid-column: 3 / 6;
   }
   .pipeline-message-actions {
-    position: absolute;
-    top: -34px;
-    right: 0;
+    grid-column: 1 / 3;
+    grid-row: 3;
+    align-self: center;
     margin: 0;
     gap: 5px;
   }
   .pipeline-message-actions button {
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 28px;
-    padding: 0 9px;
+    padding: 0 7px;
     font-size: 11px;
+  }
+  .pipeline-tab-panel.active {
+    grid-column: 1 / -1;
+    grid-row: 4;
+  }
+  .pipeline-feed {
+    overflow: visible;
   }
   .pipeline-message-row {
     grid-template-columns: 68px 72px minmax(0,1fr);
@@ -1939,7 +1967,7 @@ label.wide { grid-column: 1 / -1; }
     font-size: 10px;
   }
   .session-controls span {
-    padding-right: 118px;
+    padding-right: 0;
   }
   .dpad {
     min-height: 188px;

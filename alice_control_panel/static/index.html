@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.131" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.131" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.132" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.132" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.131" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.132" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.131" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.132" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -167,6 +167,10 @@
                   <button id="pipeline-send">LLM + TTS</button>
                   <button id="pipeline-tts-send">TTS only</button>
                 </div>
+                <div class="pipeline-message-actions">
+                  <button id="pipeline-messages-download" type="button">Download</button>
+                  <button id="pipeline-messages-clear" type="button">Clear</button>
+                </div>
                 <div class="session-controls">
                   <button id="session-start">Start session</button>
                   <button id="session-stop">Stop session</button>
@@ -177,10 +181,6 @@
                   <div id="pipeline-feed" class="pipeline-feed" data-autoscroll></div>
                 </div>
                 <div class="pipeline-tab-panel" data-pipeline-panel="messages">
-                  <div class="pipeline-message-actions">
-                    <button id="pipeline-messages-download" type="button">Download</button>
-                    <button id="pipeline-messages-clear" type="button">Clear</button>
-                  </div>
                   <div id="pipeline-messages" class="pipeline-messages" data-autoscroll></div>
                 </div>
                 <div class="pipeline-tab-panel" data-pipeline-panel="timing">
@@ -530,6 +530,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.131"></script>
+  <script src="/app.js?v=0.1.132"></script>
   </body>
 </html>
