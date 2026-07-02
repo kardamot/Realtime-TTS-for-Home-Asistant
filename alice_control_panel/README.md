@@ -33,6 +33,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - Version `0.1.94` adds radar jump rejection, continuity confidence, and empty-room calibration commands.
 - Version `0.1.93` fixes the RD-03D radar X orientation and makes radar tracking updates more responsive.
 - Version `0.1.92` compacts the Voice Pipeline transcript and realtime timeline so short RT rows do not create unnecessary scrollbars.
+- Version `0.1.143` refreshes add-on metadata so Home Assistant can surface the latest HA control reply changes as an update.
 - Version `0.1.142` keeps HA control deterministic while adding safer, more varied natural replies from alias names, local fallbacks, and optional LLM narration.
 - Version `0.1.141` lets strong aliases outside a misleading domain hint still match safely, so `switch.masa_lambasi` can answer "masa lambasini ac" while color/brightness remains light-only.
 - Version `0.1.140` adds a safer Home Assistant intent parser for Turkish light color/brightness commands, alias matching, room groups, and clarification instead of guessing between multiple allowlisted entities.
