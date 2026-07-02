@@ -371,6 +371,23 @@ function keepAutoScrolled(el, mutate, force = false) {
   });
 }
 
+function keepChildVisible(scroller, child, padding = 12) {
+  if (!scroller || !child) return;
+  window.requestAnimationFrame(() => {
+    const scrollerRect = scroller.getBoundingClientRect();
+    const childRect = child.getBoundingClientRect();
+    const bottomOverflow = childRect.bottom - scrollerRect.bottom + padding;
+    const topOverflow = scrollerRect.top - childRect.top + padding;
+    if (bottomOverflow > 0) {
+      scroller.scrollTop += bottomOverflow;
+    } else if (topOverflow > 0) {
+      scroller.scrollTop = Math.max(0, scroller.scrollTop - topOverflow);
+    }
+    const state = autoScrollState.get(scroller);
+    if (state) state.pinned = isNearBottom(scroller);
+  });
+}
+
 function setAutoText(id, value) {
   const el = $(id);
   keepAutoScrolled(el, () => { el.textContent = value ?? "-"; });
@@ -2579,8 +2596,13 @@ function renderLogs(options = {}) {
       row.querySelector("p").textContent = entry.message || "";
       if (details) {
         row.classList.add("has-details");
-        row.querySelector("pre").textContent = details;
-        row.onclick = () => row.classList.toggle("expanded");
+        const detailBlock = row.querySelector("pre");
+        detailBlock.textContent = details;
+        detailBlock.addEventListener("click", (event) => event.stopPropagation());
+        row.addEventListener("click", () => {
+          row.classList.toggle("expanded");
+          if (row.classList.contains("expanded")) keepChildVisible(list, row);
+        });
       }
       list.appendChild(row);
     });
