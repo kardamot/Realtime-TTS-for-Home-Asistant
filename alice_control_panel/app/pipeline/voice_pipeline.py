@@ -159,6 +159,11 @@ class VoicePipeline:
         await self._ws_hub.publish("pipeline_status", await self.status())
         return await self.status()
 
+    async def handle_esp_tts_timing(self, payload: dict[str, Any]) -> None:
+        if self._realtime_bridge and hasattr(self._realtime_bridge, "record_esp_tts_timing"):
+            await self._realtime_bridge.record_esp_tts_timing(payload)
+        await self._ws_hub.publish("pipeline_status", await self.status())
+
     async def message_history_text(self) -> str:
         status = await self.status()
         lines: list[str] = []
@@ -252,7 +257,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.149",
+                "version": "0.1.150",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),

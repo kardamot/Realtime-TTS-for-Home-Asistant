@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.149", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.150", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
@@ -80,6 +80,7 @@ def create_app() -> FastAPI:
         ha_narrator,
     )
     esp_client.set_mic_stream_handler(voice_pipeline.run_audio_capture)
+    esp_client.set_tts_timing_handler(voice_pipeline.handle_esp_tts_timing)
 
     app.state.config_store = config_store
     app.state.log_bus = log_bus

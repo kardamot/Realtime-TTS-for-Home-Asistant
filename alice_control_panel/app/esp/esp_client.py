@@ -157,12 +157,19 @@ class EspClient:
         self._active_mic_stream: dict[str, Any] | None = None
         self._active_mic_buffer = bytearray()
         self._mic_stream_handler: Callable[[dict[str, Any], bytes], Awaitable[dict[str, Any]]] | None = None
+        self._tts_timing_handler: Callable[[dict[str, Any]], Awaitable[None]] | None = None
 
     def set_mic_stream_handler(
         self,
         handler: Callable[[dict[str, Any], bytes], Awaitable[dict[str, Any]]] | None,
     ) -> None:
         self._mic_stream_handler = handler
+
+    def set_tts_timing_handler(
+        self,
+        handler: Callable[[dict[str, Any]], Awaitable[None]] | None,
+    ) -> None:
+        self._tts_timing_handler = handler
 
     async def start(self) -> None:
         if self._poll_task and not self._poll_task.done():
@@ -487,6 +494,13 @@ class EspClient:
                 {"stream_id": stream_id, "message": message},
             )
             await self._ws_hub.publish("esp_event", {"type": msg_type, "payload": payload})
+            return
+        if msg_type == "tts_timing":
+            event_payload = {"type": "tts_timing", "payload": payload}
+            await self._ws_hub.publish("esp_event", event_payload)
+            handler = self._tts_timing_handler
+            if handler is not None:
+                await handler(dict(payload))
             return
         if msg_type == "mic_start":
             await self._handle_mic_start(doc, payload)

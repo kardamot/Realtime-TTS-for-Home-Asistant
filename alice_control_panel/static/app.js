@@ -2,7 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.149";
+const UI_VERSION = "0.1.150";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -570,6 +570,15 @@ function fmtSeconds(value) {
 function fmtMs(value) {
   const total = Number(value);
   return Number.isFinite(total) ? `${Math.round(total)}ms` : "-";
+}
+
+function fmtClock(value, withMs = false) {
+  const ts = Number(value || 0);
+  if (!Number.isFinite(ts) || ts <= 0) return "--:--:--";
+  const date = new Date(ts * 1000);
+  if (!withMs) return date.toLocaleTimeString();
+  const base = date.toLocaleTimeString();
+  return `${base}.${String(date.getMilliseconds()).padStart(3, "0")}`;
 }
 
 function tone(value) {
@@ -1944,7 +1953,7 @@ function renderPipelineMessages(messages) {
       const sourceEl = document.createElement("span");
       const textEl = document.createElement("p");
       const ts = Number(item.ts || 0);
-      timeEl.textContent = Number.isFinite(ts) && ts > 0 ? new Date(ts * 1000).toLocaleTimeString() : "--:--:--";
+      timeEl.textContent = fmtClock(ts);
       roleEl.textContent = role.toUpperCase();
       sourceEl.textContent = String(item.source || "-").replaceAll("_", " ");
       textEl.textContent = String(item.text || "");
@@ -1963,7 +1972,9 @@ function renderRealtimeLatency(latency) {
     ["Wake -> mic", summary.wake_to_first_audio_ms],
     ["Speech -> STT", summary.speech_stop_to_transcript_ms ?? summary.speech_to_transcript_ms],
     ["STT -> LLM", summary.transcript_to_first_delta_ms],
-    ["LLM -> TTS", summary.first_delta_to_first_chunk_ms],
+    ["LLM -> TTS text", summary.first_delta_to_first_chunk_ms],
+    ["TTS text -> speaker", summary.tts_text_to_speaker_ms],
+    ["Wake -> speaker", summary.wake_to_speaker_ms],
     ["Wake -> TTS text", summary.wake_to_first_tts_ms],
     ["Turn total", summary.wake_to_complete_ms ?? summary.total_ms],
   ];
@@ -1989,7 +2000,8 @@ function turnHasSpeechData(turn) {
     summary.speech_stop_to_transcript_ms != null ||
     summary.transcript_to_first_delta_ms != null ||
     summary.first_delta_to_first_chunk_ms != null ||
-    summary.wake_to_first_tts_ms != null
+    summary.wake_to_first_tts_ms != null ||
+    summary.wake_to_speaker_ms != null
   );
 }
 
@@ -2007,7 +2019,7 @@ function isCurrentTimingActive(latency = {}) {
   const events = Array.isArray(latency.events) ? latency.events : [];
   if (!events.length) return false;
   const last = String(events[events.length - 1]?.name || "");
-  return !["session_completed", "response_cancelled", "client_cancelled"].includes(last);
+  return !["session_completed", "speaker_audio_finished", "response_cancelled", "client_cancelled"].includes(last);
 }
 
 function selectTimingTurn(latency = {}) {
@@ -2047,6 +2059,11 @@ function fallbackLatencyStages(events) {
     response_requested: "LLM requested",
     first_llm_delta: "First LLM text",
     first_tts_chunk: "TTS text queued",
+    tts_relay_connected: "TTS relay connected",
+    tts_relay_request_sent: "TTS request sent",
+    tts_relay_started: "TTS stream started",
+    speaker_first_audio: "Speaker first PCM",
+    speaker_audio_finished: "Speaker finished",
     response_done: "LLM done",
     session_completed: "Turn completed",
   };
@@ -2066,7 +2083,11 @@ function formatEventFallbackDetail(event) {
   if (event.chars != null) parts.push(`${event.chars} chars`);
   if (event.audio_ms != null) parts.push(`audio ${event.audio_ms}ms`);
   if (event.audio_ts != null) parts.push(`audioTs ${event.audio_ts}ms`);
+  if (event.esp_offset_ms != null) parts.push(`ESP stream +${event.esp_offset_ms}ms`);
+  if (event.relay_ms != null) parts.push(`stage ${event.relay_ms}ms`);
+  if (event.prebuffer_bytes != null) parts.push(`prebuffer ${event.prebuffer_bytes} bytes`);
   if (event.source_rate && event.target_rate) parts.push(`${event.source_rate}Hz -> ${event.target_rate}Hz`);
+  if (event.sample_rate) parts.push(`${event.sample_rate}Hz x${event.channels || 1}`);
   return parts.join("; ") || String(event.name || "event").replaceAll("_", " ");
 }
 
@@ -2083,6 +2104,8 @@ function renderTurnSummary(latency, selected) {
     source.transcript ? `STT: ${compactSnippet(source.transcript, "")}` : "",
     source.assistant_text ? `LLM: ${compactSnippet(source.assistant_text, "")}` : "",
     summary.wake_to_first_tts_ms != null ? `Wake -> TTS text ${fmtMs(summary.wake_to_first_tts_ms)}` : "",
+    summary.tts_text_to_speaker_ms != null ? `TTS text -> speaker ${fmtMs(summary.tts_text_to_speaker_ms)}` : "",
+    summary.wake_to_speaker_ms != null ? `Wake -> speaker ${fmtMs(summary.wake_to_speaker_ms)}` : "",
     summary.wake_to_complete_ms != null ? `Total ${fmtMs(summary.wake_to_complete_ms)}` : "",
   ].filter(Boolean);
   box.innerHTML = "";
@@ -2116,10 +2139,12 @@ function renderTurnHistory(history) {
     const row = document.createElement("div");
     const summary = turn.summary || {};
     const when = Number(turn.ended_at || 0);
-    const timeText = Number.isFinite(when) && when > 0 ? new Date(when * 1000).toLocaleTimeString() : "--:--:--";
+    const timeText = fmtClock(when);
+    const speakerMs = summary.wake_to_speaker_ms;
+    const ttsMs = summary.wake_to_first_tts_ms;
     const meta = document.createElement("span");
     const textLine = document.createElement("p");
-    meta.textContent = `${timeText} | TTS ${fmtMs(summary.wake_to_first_tts_ms)} | total ${fmtMs(summary.wake_to_complete_ms ?? summary.total_ms)}`;
+    meta.textContent = `${timeText} | ${speakerMs != null ? `speaker ${fmtMs(speakerMs)}` : `TTS text ${fmtMs(ttsMs)}`} | total ${fmtMs(summary.wake_to_complete_ms ?? summary.total_ms)}`;
     textLine.textContent = turnHistoryText(turn);
     row.append(meta, textLine);
     box.appendChild(row);
@@ -2137,7 +2162,7 @@ function renderTurnTiming(latency = {}, items = []) {
   renderTurnSummary(latency, selected);
   renderTurnHistory(history);
   box.innerHTML = "";
-  const visibleStages = stages.slice(-10);
+  const visibleStages = stages.slice(-14);
   if (!visibleStages.length) {
     const idle = document.createElement("div");
     idle.className = "turn-stage-row idle";
@@ -2151,7 +2176,7 @@ function renderTurnTiming(latency = {}, items = []) {
     const timeEl = document.createElement("b");
     const labelEl = document.createElement("span");
     const detailEl = document.createElement("em");
-    timeEl.textContent = `+${fmtMs(stage.ms)}`;
+    timeEl.textContent = `${fmtClock(stage.at, true)}  +${fmtMs(stage.ms)}`;
     labelEl.textContent = stage.label || String(stage.key || "Step").replaceAll("_", " ");
     detailEl.textContent = formatStageDetail(stage);
     row.append(timeEl, labelEl, detailEl);

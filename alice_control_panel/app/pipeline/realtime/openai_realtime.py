@@ -52,6 +52,12 @@ REALTIME_LATENCY_DELTAS = (
     ("commit_to_first_delta_ms", "input_committed", "first_llm_delta"),
     ("response_to_first_delta_ms", "response_requested", "first_llm_delta"),
     ("first_delta_to_first_chunk_ms", "first_llm_delta", "first_tts_chunk"),
+    ("tts_text_to_relay_connect_ms", "first_tts_chunk", "tts_relay_connected"),
+    ("tts_text_to_relay_request_ms", "first_tts_chunk", "tts_relay_request_sent"),
+    ("tts_text_to_relay_start_ms", "first_tts_chunk", "tts_relay_started"),
+    ("tts_text_to_speaker_ms", "first_tts_chunk", "speaker_first_audio"),
+    ("wake_to_speaker_ms", "start_received", "speaker_first_audio"),
+    ("llm_to_speaker_ms", "first_llm_delta", "speaker_first_audio"),
     ("wake_to_first_tts_ms", "start_received", "first_tts_chunk"),
     ("wake_to_response_done_ms", "start_received", "response_done"),
     ("wake_to_complete_ms", "start_received", "session_completed"),
@@ -76,6 +82,11 @@ REALTIME_STAGE_DEFINITIONS = (
     ("response_created", "LLM started", "OpenAI started the response"),
     ("first_llm_delta", "First LLM text", "First assistant text token arrived"),
     ("first_tts_chunk", "TTS text queued", "First text chunk sent toward the firmware TTS player"),
+    ("tts_relay_connected", "TTS relay connected", "ESP connected to the TTS relay WebSocket"),
+    ("tts_relay_request_sent", "TTS request sent", "ESP sent the text request to the TTS relay"),
+    ("tts_relay_started", "TTS stream started", "TTS relay returned audio format/start metadata"),
+    ("speaker_first_audio", "Speaker first PCM", "ESP started writing the first PCM frames to the speaker"),
+    ("speaker_audio_finished", "Speaker finished", "ESP finished draining the speaker PCM stream"),
     ("response_done", "LLM done", "Assistant response completed"),
     ("session_completed", "Turn completed", "Add-on finished the voice turn"),
     ("response_cancelled", "Cancelled", "Assistant response was cancelled"),
@@ -393,11 +404,31 @@ class OpenAIRealtimeBridge:
             parts.append(f"{int(event['chars'])} chars")
         if event.get("wait_ms") is not None:
             parts.append(f"wait {int(event['wait_ms'])}ms")
+        if event.get("esp_offset_ms") is not None:
+            parts.append(f"ESP stream +{int(event['esp_offset_ms'])}ms")
+        if event.get("relay_ms") is not None:
+            parts.append(f"stage {int(event['relay_ms'])}ms")
+        if event.get("prebuffer_bytes") is not None:
+            parts.append(f"prebuffer {int(event['prebuffer_bytes'])} bytes")
         if event.get("source_rate") is not None and event.get("target_rate") is not None:
             parts.append(f"{int(event['source_rate'])}Hz -> {int(event['target_rate'])}Hz")
+        if event.get("sample_rate") is not None:
+            channels = int(event.get("channels") or 1)
+            parts.append(f"{int(event['sample_rate'])}Hz x{channels}")
         if event.get("model"):
             parts.append(str(event["model"]))
         return "; ".join(parts) or fallback
+
+    def _first_latency_event(
+        self,
+        name: str,
+        events: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        selected = events if events is not None else self._latency_events
+        for event in selected:
+            if str(event.get("name") or "") == name:
+                return event
+        return None
 
     def _latency_stages(self, events: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
         selected = events if events is not None else self._latency_events
@@ -445,6 +476,54 @@ class OpenAIRealtimeBridge:
             self._latency_history.append(turn)
         self._latency_history = self._latency_history[-12:]
 
+    def _refresh_latest_latency_turn(self) -> None:
+        if not self._latency_history:
+            return
+        if self._latency_history[-1].get("session_id") != self._latency_session_id:
+            return
+        events = [dict(event) for event in self._latency_events]
+        self._latency_history[-1]["summary"] = dict(self._latency_summary)
+        self._latency_history[-1]["stages"] = self._latency_stages(events)
+        self._latency_history[-1]["events"] = events[-32:]
+
+    async def record_esp_tts_timing(self, payload: dict[str, Any]) -> None:
+        if not self._latency_session_id or not isinstance(payload, dict):
+            return
+        event_name = str(payload.get("event") or "").strip()
+        if event_name not in {
+            "tts_relay_connected",
+            "tts_relay_request_sent",
+            "tts_relay_started",
+            "speaker_first_audio",
+            "speaker_audio_finished",
+        }:
+            return
+        data: dict[str, Any] = {}
+        for key in ("esp_offset_ms", "relay_ms", "prebuffer_bytes", "sample_rate", "channels", "esp_millis"):
+            value = payload.get(key)
+            if value is not None:
+                data[key] = value
+        self._last_event = event_name
+        self._mark_latency(event_name, **data)
+        self._refresh_latest_latency_turn()
+
+    def _speaker_first_audio_snapshot(self) -> dict[str, Any]:
+        event = self._first_latency_event("speaker_first_audio")
+        if not event:
+            return {
+                "available": False,
+                "note": "ESP does not report first speaker PCM yet; Wake -> TTS text is the current proxy.",
+            }
+        return {
+            "available": True,
+            "ms": int(event.get("ms") or 0),
+            "at": event.get("at"),
+            "esp_offset_ms": event.get("esp_offset_ms"),
+            "prebuffer_bytes": event.get("prebuffer_bytes"),
+            "sample_rate": event.get("sample_rate"),
+            "channels": event.get("channels"),
+        }
+
     def _latency_snapshot(self) -> dict[str, Any]:
         return {
             "session_id": self._latency_session_id,
@@ -453,10 +532,7 @@ class OpenAIRealtimeBridge:
             "stages": self._latency_stages(),
             "history": [dict(item) for item in self._latency_history[-12:]],
             "updated_at": self._latency_updated_at,
-            "speaker_first_audio": {
-                "available": False,
-                "note": "ESP does not report first speaker PCM yet; first_tts_chunk is the current proxy.",
-            },
+            "speaker_first_audio": self._speaker_first_audio_snapshot(),
         }
 
     async def websocket_session(self, websocket: WebSocket) -> None:
@@ -834,7 +910,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.149",
+                version="0.1.150",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
