@@ -562,8 +562,14 @@ nav a:hover { background: #121a25; color: var(--text); }
   flex-direction: column;
 }
 #pipeline.timing-expanded {
-  height: var(--pipeline-timing-panel-h);
-  min-height: var(--pipeline-timing-panel-h);
+  height: auto;
+  min-height: var(--pipeline-panel-h);
+  max-height: var(--pipeline-timing-panel-h);
+}
+#pipeline.timing-expanded .pipeline,
+#pipeline.timing-expanded .pipeline-main,
+#pipeline.timing-expanded .pipeline-tab-panel[data-pipeline-panel="timing"].active {
+  flex: 0 1 auto;
 }
 #pipeline .pipeline {
   display: flex;
@@ -856,6 +862,7 @@ nav a:hover { background: #121a25; color: var(--text); }
   overflow: hidden;
 }
 #pipeline.timing-expanded .turn-timeline {
+  max-height: 300px;
   overflow: auto;
   padding-right: 2px;
 }
@@ -1634,8 +1641,12 @@ label.wide { grid-column: 1 / -1; }
     min-height: 320px;
   }
   #pipeline.timing-expanded {
-    height: min(78vh, var(--pipeline-timing-panel-h));
-    min-height: min(560px, 78vh);
+    height: auto;
+    min-height: 320px;
+    max-height: min(78vh, var(--pipeline-timing-panel-h));
+  }
+  #pipeline.timing-expanded .turn-timeline {
+    max-height: min(300px, 36vh);
   }
   .command-panel {
     height: auto;
