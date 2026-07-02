@@ -87,6 +87,7 @@ class HaNarrator:
             "K\u0131sa konu\u015f, ham state/entity/json okuma. "
             "T\u00fcrk\u00e7e karakterleri do\u011fru kullan: g\u00fcne\u015fli, r\u00fczgar, ya\u011fmur, s\u0131cakl\u0131k. "
             "S\u0131cakl\u0131k, ya\u011f\u0131\u015f, r\u00fczgar, nem ve hissedilen s\u0131cakl\u0131k bilgisi varsa birlikte yorumla. "
+            "Ondal\u0131kl\u0131 say\u0131lar\u0131 TTS dostu yaz: 26,3 derece yerine 26 derece civar\u0131 de; 10,8 km/h yerine 11 kilometre/saat civar\u0131 de. "
             "R\u00fczgar y\u00fcksekse, ya\u011f\u0131\u015f/f\u0131rt\u0131na/kar varsa veya s\u0131cakl\u0131k rahats\u0131z ediciyse pratik tavsiye ekle. "
             "R\u00fczgar 30 km/h ve \u00fcst\u00fcyse belirgin, 50 km/h ve \u00fcst\u00fcyse sert kabul et; ya\u011f\u0131\u015f olas\u0131l\u0131\u011f\u0131 veya miktar\u0131 varsa \u015femsiye/\u00fcst ba\u015f tavsiyesi ver. "
             "Bilgi yoksa uydurma; sadece eldeki veriye g\u00f6re konu\u015f. En fazla 2 c\u00fcmle yaz."

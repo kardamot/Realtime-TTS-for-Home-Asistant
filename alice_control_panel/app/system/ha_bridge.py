@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
+import math
 import os
 import re
 from typing import Any
@@ -126,6 +127,43 @@ def _format_number(value: float | None) -> str:
     return f"{value:.1f}".replace(".", ",")
 
 
+def _rounded_weather_int(value: float) -> int:
+    if value >= 0:
+        return int(math.floor(value + 0.5))
+    return int(math.ceil(value - 0.5))
+
+
+def _is_nearly_integer(value: float, rounded: int) -> bool:
+    return abs(value - rounded) < 0.15
+
+
+def _format_temperature_phrase(value: float | None) -> str:
+    if value is None:
+        return ""
+    rounded = _rounded_weather_int(value)
+    if _is_nearly_integer(value, rounded):
+        return f"{rounded} derece"
+    return f"{rounded} derece civar\u0131"
+
+
+def _format_weather_measure_phrase(value: float | None, unit: str = "") -> str:
+    if value is None:
+        return ""
+    rounded = _rounded_weather_int(value)
+    normalized_unit = unit.strip().lower()
+    unit_text = "kilometre/saat" if normalized_unit in {"km/h", "kmh", "kph"} else unit.strip()
+    suffix = "" if _is_nearly_integer(value, rounded) else " civar\u0131"
+    return f"{rounded}{(' ' + unit_text) if unit_text else ''}{suffix}"
+
+
+def _format_weather_percent_phrase(value: float | None) -> str:
+    if value is None:
+        return ""
+    rounded = _rounded_weather_int(value)
+    suffix = "" if _is_nearly_integer(value, rounded) else " civar\u0131"
+    return f"y\u00fczde {rounded}{suffix}"
+
+
 def _weather_condition_text(value: Any) -> str:
     key = str(value or "").strip().lower().replace("_", "-")
     return _WEATHER_CONDITION_TR.get(key, key or "bilinmiyor")
@@ -228,23 +266,28 @@ def _weather_speech(state: dict[str, Any], friendly_name: str, user_text: str = 
     low_temperature = _weather_doc_number(source, "templow", "temperature_low", "low_temperature")
     humidity = _weather_doc_number(source, "humidity")
     wind_speed = _weather_doc_number(source, "wind_speed", "wind_speed_10m")
-    precipitation = _weather_doc_number(source, "precipitation", "precipitation_probability")
+    precipitation_probability = _weather_doc_number(source, "precipitation_probability")
+    precipitation_amount = _weather_doc_number(source, "precipitation")
+    precipitation = precipitation_probability if precipitation_probability is not None else precipitation_amount
     wind_unit = str(source.get("wind_speed_unit") or attributes.get("wind_speed_unit") or "km/h").strip()
     location = _weather_location(friendly_name)
     when = "Yar\u0131n" if scope == "tomorrow" and forecast else "\u015eu an"
 
     pieces = [f"{when} {location} i\u00e7in hava {condition}"]
     if high_temperature is not None and low_temperature is not None and abs(high_temperature - low_temperature) > 0.2:
-        pieces.append(f"s\u0131cakl\u0131k {_format_number(low_temperature)} ile {_format_number(high_temperature)} derece aras\u0131")
+        low_text = str(_rounded_weather_int(low_temperature))
+        high_text = str(_rounded_weather_int(high_temperature))
+        pieces.append(f"s\u0131cakl\u0131k {low_text} ile {high_text} derece aras\u0131")
     elif temperature is not None:
-        pieces.append(f"s\u0131cakl\u0131k {_format_number(temperature)} derece")
+        pieces.append(f"s\u0131cakl\u0131k {_format_temperature_phrase(temperature)}")
     if wind_speed is not None:
-        pieces.append(f"r\u00fczgar {_format_number(wind_speed)} {wind_unit}")
+        pieces.append(f"r\u00fczgar {_format_weather_measure_phrase(wind_speed, wind_unit)}")
     if humidity is not None and scope != "tomorrow":
-        pieces.append(f"nem y\u00fczde {_format_number(humidity)}")
-    if precipitation is not None and precipitation > 0:
-        suffix = "%" if precipitation <= 100 and any("probability" in str(key) for key in source) else ""
-        pieces.append(f"ya\u011f\u0131\u015f {_format_number(precipitation)}{suffix}")
+        pieces.append(f"nem {_format_weather_percent_phrase(humidity)}")
+    if precipitation_probability is not None and precipitation_probability > 0:
+        pieces.append(f"ya\u011f\u0131\u015f olas\u0131l\u0131\u011f\u0131 {_format_weather_percent_phrase(precipitation_probability)}")
+    elif precipitation_amount is not None and precipitation_amount > 0:
+        pieces.append(f"ya\u011f\u0131\u015f {_format_weather_measure_phrase(precipitation_amount, 'mm')}")
 
     advice = _weather_advice(condition_key, temperature or high_temperature, wind_speed, precipitation)
     return ", ".join(pieces) + f". {advice}"
