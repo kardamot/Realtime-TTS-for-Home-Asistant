@@ -2183,7 +2183,10 @@ function renderButtons() {
 
 async function sendCommand(command, payload = {}) {
   const result = await api("/api/command", { method: "POST", body: JSON.stringify({ command, payload }) });
-  if (command === "clear_logs") logs = [];
+  if (command === "clear_logs") {
+    logs = [];
+    expandedLogKey = "";
+  }
   notice(result.message || `${command} sent`);
   renderLogs({ forceScroll: command === "clear_logs" });
   await loadStatus();

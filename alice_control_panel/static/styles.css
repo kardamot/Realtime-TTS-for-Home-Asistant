@@ -1629,7 +1629,10 @@ label.wide { grid-column: 1 / -1; }
   gap: 4px;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding-right: 2px;
+  padding-bottom: 4px;
 }
 .log-panel .log-list { flex: 1 1 auto; }
 .log-list::-webkit-scrollbar,
