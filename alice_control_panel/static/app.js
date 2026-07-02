@@ -27,6 +27,7 @@ let logs = [];
 let paused = false;
 let logPreset = localStorage.getItem("alice_log_preset") || "all";
 let logFocusMode = localStorage.getItem("alice_log_focus") === "1";
+let expandedLogKey = "";
 let configDirty = false;
 let logSocket = null;
 let logSocketSeq = 0;
@@ -2571,11 +2572,16 @@ function logMatchesPreset(entry) {
   return true;
 }
 
+function logEntryKey(entry, index) {
+  const detailText = entry?.details ? JSON.stringify(entry.details) : "";
+  return `${index}|${entry?.ts || 0}|${entry?.level || ""}|${entry?.category || ""}|${entry?.message || ""}|${detailText}`;
+}
+
 function renderLogs(options = {}) {
   const q = $("log-search").value.toLowerCase().trim();
   const level = $("log-level").value;
   const cat = $("log-category").value;
-  const rows = logs.filter((entry) => {
+  const rows = logs.map((entry, index) => ({ entry, index })).filter(({ entry }) => {
     if (!logMatchesPreset(entry)) return false;
     if (isRoutineLog(entry)) return false;
     if (level !== "ALL" && entry.level !== level) return false;
@@ -2584,13 +2590,16 @@ function renderLogs(options = {}) {
     return `${entry.level} ${entry.category} ${entry.message} ${JSON.stringify(entry.details || {})}`.toLowerCase().includes(q);
   }).slice(-220);
   const list = $("log-list");
+  let expandedTarget = null;
   renderLogSummary();
   renderLogControls();
   keepAutoScrolled(list, () => {
     list.innerHTML = "";
-    rows.forEach((entry) => {
+    rows.forEach(({ entry, index }) => {
       const row = document.createElement("div");
+      const key = logEntryKey(entry, index);
       row.className = `log-row ${String(entry.level || "").toLowerCase()}`;
+      row.dataset.logKey = key;
       const details = entry.details && Object.keys(entry.details).length ? JSON.stringify(entry.details, null, 2) : "";
       row.innerHTML = `<time>${new Date(entry.ts * 1000).toLocaleTimeString()}</time><b>${entry.level}</b><span>${entry.category}</span><p></p>${details ? "<pre></pre>" : ""}`;
       row.querySelector("p").textContent = entry.message || "";
@@ -2600,9 +2609,18 @@ function renderLogs(options = {}) {
         detailBlock.textContent = details;
         detailBlock.addEventListener("click", (event) => event.stopPropagation());
         row.addEventListener("click", () => {
-          row.classList.toggle("expanded");
-          if (row.classList.contains("expanded")) keepChildVisible(list, row);
+          expandedLogKey = expandedLogKey === key ? "" : key;
+          list.querySelectorAll(".log-row.expanded").forEach((openRow) => {
+            openRow.classList.toggle("expanded", openRow.dataset.logKey === expandedLogKey);
+          });
+          if (expandedLogKey === key) {
+            keepChildVisible(list, detailBlock, 18);
+          }
         });
+        if (expandedLogKey === key) {
+          row.classList.add("expanded");
+          expandedTarget = detailBlock;
+        }
       }
       list.appendChild(row);
     });
@@ -2613,6 +2631,9 @@ function renderLogs(options = {}) {
       list.appendChild(empty);
     }
   }, Boolean(options.forceScroll));
+  if (expandedTarget) {
+    window.requestAnimationFrame(() => keepChildVisible(list, expandedTarget, 18));
+  }
 }
 
 window.addEventListener("load", boot);
