@@ -1097,6 +1097,14 @@ nav a:hover { background: #121a25; color: var(--text); }
 .drive-card-head {
   align-items: center;
 }
+.drive-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
 .daily-title-stack {
   display: block;
 }
@@ -1210,6 +1218,23 @@ nav a:hover { background: #121a25; color: var(--text); }
   font-size: 10px;
   font-weight: 900;
   white-space: nowrap;
+}
+.drive-card-actions button[data-daily-toggle] {
+  min-height: 28px;
+  padding: 0 10px;
+  border-color: rgba(100,169,255,.24);
+  border-radius: 7px;
+  background: rgba(31,47,72,.82);
+  color: #d7ecff;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.drive-card-actions button[data-daily-toggle].active {
+  border-color: rgba(57,197,187,.48);
+  background: rgba(23,84,76,.72);
+  color: #d7fffb;
+  box-shadow: 0 0 0 1px rgba(57,197,187,.18) inset;
 }
 .motion-lock-toggle.active {
   border-color: rgba(255,189,84,.55);

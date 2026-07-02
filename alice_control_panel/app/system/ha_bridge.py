@@ -56,7 +56,54 @@ def _normalize_tr(text: str) -> str:
 _TURN_ON_TERMS = {"ac", "yak", "baslat", "calistir", "aktiflestir"}
 _TURN_OFF_TERMS = {"kapat", "kapa", "sondur", "durdur", "pasiflestir"}
 _TOGGLE_TERMS = {"degistir", "toggle"}
-_READ_TERMS = {"durum", "durumu", "kac", "nedir", "nasil", "oku", "goster", "sicaklik", "nem", "hava"}
+_READ_TERMS = {
+    "durum",
+    "durumu",
+    "kac",
+    "nedir",
+    "nasil",
+    "oku",
+    "goster",
+    "sicaklik",
+    "nem",
+    "hava",
+    "acik",
+    "kapali",
+    "yaniyor",
+}
+_ACTION_SUFFIXES = (
+    "ar",
+    "er",
+    "ir",
+    "ur",
+    "iyor",
+    "acak",
+    "ecek",
+    "abilir",
+    "ebilir",
+    "sana",
+    "iver",
+    "in",
+    "alim",
+)
+_ENTITY_SUFFIXES = (
+    "lerini",
+    "larini",
+    "nizi",
+    "sini",
+    "sunu",
+    "sine",
+    "lara",
+    "lere",
+    "lar",
+    "ler",
+    "ni",
+    "nu",
+    "ne",
+    "yi",
+    "yu",
+    "ye",
+)
 _DOMAIN_HINTS = {
     "isik": "light",
     "isig": "light",
@@ -88,7 +135,7 @@ _IGNORED_MATCH_TERMS = (
     | _TOGGLE_TERMS
     | _READ_TERMS
     | set(_DOMAIN_HINTS)
-    | {"alice", "lutfen", "bir", "de", "da", "mi", "mu", "midir", "bana", "icin", "su", "sunu", "oradaki"}
+    | {"alice", "lutfen", "bir", "de", "da", "mi", "mu", "misin", "musun", "midir", "bana", "icin", "su", "sunu", "oradaki"}
 )
 
 _WEATHER_CONDITION_TR = {
@@ -298,6 +345,42 @@ _CONTROL_DOMAINS = {"light", "switch", "fan", "input_boolean", "media_player", "
 
 def _words(text: str) -> list[str]:
     return re.findall(r"[a-z0-9_.]+", _normalize_tr(text))
+
+
+def _matches_action_word(word: str, roots: set[str]) -> bool:
+    if word in roots:
+        return True
+    for root in roots:
+        if not word.startswith(root):
+            continue
+        suffix = word[len(root) :]
+        if suffix and suffix.startswith(_ACTION_SUFFIXES):
+            return True
+    return False
+
+
+def _is_ignored_entity_term(term: str) -> bool:
+    return (
+        term in _IGNORED_MATCH_TERMS
+        or _matches_action_word(term, _TURN_ON_TERMS)
+        or _matches_action_word(term, _TURN_OFF_TERMS)
+        or _matches_action_word(term, _TOGGLE_TERMS)
+    )
+
+
+def _entity_match_terms(text: str) -> list[str]:
+    terms: list[str] = []
+    for word in _words(text):
+        if len(word) <= 1 or _is_ignored_entity_term(word):
+            continue
+        candidates = [word]
+        for suffix in _ENTITY_SUFFIXES:
+            if word.endswith(suffix) and len(word) > len(suffix) + 2:
+                candidates.append(word[: -len(suffix)])
+        for candidate in candidates:
+            if len(candidate) > 1 and candidate not in terms and not _is_ignored_entity_term(candidate):
+                terms.append(candidate)
+    return terms
 
 
 class HomeAssistantBridge:
@@ -525,9 +608,7 @@ class HomeAssistantBridge:
 
     async def should_route_home_control(self, text: str) -> bool:
         cfg = await self._cfg()
-        if not bool(cfg.get("route_home_control", True)) or not await self.is_ready():
-            return False
-        if not self.has_entity_scope(cfg):
+        if not bool(cfg.get("route_home_control", True)):
             return False
         normalized = _normalize_tr(text)
         weather_terms = ["hava", "derece", "sicaklik", "nem", "ruzgar", "yagmur"]
@@ -545,7 +626,7 @@ class HomeAssistantBridge:
             return None, []
 
         text_norm = _normalize_tr(text)
-        terms = [term for term in _words(text) if len(term) > 1 and term not in _IGNORED_MATCH_TERMS]
+        terms = _entity_match_terms(text)
         scored: list[tuple[int, dict[str, Any]]] = []
         for item in states:
             entity_id = str(item.get("entity_id") or "").lower()
@@ -575,21 +656,21 @@ class HomeAssistantBridge:
         return scored[0][1], [item for _score, item in scored[1:6]]
 
     def _detect_action(self, text: str) -> str:
-        words = set(_words(text))
-        if words & _TURN_OFF_TERMS:
+        words = _words(text)
+        if any(_matches_action_word(word, _TURN_OFF_TERMS) for word in words):
             return "turn_off"
-        if words & _TURN_ON_TERMS:
+        if any(_matches_action_word(word, _TURN_ON_TERMS) for word in words):
             return "turn_on"
-        if words & _TOGGLE_TERMS:
+        if any(_matches_action_word(word, _TOGGLE_TERMS) for word in words):
             return "toggle"
-        if words & _READ_TERMS:
+        if set(words) & _READ_TERMS:
             return "read"
         return ""
 
     def _domain_hint(self, text: str) -> str:
         for word in _words(text):
             for term, domain in _DOMAIN_HINTS.items():
-                if word == term or word.startswith(term):
+                if word == term or word.startswith(term) or (len(term) >= 4 and term in word):
                     return domain
         return ""
 

@@ -26,6 +26,13 @@ INCOMPLETE_EMOTION_TAG_RE = re.compile(r"<emotion:\s*[^>]*$", re.IGNORECASE)
 STREAM_CHUNK_MIN_CHARS = 28
 STREAM_CHUNK_HARD_CHARS = 90
 REALTIME_TRANSCRIPTION_PROMPT_MAX_CHARS = 1024
+HOME_ASSISTANT_RUNTIME_GUARDRAILS = (
+    "Runtime guardrails for Home Assistant control:\n"
+    "- Alice Control Panel handles Home Assistant state reads and service calls outside the model.\n"
+    "- Never invent, print, or narrate tool calls, JSON, service names, entity_id values, ha-* calls, light.turn_on, switch.turn_off, or 'Calling Home Assistant'.\n"
+    "- For home-control requests, speak only a short natural Turkish result or ask a brief clarification.\n"
+    "- Do not expose internal command syntax to the user."
+)
 REALTIME_LATENCY_DELTAS = (
     ("wake_to_openai_ms", "start_received", "openai_connected"),
     ("wake_to_first_audio_ms", "start_received", "first_audio_chunk"),
@@ -827,7 +834,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.136",
+                version="0.1.139",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -1063,12 +1070,20 @@ class OpenAIRealtimeBridge:
     async def _instructions(self, config: dict[str, Any], realtime: dict[str, Any]) -> str:
         text = str(realtime.get("instructions") or "").strip()
         if text:
-            return text
+            return self._with_runtime_guardrails(text)
         llm = config.get("llm", {}) if isinstance(config.get("llm"), dict) else {}
         text = str(llm.get("system_prompt") or "").strip()
         if text:
-            return text
-        return await self._prompt_store.active_prompt_text()
+            return self._with_runtime_guardrails(text)
+        return self._with_runtime_guardrails(await self._prompt_store.active_prompt_text())
+
+    def _with_runtime_guardrails(self, text: str) -> str:
+        clean = str(text or "").strip()
+        if HOME_ASSISTANT_RUNTIME_GUARDRAILS in clean:
+            return clean
+        if not clean:
+            return HOME_ASSISTANT_RUNTIME_GUARDRAILS
+        return f"{clean}\n\n{HOME_ASSISTANT_RUNTIME_GUARDRAILS}"
 
     def _turn_detection(self, realtime: dict[str, Any]) -> dict[str, Any]:
         mode = str(realtime.get("turn_detection") or "server_vad").strip().lower()

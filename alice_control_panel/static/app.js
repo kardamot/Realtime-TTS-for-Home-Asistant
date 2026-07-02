@@ -1,6 +1,6 @@
 const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
-  "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
+  "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
@@ -49,6 +49,7 @@ const DAILY_TOGGLE_LABELS = {
   follow_up: { on: "Follow-up on", off: "Follow-up off" },
   touch_reactions: { on: "Touch on", off: "Touch off" },
   lift_reactions: { on: "Lift on", off: "Lift off" },
+  motors: { on: "Motors on", off: "Motors off" },
   wake: { on: "Wake on", off: "Wake off" },
   sleep_mode: { on: "Wake", off: "Sleep" },
 };
@@ -1187,6 +1188,7 @@ function syncDailyBehaviorButtons(esp, pipe = {}) {
   setDailyToggleState("follow_up", hw.follow_up_enabled);
   setDailyToggleState("touch_reactions", hw.touch_reactions_enabled);
   setDailyToggleState("lift_reactions", hw.lift_reactions_enabled);
+  setDailyToggleState("motors", hw.motors_enabled);
   setDailyToggleState("sleep_mode", esp?.sleep_mode ?? hw.sleep_mode ?? hw.eyes_sleeping);
 }
 
