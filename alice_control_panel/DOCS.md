@@ -244,6 +244,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - This is the first integrated control-panel version.
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
+- `0.1.141` lets strong aliases outside a misleading domain hint still match safely, so `switch.masa_lambasi` can answer "masa lambasini ac" while color/brightness remains light-only.
 - `0.1.140` adds a safer Home Assistant intent parser for Turkish light color/brightness commands, alias matching, room groups, and clarification instead of guessing between multiple allowlisted entities.
 - `0.1.115` adds firmware soft sleep mode, deep-sleep eyes, and Sleep/Wake panel control.
 - `0.1.98` ends empty-room radar calibration even when no radar frames arrive and tightens the mobile radar header controls.

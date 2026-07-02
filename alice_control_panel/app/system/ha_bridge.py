@@ -1014,6 +1014,10 @@ class HomeAssistantBridge:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
         domain_hint = intent.domain_hint
         states = await self.list_states(domain=domain_hint, limit=256) if domain_hint else await self.list_states(limit=256)
+        if domain_hint and (not states or self._should_try_cross_domain_match(text, intent, states, cfg)):
+            all_states = await self.list_states(limit=256)
+            if all_states:
+                states = all_states
         if not states:
             return [], [], ""
 
@@ -1058,6 +1062,21 @@ class HomeAssistantBridge:
                 return [], [entry.item for entry in scored[:5]], self._clarify_speech([entry.item for entry in scored[:5]])
 
         return [top.item], [entry.item for entry in scored[1:6]], ""
+
+    def _should_try_cross_domain_match(
+        self,
+        text: str,
+        intent: HaIntent,
+        states: list[dict[str, Any]],
+        cfg: dict[str, Any],
+    ) -> bool:
+        if intent.all_requested or intent.room_group_requested:
+            return False
+        hinted_scores = self._score_entities(text, intent, states, cfg)
+        hinted_top = hinted_scores[0].score if hinted_scores else 0
+        if hinted_top >= 35:
+            return False
+        return bool(intent.target_terms)
 
     def _score_entities(self, text: str, intent: HaIntent, states: list[dict[str, Any]], cfg: dict[str, Any]) -> list[EntityScore]:
         text_norm = _normalize_tr(text)

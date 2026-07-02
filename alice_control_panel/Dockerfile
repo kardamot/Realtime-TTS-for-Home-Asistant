@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
 LABEL \
-      io.hass.version="0.1.140" \
+      io.hass.version="0.1.141" \
   io.hass.type="addon" \
   io.hass.arch="amd64"
 
