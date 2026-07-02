@@ -942,6 +942,7 @@ async function boot() {
   $("log-search").oninput = () => renderLogs({ forceScroll: true });
   $("log-level").onchange = () => renderLogs({ forceScroll: true });
   $("log-category").onchange = () => renderLogs({ forceScroll: true });
+  initLogListInteractions();
   document.querySelectorAll("[data-log-preset]").forEach((button) => {
     button.onclick = () => setLogPreset(button.dataset.logPreset || "all");
   });
@@ -2583,6 +2584,44 @@ function logEntryKey(entry, index) {
   return `${index}|${entry?.ts || 0}|${entry?.level || ""}|${entry?.category || ""}|${entry?.message || ""}|${detailText}`;
 }
 
+function formatLogDetails(entry) {
+  const details = entry?.details && Object.keys(entry.details).length ? entry.details : null;
+  if (details) return JSON.stringify(details, null, 2);
+  return JSON.stringify({
+    time: entry?.ts ? new Date(entry.ts * 1000).toLocaleString() : "",
+    level: entry?.level || "",
+    category: entry?.category || "",
+    message: entry?.message || ""
+  }, null, 2);
+}
+
+function toggleLogDetails(key) {
+  if (!key) return;
+  expandedLogKey = expandedLogKey === key ? "" : key;
+  renderLogs({ revealExpanded: true });
+}
+
+function initLogListInteractions() {
+  const list = $("log-list");
+  if (!list || list.dataset.interactionsBound) return;
+  list.dataset.interactionsBound = "1";
+  list.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+    if (!target || target.closest("pre")) return;
+    const row = target.closest(".log-row");
+    if (!row || !list.contains(row)) return;
+    toggleLogDetails(row.dataset.logKey || "");
+  });
+  list.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+    const row = target?.closest(".log-row");
+    if (!row || !list.contains(row)) return;
+    event.preventDefault();
+    toggleLogDetails(row.dataset.logKey || "");
+  });
+}
+
 function renderLogs(options = {}) {
   const q = $("log-search").value.toLowerCase().trim();
   const level = $("log-level").value;
@@ -2606,22 +2645,20 @@ function renderLogs(options = {}) {
       const key = logEntryKey(entry, index);
       row.className = `log-row ${String(entry.level || "").toLowerCase()}`;
       row.dataset.logKey = key;
-      const details = entry.details && Object.keys(entry.details).length ? JSON.stringify(entry.details, null, 2) : "";
-      row.innerHTML = `<time>${new Date(entry.ts * 1000).toLocaleTimeString()}</time><b>${entry.level}</b><span>${entry.category}</span><p></p>${details ? "<pre></pre>" : ""}`;
+      const details = formatLogDetails(entry);
+      const isExpanded = expandedLogKey === key;
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+      row.innerHTML = `<time>${new Date(entry.ts * 1000).toLocaleTimeString()}</time><b>${entry.level}</b><span>${entry.category}</span><p></p><pre></pre>`;
       row.querySelector("p").textContent = entry.message || "";
-      if (details) {
-        row.classList.add("has-details");
-        const detailBlock = row.querySelector("pre");
-        detailBlock.textContent = details;
-        detailBlock.addEventListener("click", (event) => event.stopPropagation());
-        row.addEventListener("click", () => {
-          expandedLogKey = expandedLogKey === key ? "" : key;
-          renderLogs({ revealExpanded: true });
-        });
-        if (expandedLogKey === key) {
-          row.classList.add("expanded");
-          expandedTarget = row;
-        }
+      row.classList.add("has-details");
+      const detailBlock = row.querySelector("pre");
+      detailBlock.textContent = details;
+      detailBlock.addEventListener("click", (event) => event.stopPropagation());
+      if (isExpanded) {
+        row.classList.add("expanded");
+        expandedTarget = row;
       }
       list.appendChild(row);
     });
