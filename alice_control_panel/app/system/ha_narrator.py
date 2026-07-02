@@ -83,12 +83,13 @@ class HaNarrator:
         persona = str(cfg.get("system_prompt") or "").strip() or await self._prompt_store.active_prompt_text()
         system_prompt = (
             f"{persona}\n\n"
-            "Home Assistant weather verisini Alice karakteriyle dogal Turkceye cevir. "
-            "Kisa konus, ham state/entity/json okuma. "
-            "Sicaklik, yagis, ruzgar, nem ve hissedilen sicaklik bilgisi varsa birlikte yorumla. "
-            "Ruzgar yuksekse, yagis/firtina/kar varsa veya sicaklik rahatsiz ediciyse pratik tavsiye ekle. "
-            "Ruzgar 30 km/h ve ustuyse belirgin, 50 km/h ve ustuyse sert kabul et; yagis olasiligi veya miktari varsa semsiye/ust bas tavsiyesi ver. "
-            "Bilgi yoksa uydurma; sadece eldeki veriye gore konus. En fazla 2 cumle yaz."
+            "Home Assistant weather verisini Alice karakteriyle do\u011fal T\u00fcrk\u00e7eye \u00e7evir. "
+            "K\u0131sa konu\u015f, ham state/entity/json okuma. "
+            "T\u00fcrk\u00e7e karakterleri do\u011fru kullan: g\u00fcne\u015fli, r\u00fczgar, ya\u011fmur, s\u0131cakl\u0131k. "
+            "S\u0131cakl\u0131k, ya\u011f\u0131\u015f, r\u00fczgar, nem ve hissedilen s\u0131cakl\u0131k bilgisi varsa birlikte yorumla. "
+            "R\u00fczgar y\u00fcksekse, ya\u011f\u0131\u015f/f\u0131rt\u0131na/kar varsa veya s\u0131cakl\u0131k rahats\u0131z ediciyse pratik tavsiye ekle. "
+            "R\u00fczgar 30 km/h ve \u00fcst\u00fcyse belirgin, 50 km/h ve \u00fcst\u00fcyse sert kabul et; ya\u011f\u0131\u015f olas\u0131l\u0131\u011f\u0131 veya miktar\u0131 varsa \u015femsiye/\u00fcst ba\u015f tavsiyesi ver. "
+            "Bilgi yoksa uydurma; sadece eldeki veriye g\u00f6re konu\u015f. En fazla 2 c\u00fcmle yaz."
         )
         weather = _compact_weather_state(result)
         user_prompt = (
@@ -96,7 +97,7 @@ class HaNarrator:
             f"{user_text}\n\n"
             "Home Assistant weather verisi:\n"
             f"{json.dumps(weather, ensure_ascii=False, indent=2)}\n\n"
-            "Alice'in soyleyecegi dogal cevap:"
+            "Alice'in s\u00f6yleyece\u011fi do\u011fal cevap:"
         )
         payload = {
             "model": str(cfg.get("model") or "gpt-5-mini"),

@@ -91,21 +91,21 @@ _IGNORED_MATCH_TERMS = (
 )
 
 _WEATHER_CONDITION_TR = {
-    "clear-night": "acik bir gece",
+    "clear-night": "a\u00e7\u0131k bir gece",
     "cloudy": "bulutlu",
     "fog": "sisli",
     "hail": "dolu riski olan",
-    "lightning": "gok gurultulu",
-    "lightning-rainy": "gok gurultulu ve yagmurlu",
-    "partlycloudy": "parcali bulutlu",
-    "pouring": "saganak yagmurlu",
-    "rainy": "yagmurlu",
-    "snowy": "karli",
-    "snowy-rainy": "karla karisik yagmurlu",
-    "sunny": "gunesli",
-    "windy": "ruzgarli",
-    "windy-variant": "ruzgarli ve bulutlu",
-    "exceptional": "olagan disi",
+    "lightning": "g\u00f6k g\u00fcr\u00fclt\u00fcl\u00fc",
+    "lightning-rainy": "g\u00f6k g\u00fcr\u00fclt\u00fcl\u00fc ve ya\u011fmurlu",
+    "partlycloudy": "par\u00e7al\u0131 bulutlu",
+    "pouring": "sa\u011fanak ya\u011fmurlu",
+    "rainy": "ya\u011fmurlu",
+    "snowy": "karl\u0131",
+    "snowy-rainy": "karla kar\u0131\u015f\u0131k ya\u011fmurlu",
+    "sunny": "g\u00fcne\u015fli",
+    "windy": "r\u00fczgarl\u0131",
+    "windy-variant": "r\u00fczgarl\u0131 ve bulutlu",
+    "exceptional": "ola\u011fan d\u0131\u015f\u0131",
 }
 
 
@@ -124,6 +124,132 @@ def _format_number(value: float | None) -> str:
     if abs(value - round(value)) < 0.05:
         return str(int(round(value)))
     return f"{value:.1f}".replace(".", ",")
+
+
+def _weather_condition_text(value: Any) -> str:
+    key = str(value or "").strip().lower().replace("_", "-")
+    return _WEATHER_CONDITION_TR.get(key, key or "bilinmiyor")
+
+
+def _weather_query_scope(text: str) -> str:
+    normalized = _normalize_tr(text)
+    if any(term in normalized for term in ("yarin", "ertesi gun")):
+        return "tomorrow"
+    if any(term in normalized for term in ("bugun", "simdi", "su an", "disari", "disarida")):
+        return "today"
+    return "current"
+
+
+def _forecast_response_data(response: Any) -> dict[str, Any]:
+    if not isinstance(response, dict):
+        return {}
+    service_response = response.get("service_response")
+    return service_response if isinstance(service_response, dict) else response
+
+
+def _forecast_items(state: dict[str, Any], forecast_type: str) -> list[dict[str, Any]]:
+    responses = state.get("alice_forecast_response") if isinstance(state.get("alice_forecast_response"), dict) else {}
+    preferred = [key for key in responses if key.endswith(f"_{forecast_type}")]
+    fallback = [key for key in responses if key not in preferred]
+    for key in [*preferred, *fallback]:
+        response_data = _forecast_response_data(responses.get(key))
+        for forecast_doc in response_data.values():
+            if not isinstance(forecast_doc, dict):
+                continue
+            items = forecast_doc.get("forecast")
+            if isinstance(items, list):
+                return [item for item in items if isinstance(item, dict)]
+    return []
+
+
+def _forecast_for_scope(state: dict[str, Any], user_text: str) -> tuple[str, dict[str, Any] | None]:
+    scope = _weather_query_scope(user_text)
+    if scope == "tomorrow":
+        daily = _forecast_items(state, "daily")
+        if len(daily) > 1:
+            return "tomorrow", daily[1]
+        if daily:
+            return "tomorrow", daily[0]
+    if scope in {"today", "current"}:
+        hourly = _forecast_items(state, "hourly")
+        if hourly:
+            return "today", hourly[0]
+        daily = _forecast_items(state, "daily")
+        if daily:
+            return "today", daily[0]
+    return scope, None
+
+
+def _weather_doc_number(doc: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = _float_or_none(doc.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _weather_advice(condition_key: str, temperature: float | None, wind_speed: float | None, precipitation: float | None) -> str:
+    condition = condition_key.lower().replace("_", "-")
+    advice: list[str] = []
+    if condition in {"rainy", "pouring", "lightning-rainy"} or (precipitation is not None and precipitation > 0):
+        advice.append("\u015eemsiye al; sonra dramatik dramatik ko\u015fmak zorunda kalma.")
+    if condition in {"snowy", "snowy-rainy"}:
+        advice.append("Kaygan zeminlere dikkat; kahramanl\u0131k yapma, Alice izliyor.")
+    if wind_speed is not None:
+        if wind_speed >= 50:
+            advice.append("R\u00fczgar sert, sa\u00e7-ba\u015f modu biraz sava\u015f alan\u0131 olabilir.")
+        elif wind_speed >= 30:
+            advice.append("R\u00fczgar kendini belli ediyor, hafife alma.")
+    if temperature is not None:
+        if temperature <= 0:
+            advice.append("S\u0131k\u0131 giyin; d\u0131\u015far\u0131s\u0131 \u0131s\u0131rma modunda.")
+        elif temperature <= 8:
+            advice.append("Kal\u0131n bir \u015fey almak iyi olur.")
+        elif temperature <= 16:
+            advice.append("\u0130nce bir ceket ak\u0131ll\u0131ca olur.")
+        elif temperature >= 30:
+            advice.append("Su i\u00e7meyi unutma; s\u0131cak taraflar hafif sinsice.")
+    return advice[0] if advice else "D\u0131\u015far\u0131 \u00e7\u0131kacaksan fena bir tablo yok; Alice onay\u0131 \u015fimdilik var."
+
+
+def _weather_location(friendly_name: str) -> str:
+    return friendly_name.replace("Hava Durumu", "").replace("hava durumu", "").strip() or friendly_name
+
+
+def _weather_speech(state: dict[str, Any], friendly_name: str, user_text: str = "") -> str:
+    attributes = state.get("attributes") if isinstance(state.get("attributes"), dict) else {}
+    current_state = str(state.get("state") or "bilinmiyor")
+    scope, forecast = _forecast_for_scope(state, user_text)
+    source = forecast if forecast else attributes
+    condition_key = str((forecast or {}).get("condition") or current_state)
+    condition = _weather_condition_text(condition_key)
+    temperature = _weather_doc_number(source, "temperature", "templow", "temperature_low")
+    high_temperature = _weather_doc_number(source, "temperature", "temperature_high")
+    low_temperature = _weather_doc_number(source, "templow", "temperature_low", "low_temperature")
+    humidity = _weather_doc_number(source, "humidity")
+    wind_speed = _weather_doc_number(source, "wind_speed", "wind_speed_10m")
+    precipitation = _weather_doc_number(source, "precipitation", "precipitation_probability")
+    wind_unit = str(source.get("wind_speed_unit") or attributes.get("wind_speed_unit") or "km/h").strip()
+    location = _weather_location(friendly_name)
+    when = "Yar\u0131n" if scope == "tomorrow" and forecast else "\u015eu an"
+
+    pieces = [f"{when} {location} i\u00e7in hava {condition}"]
+    if high_temperature is not None and low_temperature is not None and abs(high_temperature - low_temperature) > 0.2:
+        pieces.append(f"s\u0131cakl\u0131k {_format_number(low_temperature)} ile {_format_number(high_temperature)} derece aras\u0131")
+    elif temperature is not None:
+        pieces.append(f"s\u0131cakl\u0131k {_format_number(temperature)} derece")
+    if wind_speed is not None:
+        pieces.append(f"r\u00fczgar {_format_number(wind_speed)} {wind_unit}")
+    if humidity is not None and scope != "tomorrow":
+        pieces.append(f"nem y\u00fczde {_format_number(humidity)}")
+    if precipitation is not None and precipitation > 0:
+        suffix = "%" if precipitation <= 100 and any("probability" in str(key) for key in source) else ""
+        pieces.append(f"ya\u011f\u0131\u015f {_format_number(precipitation)}{suffix}")
+
+    advice = _weather_advice(condition_key, temperature or high_temperature, wind_speed, precipitation)
+    return ", ".join(pieces) + f". {advice}"
+
+
 _CONTROL_DOMAINS = {"light", "switch", "fan", "input_boolean", "media_player", "climate", "humidifier"}
 
 
@@ -320,7 +446,7 @@ class HomeAssistantBridge:
                 forecast_response = await self.get_weather_forecast_response(entity_id)
                 if forecast_response:
                     state_doc = {**state_doc, "alice_forecast_response": forecast_response}
-            speech = self._state_speech(state_doc, friendly)
+            speech = self._state_speech(state_doc, friendly, user_text=text)
             await self._log_bus.emit("INFO", "HA", "Allowlisted HA state read", {"entity_id": entity_id, "domain": domain})
             return {
                 "handled": True,
@@ -452,7 +578,7 @@ class HomeAssistantBridge:
             return f"{friendly_name} degistirildi."
         return f"{friendly_name} icin komut uygulandi."
 
-    def _state_speech(self, state: dict[str, Any], friendly_name: str) -> str:
+    def _state_speech(self, state: dict[str, Any], friendly_name: str, user_text: str = "") -> str:
         value = str(state.get("state") or "bilinmiyor")
         attributes = state.get("attributes") if isinstance(state.get("attributes"), dict) else {}
         unit = str(attributes.get("unit_of_measurement") or "").strip()
@@ -460,6 +586,7 @@ class HomeAssistantBridge:
         if value in {"unknown", "unavailable"}:
             return f"{friendly_name} durumu su anda bilinmiyor."
         if entity_id.startswith("weather."):
+            return _weather_speech(state, friendly_name, user_text)
             temperature = _float_or_none(attributes.get("temperature"))
             temperature_unit = str(attributes.get("temperature_unit") or unit or "C").strip()
             humidity = _float_or_none(attributes.get("humidity"))
