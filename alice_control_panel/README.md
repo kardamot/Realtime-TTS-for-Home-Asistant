@@ -33,6 +33,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - Version `0.1.94` adds radar jump rejection, continuity confidence, and empty-room calibration commands.
 - Version `0.1.93` fixes the RD-03D radar X orientation and makes radar tracking updates more responsive.
 - Version `0.1.92` compacts the Voice Pipeline transcript and realtime timeline so short RT rows do not create unnecessary scrollbars.
+- Version `0.1.149` shows the loaded frontend version beside backend status so stale panel JavaScript is obvious after updates.
 - Version `0.1.148` makes every log row expandable through delegated list clicks and shows a compact summary when a log has no extra details.
 - Version `0.1.147` makes log detail clicks trigger their own render so expanded details open immediately instead of waiting for the next log update.
 - Version `0.1.146` refreshes add-on metadata so Home Assistant can surface the latest log panel update as a new package.

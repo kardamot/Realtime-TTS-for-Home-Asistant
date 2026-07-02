@@ -2,6 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
+const UI_VERSION = "0.1.149";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -895,6 +896,7 @@ function initDailyCommandButtons() {
 }
 
 async function boot() {
+  document.documentElement.dataset.aliceUiVersion = UI_VERSION;
   initAutoScrollContainers();
   initHelpBubbles();
   initRadarControls();
@@ -1012,7 +1014,7 @@ async function loadStatus() {
 
   const reconnectPaused = Boolean(esp.auto_reconnect_paused);
   $("summary").textContent = esp.online ? "Robot linked" : reconnectPaused ? "ESP offline, auto reconnect paused" : esp.mock_mode ? "ESP offline, mock mode active" : "Waiting for robot status";
-  text("backend-version", `${backend.service || "alice_control_panel"} ${backend.version || ""} - FastAPI backend online`);
+  text("backend-version", `${backend.service || "alice_control_panel"} ${backend.version || ""} / ui ${UI_VERSION} - FastAPI backend online`);
   setPill("state-pill", pipe.state || "IDLE");
   const session = pipe.session || {};
   const liveMic = pipe.live_mic || {};
