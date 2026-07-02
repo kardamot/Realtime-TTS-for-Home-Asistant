@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import math
 import os
+import random
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -245,6 +246,13 @@ _BRIGHTNESS_WORDS = {
     "tam",
     "son",
 }
+_RNG = random.SystemRandom()
+_CLEAR_WEATHER_ADVICE = (
+    "Dışarı çıkacaksan fena görünmüyor.",
+    "Hava tarafında şimdilik sakin bir tablo var.",
+    "Dışarı planı için kötü bir işaret görmüyorum.",
+    "Bugün hava işi fazla naz yapmıyor.",
+)
 
 
 @dataclass
@@ -427,7 +435,7 @@ def _weather_advice(condition_key: str, temperature: float | None, wind_speed: f
             advice.append("\u0130nce bir ceket ak\u0131ll\u0131ca olur.")
         elif temperature >= 30:
             advice.append("Su i\u00e7meyi unutma; s\u0131cak taraflar hafif sinsice.")
-    return advice[0] if advice else "D\u0131\u015far\u0131 \u00e7\u0131kacaksan fena bir tablo yok; Alice onay\u0131 \u015fimdilik var."
+    return advice[0] if advice else _RNG.choice(_CLEAR_WEATHER_ADVICE)
 
 
 def _weather_location(friendly_name: str) -> str:
@@ -567,6 +575,13 @@ def _alias_map(cfg: dict[str, Any]) -> dict[str, list[str]]:
 
 def _friendly_name(item: dict[str, Any]) -> str:
     return str(item.get("friendly_name") or item.get("entity_id") or "")
+
+
+def _sentence_name(value: str) -> str:
+    clean = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not clean:
+        return ""
+    return clean[0].upper() + clean[1:]
 
 
 def _display_list(items: list[dict[str, Any]], limit: int = 3) -> str:
@@ -919,7 +934,7 @@ class HomeAssistantBridge:
                 "requires_clarification": True,
             }
         domain = next(iter(domains))
-        friendly = self._friendly_selection_name(entities, intent)
+        friendly = self._friendly_selection_name(entities, intent, cfg)
         entity_ids = [str(item.get("entity_id") or "") for item in entities if str(item.get("entity_id") or "")]
 
         if not self._domain_supports_intent(domain, intent):
@@ -958,6 +973,8 @@ class HomeAssistantBridge:
                 "action": intent.action,
                 "entity_id": entity_id,
                 "domain": domain,
+                "friendly_name": friendly,
+                "spoken_name": friendly,
                 "speech": speech,
                 "state": state_doc,
                 "narration_kind": "weather" if entity_id.startswith("weather.") else "",
@@ -987,7 +1004,10 @@ class HomeAssistantBridge:
             "entity_ids": entity_ids,
             "domain": domain,
             "service": service,
-            "speech": self._service_speech(friendly, intent, len(entity_ids)),
+            "friendly_name": friendly,
+            "spoken_name": friendly,
+            "speech": self._service_speech(friendly, intent, domain, len(entity_ids)),
+            "narration_kind": "home_control",
             "result": result,
         }
 
@@ -1232,14 +1252,21 @@ class HomeAssistantBridge:
             return f"Bunu yapamam; {friendly_name} medya oynatici degil."
         return f"{friendly_name} icin bu komut uygun degil."
 
-    def _friendly_selection_name(self, entities: list[dict[str, Any]], intent: HaIntent) -> str:
+    def _spoken_entity_name(self, entity: dict[str, Any], cfg: dict[str, Any]) -> str:
+        entity_id = str(entity.get("entity_id") or "").lower()
+        aliases = _alias_map(cfg).get(entity_id, [])
+        if aliases:
+            return _sentence_name(aliases[0])
+        return _sentence_name(_friendly_name(entity))
+
+    def _friendly_selection_name(self, entities: list[dict[str, Any]], intent: HaIntent, cfg: dict[str, Any]) -> str:
         if len(entities) == 1:
-            return _friendly_name(entities[0])
+            return self._spoken_entity_name(entities[0], cfg)
         if intent.area_terms:
             area = "oturma odasi" if "oturma" in intent.area_terms and "oda" in intent.area_terms else " ".join(intent.area_terms)
-            return f"{area} isiklari"
+            return _sentence_name(f"{area} isiklari")
         domain = str(entities[0].get("entity_id") or "").split(".", 1)[0]
-        return f"{len(entities)} {self._domain_label(domain)}"
+        return _sentence_name(f"{len(entities)} {self._domain_label(domain)}")
 
     def _domain_label(self, domain: str) -> str:
         return {
@@ -1254,31 +1281,42 @@ class HomeAssistantBridge:
             "lock": "kilit",
         }.get(domain, domain or "cihaz")
 
-    def _service_speech(self, friendly_name: str, intent: HaIntent, count: int = 1) -> str:
+    def _service_speech(self, friendly_name: str, intent: HaIntent, domain: str, count: int = 1) -> str:
         target = friendly_name
         if intent.action == "turn_on":
-            return f"{target} acildi."
+            if domain == "light":
+                return _RNG.choice((f"{target} açıldı.", f"{target} tamam, açtım.", f"{target} şimdi açık."))
+            if domain == "switch":
+                return _RNG.choice((f"{target} açıldı.", f"{target} devrede.", f"{target} tamam, açtım."))
+            return _RNG.choice((f"{target} açıldı.", f"{target} tamam, çalışıyor."))
         if intent.action == "turn_off":
-            return f"{target} kapatildi."
+            return _RNG.choice((f"{target} kapatıldı.", f"{target} tamam, kapattım.", f"{target} artık kapalı."))
         if intent.action == "toggle":
-            return f"{target} degistirildi."
+            return _RNG.choice((f"{target} değiştirildi.", f"{target} durumunu çevirdim."))
         if intent.action == "set_color":
             color = intent.color_name or "istenen renge"
-            return f"{target} {color} rengine aldim."
+            return _RNG.choice((f"{target} {color} rengine alındı.", f"{target} için {color} tonu hazır.", f"{target} rengini {color} yaptım."))
         if intent.action == "set_brightness":
             if intent.brightness_pct is not None:
-                return f"{target} parlakligini yuzde {intent.brightness_pct} yaptim."
+                return _RNG.choice(
+                    (
+                        f"{target} parlaklığı yüzde {intent.brightness_pct} oldu.",
+                        f"{target} ışığını yüzde {intent.brightness_pct} yaptım.",
+                        f"{target} yüzde {intent.brightness_pct} seviyesinde.",
+                    )
+                )
             if intent.brightness_step_pct is not None and intent.brightness_step_pct < 0:
-                return f"{target} biraz kisildi."
+                return _RNG.choice((f"{target} biraz kısıldı.", f"{target} daha loş oldu.", f"{target} ışığını biraz azalttım."))
             if intent.brightness_step_pct is not None:
-                return f"{target} biraz acildi."
+                return _RNG.choice((f"{target} biraz açıldı.", f"{target} ışığını biraz yükselttim.", f"{target} daha parlak oldu."))
         if intent.action == "set_temperature" and intent.temperature is not None:
-            return f"{target} {int(intent.temperature) if intent.temperature.is_integer() else intent.temperature} dereceye ayarlandi."
+            value = int(intent.temperature) if intent.temperature.is_integer() else intent.temperature
+            return _RNG.choice((f"{target} {value} dereceye ayarlandı.", f"{target} için {value} dereceyi seçtim."))
         if intent.action == "set_hvac":
-            return f"{target} modu ayarlandi."
+            return _RNG.choice((f"{target} modu ayarlandı.", f"{target} modunu değiştirdim."))
         if intent.action == "set_media_volume" and intent.brightness_pct is not None:
-            return f"{target} sesi yuzde {intent.brightness_pct} yapildi."
-        return f"{target} icin komut uygulandi."
+            return _RNG.choice((f"{target} sesi yüzde {intent.brightness_pct} oldu.", f"{target} sesini yüzde {intent.brightness_pct} yaptım."))
+        return _RNG.choice((f"{target} için komut uygulandı.", f"{target} tamam."))
 
     async def _multi_state_speech(self, entities: list[dict[str, Any]], user_text: str) -> str:
         pieces: list[str] = []
@@ -1318,7 +1356,7 @@ class HomeAssistantBridge:
             if value.lower() in {"rainy", "pouring", "lightning-rainy", "snowy-rainy"}:
                 advice.append("Şemsiye fikri bugün fena değil")
             if value.lower() in {"snowy", "snowy-rainy"}:
-                advice.append("Kaygan zeminlere dikkat, Alice onaylı temkin modu")
+                advice.append("Kaygan zeminlere dikkat; temkinli olmak iyi olur")
             if temperature is not None:
                 if temperature <= 0:
                     advice.append("Sıkı giyin, dışarısı bayağı ısırıyor")

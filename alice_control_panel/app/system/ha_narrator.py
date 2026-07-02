@@ -59,6 +59,32 @@ def _compact_weather_state(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _natural_action_label(action: str) -> str:
+    return {
+        "turn_on": "açıldı",
+        "turn_off": "kapatıldı",
+        "toggle": "durumu değiştirildi",
+        "set_color": "renk ayarlandı",
+        "set_brightness": "parlaklık ayarlandı",
+        "set_temperature": "sıcaklık ayarlandı",
+        "set_hvac": "mod ayarlandı",
+        "set_media_volume": "ses seviyesi ayarlandı",
+        "read": "durum okundu",
+    }.get(action, "komut uygulandı")
+
+
+def _compact_control_result(result: dict[str, Any]) -> dict[str, Any]:
+    entity_ids = result.get("entity_ids") if isinstance(result.get("entity_ids"), list) else []
+    return {
+        "ok": bool(result.get("ok")),
+        "action": _natural_action_label(str(result.get("action") or "")),
+        "domain": str(result.get("domain") or ""),
+        "spoken_name": str(result.get("spoken_name") or result.get("friendly_name") or "").strip(),
+        "entity_count": len(entity_ids) or (1 if result.get("entity_id") else 0),
+        "fallback_speech": result.get("speech"),
+    }
+
+
 class HaNarrator:
     def __init__(self, config_store: ConfigStore, prompt_store: PromptStore, log_bus: LogBus) -> None:
         self._config_store = config_store
@@ -67,7 +93,7 @@ class HaNarrator:
 
     async def narrate(self, user_text: str, result: dict[str, Any], fallback: str) -> str:
         kind = str(result.get("narration_kind") or "").strip().lower()
-        if kind != "weather":
+        if kind not in {"weather", "home_control"}:
             return fallback
 
         config = await self._config_store.get(include_secrets=True)
@@ -77,28 +103,40 @@ class HaNarrator:
             return fallback
         api_key = str(cfg.get("api_key") or "").strip()
         if not api_key:
-            await self._log_bus.emit("WARN", "HA", "HA weather narration skipped; LLM API key is empty")
+            await self._log_bus.emit("WARN", "HA", "HA narration skipped; LLM API key is empty", {"kind": kind})
             return fallback
 
         persona = str(cfg.get("system_prompt") or "").strip() or await self._prompt_store.active_prompt_text()
-        system_prompt = (
-            f"{persona}\n\n"
-            "Home Assistant weather verisini Alice karakteriyle do\u011fal T\u00fcrk\u00e7eye \u00e7evir. "
-            "K\u0131sa konu\u015f, ham state/entity/json okuma. "
-            "T\u00fcrk\u00e7e karakterleri do\u011fru kullan: g\u00fcne\u015fli, r\u00fczgar, ya\u011fmur, s\u0131cakl\u0131k. "
-            "S\u0131cakl\u0131k, ya\u011f\u0131\u015f, r\u00fczgar, nem ve hissedilen s\u0131cakl\u0131k bilgisi varsa birlikte yorumla. "
-            "Ondal\u0131kl\u0131 say\u0131lar\u0131 TTS dostu yaz: 26,3 derece yerine 26 derece civar\u0131 de; 10,8 km/h yerine 11 kilometre/saat civar\u0131 de. "
-            "R\u00fczgar y\u00fcksekse, ya\u011f\u0131\u015f/f\u0131rt\u0131na/kar varsa veya s\u0131cakl\u0131k rahats\u0131z ediciyse pratik tavsiye ekle. "
-            "R\u00fczgar 30 km/h ve \u00fcst\u00fcyse belirgin, 50 km/h ve \u00fcst\u00fcyse sert kabul et; ya\u011f\u0131\u015f olas\u0131l\u0131\u011f\u0131 veya miktar\u0131 varsa \u015femsiye/\u00fcst ba\u015f tavsiyesi ver. "
-            "Bilgi yoksa uydurma; sadece eldeki veriye g\u00f6re konu\u015f. En fazla 2 c\u00fcmle yaz."
-        )
-        weather = _compact_weather_state(result)
+        if kind == "weather":
+            system_prompt = (
+                f"{persona}\n\n"
+                "Home Assistant weather verisini Alice karakteriyle doğal Türkçeye çevir. "
+                "Kısa konuş, ham state/entity/json okuma. "
+                "Türkçe karakterleri doğru kullan: güneşli, rüzgar, yağmur, sıcaklık. "
+                "Sıcaklık, yağış, rüzgar, nem ve hissedilen sıcaklık bilgisi varsa birlikte yorumla. "
+                "Ondalıklı sayıları TTS dostu yaz: 26,3 derece yerine 26 derece civarı de; 10,8 km/h yerine 11 kilometre/saat civarı de. "
+                "Rüzgar yüksekse, yağış/fırtına/kar varsa veya sıcaklık rahatsız ediciyse pratik tavsiye ekle. "
+                "Bilgi yoksa uydurma; sadece eldeki veriye göre konuş. Aynı kalıba takılma. En fazla 2 cümle yaz."
+            )
+            payload_data = _compact_weather_state(result)
+            data_label = "Home Assistant weather verisi"
+        else:
+            system_prompt = (
+                f"{persona}\n\n"
+                "Home Assistant kontrol sonucu için Alice'in söyleyeceği tek cümlelik doğal Türkçe cevap yaz. "
+                "Kontrol kararı ve servis çağrısı zaten güvenli backend tarafından yapıldı; yeni hedef, yeni işlem veya ek bilgi uydurma. "
+                "Servis adı, entity_id, JSON, domain, Home Assistant ya da teknik araç adı söyleme. "
+                "Fallback cümlesiyle aynı anlamı koru ama daha canlı, kısa ve TTS dostu söyle. "
+                "En fazla 14 kelime yaz."
+            )
+            payload_data = _compact_control_result(result)
+            data_label = "Güvenli kontrol özeti"
         user_prompt = (
-            "Kullanici sorusu:\n"
+            "Kullanıcı sözü:\n"
             f"{user_text}\n\n"
-            "Home Assistant weather verisi:\n"
-            f"{json.dumps(weather, ensure_ascii=False, indent=2)}\n\n"
-            "Alice'in s\u00f6yleyece\u011fi do\u011fal cevap:"
+            f"{data_label}:\n"
+            f"{json.dumps(payload_data, ensure_ascii=False, indent=2)}\n\n"
+            "Alice'in söyleyeceği doğal cevap:"
         )
         payload = {
             "model": str(cfg.get("model") or "gpt-5-mini"),
@@ -119,14 +157,14 @@ class HaNarrator:
                 async with session.post(f"{base_url}/chat/completions", headers=headers, json=payload, timeout=45) as resp:
                     body = await resp.text()
                     if resp.status >= 400:
-                        await self._log_bus.emit("ERROR", "HA", "HA weather narration failed", {"status": resp.status, "body": body[:400]})
+                        await self._log_bus.emit("ERROR", "HA", "HA narration failed", {"status": resp.status, "body": body[:400], "kind": kind})
                         return fallback
                     doc = json.loads(body)
             text = str(doc.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
             if not text:
                 return fallback
-            await self._log_bus.emit("INFO", "HA", "HA weather narrated by LLM", {"chars": len(text), "provider": provider})
+            await self._log_bus.emit("INFO", "HA", "HA result narrated by LLM", {"chars": len(text), "provider": provider, "kind": kind})
             return text
         except Exception as exc:
-            await self._log_bus.emit("ERROR", "HA", "HA weather narration error", {"error": str(exc)})
+            await self._log_bus.emit("ERROR", "HA", "HA narration error", {"error": str(exc), "kind": kind})
             return fallback
