@@ -1922,7 +1922,8 @@ function renderPipelineMessages(messages) {
 function renderRealtimeLatency(latency) {
   const box = $("realtime-latency");
   if (!box) return;
-  const summary = latency.summary || {};
+  const selected = selectTimingTurn(latency);
+  const summary = selected.turn?.summary || latency.summary || {};
   const chips = [
     ["Wake -> mic", summary.wake_to_first_audio_ms],
     ["Speech -> STT", summary.speech_stop_to_transcript_ms ?? summary.speech_to_transcript_ms],
@@ -1942,6 +1943,48 @@ function renderRealtimeLatency(latency) {
     chip.append(title, metric);
     box.appendChild(chip);
   });
+}
+
+function turnHasSpeechData(turn) {
+  if (!turn) return false;
+  const summary = turn.summary || {};
+  if (String(turn.transcript || turn.assistant_text || "").trim()) return true;
+  return (
+    summary.speech_to_transcript_ms != null ||
+    summary.speech_stop_to_transcript_ms != null ||
+    summary.transcript_to_first_delta_ms != null ||
+    summary.first_delta_to_first_chunk_ms != null ||
+    summary.wake_to_first_tts_ms != null
+  );
+}
+
+function latencyAsTurn(latency = {}) {
+  return {
+    session_id: latency.session_id || "",
+    summary: latency.summary || {},
+    stages: latency.stages || fallbackLatencyStages(latency.events || []),
+    events: latency.events || [],
+    reason: "",
+  };
+}
+
+function isCurrentTimingActive(latency = {}) {
+  const events = Array.isArray(latency.events) ? latency.events : [];
+  if (!events.length) return false;
+  const last = String(events[events.length - 1]?.name || "");
+  return !["session_completed", "response_cancelled", "client_cancelled"].includes(last);
+}
+
+function selectTimingTurn(latency = {}) {
+  const history = Array.isArray(latency.history) ? latency.history : [];
+  const current = latencyAsTurn(latency);
+  if (isCurrentTimingActive(latency) || turnHasSpeechData(current)) {
+    return { turn: current, source: "current" };
+  }
+  const meaningful = history.slice().reverse().find(turnHasSpeechData);
+  if (meaningful) return { turn: meaningful, source: "last_spoken" };
+  const latest = history.length ? history[history.length - 1] : current;
+  return { turn: latest, source: history.length ? "latest" : "current" };
 }
 
 function compactSnippet(value, fallback = "-") {
@@ -1992,15 +2035,16 @@ function formatEventFallbackDetail(event) {
   return parts.join("; ") || String(event.name || "event").replaceAll("_", " ");
 }
 
-function renderTurnSummary(latency, latestTurn) {
+function renderTurnSummary(latency, selected) {
   const box = $("turn-summary");
   if (!box) return;
   const note = latency.speaker_first_audio?.available === false
     ? "Speaker first PCM is not reported by ESP yet; Wake -> TTS text is the current proxy."
     : "";
-  const source = latestTurn || {};
+  const source = selected.turn || {};
   const summary = source.summary || latency.summary || {};
   const textParts = [
+    selected.source === "last_spoken" ? "Showing last spoken turn" : "",
     source.transcript ? `STT: ${compactSnippet(source.transcript, "")}` : "",
     source.assistant_text ? `LLM: ${compactSnippet(source.assistant_text, "")}` : "",
     summary.wake_to_first_tts_ms != null ? `Wake -> TTS text ${fmtMs(summary.wake_to_first_tts_ms)}` : "",
@@ -2015,6 +2059,13 @@ function renderTurnSummary(latency, latestTurn) {
     small.textContent = note;
     box.appendChild(small);
   }
+}
+
+function turnHistoryText(turn) {
+  const reason = String(turn.reason || "").replaceAll("_", " ").trim();
+  const textValue = String(turn.transcript || turn.assistant_text || "").trim();
+  if (textValue) return compactSnippet(textValue, "completed turn");
+  return reason ? `no speech / ${reason}` : "no speech / completed turn";
 }
 
 function renderTurnHistory(history) {
@@ -2034,7 +2085,7 @@ function renderTurnHistory(history) {
     const meta = document.createElement("span");
     const textLine = document.createElement("p");
     meta.textContent = `${timeText} | TTS ${fmtMs(summary.wake_to_first_tts_ms)} | total ${fmtMs(summary.wake_to_complete_ms ?? summary.total_ms)}`;
-    textLine.textContent = compactSnippet(turn.transcript || turn.assistant_text, "completed turn");
+    textLine.textContent = turnHistoryText(turn);
     row.append(meta, textLine);
     box.appendChild(row);
   });
@@ -2044,13 +2095,11 @@ function renderTurnTiming(latency = {}, items = []) {
   const box = $("timeline");
   if (!box) return;
   const history = Array.isArray(latency.history) ? latency.history : [];
-  const latestTurn = history.length ? history[history.length - 1] : null;
-  const stages = (latency.stages && latency.stages.length)
-    ? latency.stages
-    : latestTurn?.stages?.length
-      ? latestTurn.stages
-      : fallbackLatencyStages(latency.events || []);
-  renderTurnSummary(latency, latestTurn);
+  const selected = selectTimingTurn(latency);
+  const stages = selected.turn?.stages?.length
+    ? selected.turn.stages
+    : fallbackLatencyStages(selected.turn?.events || latency.events || []);
+  renderTurnSummary(latency, selected);
   renderTurnHistory(history);
   box.innerHTML = "";
   const visibleStages = stages.slice(-10);
