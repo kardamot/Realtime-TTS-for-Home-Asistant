@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.139" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.139" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.140" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.140" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.139" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.140" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.139" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.140" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -411,6 +411,7 @@
                     <label class="check-row"><input data-path="ha_bridge.route_home_control" type="checkbox" /><span>Route home control</span></label>
                   </div>
                   <label class="wide"><span>Allowed entity IDs</span><textarea data-path="ha_bridge.exposed_entities" placeholder="weather.home&#10;light.salon&#10;switch.kahve_makinesi&#10;sensor.oturma_odasi_sicaklik"></textarea></label>
+                  <label class="wide"><span>Entity aliases</span><textarea data-path="ha_bridge.aliases" placeholder="light.masa_lambasi: masa lambasi, masalambasi, calisma lambasi&#10;light.salon_led: salon ledleri, ledler"></textarea></label>
                 </div>
               </section>
 
@@ -533,6 +534,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.139"></script>
+  <script src="/app.js?v=0.1.140"></script>
   </body>
 </html>

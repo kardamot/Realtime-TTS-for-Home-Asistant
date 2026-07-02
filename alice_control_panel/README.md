@@ -33,6 +33,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - Version `0.1.94` adds radar jump rejection, continuity confidence, and empty-room calibration commands.
 - Version `0.1.93` fixes the RD-03D radar X orientation and makes radar tracking updates more responsive.
 - Version `0.1.92` compacts the Voice Pipeline transcript and realtime timeline so short RT rows do not create unnecessary scrollbars.
+- Version `0.1.140` adds a safer Home Assistant intent parser for Turkish light color/brightness commands, alias matching, room groups, and clarification instead of guessing between multiple allowlisted entities.
 - Version `0.1.91` keeps the Radar view switch fixed while technical calibration buttons appear to its left.
 - Version `0.1.82` widens the left dashboard column and restores Radar summary values to a single compact row.
 - Version `0.1.81` compacts the top status strip, folds hardware state into it, and moves Radar under Connections.
@@ -104,5 +105,9 @@ spaces/commas. The backend reads those exact entity IDs one by one instead of
 fetching the full Home Assistant entity list. Legacy broad-access settings such as exposing all
 entities, allowing whole domains, or blacklist-style filtering are ignored by the
 runtime even if those old option keys remain for Supervisor compatibility.
+Use `ha_bridge.aliases` to add natural names for allowlisted entities, for example
+`light.masa_lambasi: masa lambasi, masalambasi, calisma lambasi`. Aliases never
+grant access by themselves; they only improve matching for entity IDs already in
+the allowlist.
 
 `ha_bridge.api_base_url` defaults to `http://supervisor/core/api` inside the add-on and normally does not need editing. Home Assistant Assist/conversation agents are not used for Alice home control because that endpoint cannot be constrained to the panel allowlist.

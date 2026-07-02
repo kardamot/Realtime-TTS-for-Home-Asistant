@@ -119,6 +119,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "route_home_control": True,
         "strict_allowlist": True,
         "exposed_entities": "",
+        "aliases": "",
     },
     "tts": {
         "enabled": True,

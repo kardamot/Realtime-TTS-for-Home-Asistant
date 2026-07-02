@@ -274,6 +274,7 @@ const HELP_DETAIL_TEXTS = {
       ["HA Bridge enabled", "Alice'in Home Assistant state ve servis yolunu kullanip kullanmayacagini acar/kapatir."],
       ["Route home control", "Hava durumu veya basit ev kontrolu gibi istekleri LLM'e birakmadan once HA bridge tarafinda yakalamaya calisir."],
       ["Allowed entity IDs", "Erisime izin verdigin entityleri satir satir yazarsin. Liste disindaki entityler okunmaz ve kontrol edilmez."],
+      ["Entity aliases", "Allowlist'teki entityleri dogal Turkce adlarla eslestirir. Alias yeni erisim izni vermez; sadece mevcut izinli entitynin daha dogru bulunmasini saglar."],
       ["Weather entity", "Hava durumu sorularinda oncelikli kullanilacak weather entitysidir. Allowed list icinde olmasi gerekir."],
       ["Service calls", "Kontrol komutlari ileride HA servislerine donusebilir. Allowlist bu yuzden guvenlik siniri olarak onemli kalir."]
     ]

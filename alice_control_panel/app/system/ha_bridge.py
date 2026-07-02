@@ -4,6 +4,7 @@ import fnmatch
 import math
 import os
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
 import aiohttp
@@ -87,9 +88,14 @@ _ACTION_SUFFIXES = (
     "alim",
 )
 _ENTITY_SUFFIXES = (
+    "lerimizi",
+    "larimizi",
     "lerini",
     "larini",
+    "lerimi",
+    "larimi",
     "nizi",
+    "imizi",
     "sini",
     "sunu",
     "sine",
@@ -103,14 +109,18 @@ _ENTITY_SUFFIXES = (
     "yi",
     "yu",
     "ye",
+    "i",
+    "u",
 )
 _DOMAIN_HINTS = {
     "isik": "light",
     "isig": "light",
+    "isiklar": "light",
     "lamba": "light",
     "lamb": "light",
     "avize": "light",
     "led": "light",
+    "renk": "light",
     "priz": "switch",
     "anahtar": "switch",
     "role": "switch",
@@ -121,6 +131,11 @@ _DOMAIN_HINTS = {
     "garaj": "cover",
     "klima": "climate",
     "termostat": "climate",
+    "ses": "media_player",
+    "muzik": "media_player",
+    "hoparlor": "media_player",
+    "televizyon": "media_player",
+    "tv": "media_player",
     "sensor": "sensor",
     "sicaklik": "sensor",
     "sicak": "sensor",
@@ -129,14 +144,132 @@ _DOMAIN_HINTS = {
     "hava": "weather",
     "kilit": "lock",
 }
+_TARGETABLE_DOMAIN_TERMS = {"avize", "led", "priz", "role", "fan", "vantilator", "perde", "panjur", "klima", "termostat", "tv"}
 _IGNORED_MATCH_TERMS = (
     _TURN_ON_TERMS
     | _TURN_OFF_TERMS
     | _TOGGLE_TERMS
     | _READ_TERMS
     | set(_DOMAIN_HINTS)
-    | {"alice", "lutfen", "bir", "de", "da", "mi", "mu", "misin", "musun", "midir", "bana", "icin", "su", "sunu", "oradaki"}
+    | {
+        "alice",
+        "lutfen",
+        "bir",
+        "de",
+        "da",
+        "mi",
+        "mu",
+        "misin",
+        "musun",
+        "midir",
+        "bana",
+        "icin",
+        "su",
+        "sunu",
+        "oradaki",
+        "yap",
+        "al",
+        "ayarla",
+        "getir",
+        "et",
+        "eder",
+        "ederim",
+        "lazim",
+    }
 )
+
+_ALL_TERMS = {
+    "tum",
+    "tumu",
+    "tumunu",
+    "butun",
+    "hepsi",
+    "hepsini",
+    "tamami",
+    "tamamini",
+    "toplu",
+}
+_ONLY_TERMS = {"sadece", "yalniz", "yalnizca"}
+_ROOM_TERMS = {
+    "salon",
+    "oturma",
+    "oda",
+    "mutfak",
+    "yatak",
+    "banyo",
+    "koridor",
+    "hol",
+    "calisma",
+    "cocuk",
+    "misafir",
+    "teras",
+    "balkon",
+    "bahce",
+    "garaj",
+}
+_COLOR_RGB: dict[str, tuple[str, tuple[int, int, int]]] = {
+    "kirmizi": ("kirmizi", (255, 0, 0)),
+    "mavi": ("mavi", (0, 90, 255)),
+    "yesil": ("yesil", (0, 180, 80)),
+    "sari": ("sari", (255, 210, 0)),
+    "turuncu": ("turuncu", (255, 120, 0)),
+    "mor": ("mor", (145, 70, 255)),
+    "pembe": ("pembe", (255, 90, 170)),
+    "beyaz": ("beyaz", (255, 255, 255)),
+}
+_COLOR_TEMPERATURES: dict[str, tuple[str, int]] = {
+    "sicak beyaz": ("sicak beyaz", 2700),
+    "soguk beyaz": ("soguk beyaz", 6500),
+    "gun isigi": ("gun isigi", 4000),
+    "gunisigi": ("gun isigi", 4000),
+    "normal": ("normal", 4000),
+    "normale": ("normal", 4000),
+}
+_COLOR_WORDS = set(_COLOR_RGB) | {word for phrase in _COLOR_TEMPERATURES for word in phrase.split()} | {"renk", "renkleri"}
+_BRIGHTNESS_WORDS = {
+    "yuzde",
+    "parlaklik",
+    "parlakligi",
+    "kis",
+    "kismak",
+    "azalt",
+    "artir",
+    "yukselt",
+    "cogalt",
+    "biraz",
+    "los",
+    "yari",
+    "yariya",
+    "yarim",
+    "full",
+    "tam",
+    "son",
+}
+
+
+@dataclass
+class HaIntent:
+    action: str = ""
+    domain_hint: str = ""
+    target_terms: list[str] = field(default_factory=list)
+    area_terms: list[str] = field(default_factory=list)
+    color_name: str = ""
+    rgb_color: tuple[int, int, int] | None = None
+    color_temp_kelvin: int | None = None
+    brightness_pct: int | None = None
+    brightness_step_pct: int | None = None
+    temperature: float | None = None
+    hvac_mode: str = ""
+    all_requested: bool = False
+    only_requested: bool = False
+    room_group_requested: bool = False
+
+
+@dataclass
+class EntityScore:
+    score: int
+    item: dict[str, Any]
+    reasons: list[str] = field(default_factory=list)
 
 _WEATHER_CONDITION_TR = {
     "clear-night": "a\u00e7\u0131k bir gece",
@@ -347,6 +480,21 @@ def _words(text: str) -> list[str]:
     return re.findall(r"[a-z0-9_.]+", _normalize_tr(text))
 
 
+def _compact_text(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", _normalize_tr(text))
+
+
+def _clamp_pct(value: int) -> int:
+    return max(1, min(100, int(value)))
+
+
+def _phrase_in_text(phrase: str, text_norm: str, text_compact: str) -> bool:
+    phrase_norm = _normalize_tr(phrase).strip()
+    if not phrase_norm:
+        return False
+    return phrase_norm in text_norm or _compact_text(phrase_norm) in text_compact
+
+
 def _matches_action_word(word: str, roots: set[str]) -> bool:
     if word in roots:
         return True
@@ -361,7 +509,7 @@ def _matches_action_word(word: str, roots: set[str]) -> bool:
 
 def _is_ignored_entity_term(term: str) -> bool:
     return (
-        term in _IGNORED_MATCH_TERMS
+        (term in _IGNORED_MATCH_TERMS and term not in _TARGETABLE_DOMAIN_TERMS)
         or _matches_action_word(term, _TURN_ON_TERMS)
         or _matches_action_word(term, _TURN_OFF_TERMS)
         or _matches_action_word(term, _TOGGLE_TERMS)
@@ -383,10 +531,196 @@ def _entity_match_terms(text: str) -> list[str]:
     return terms
 
 
+def _alias_map(cfg: dict[str, Any]) -> dict[str, list[str]]:
+    raw = cfg.get("aliases")
+    aliases: dict[str, list[str]] = {}
+    if isinstance(raw, dict):
+        for entity_id, value in raw.items():
+            key = str(entity_id or "").strip().lower()
+            if not key:
+                continue
+            if isinstance(value, str):
+                items = re.split(r"[,;\n]+", value)
+            elif isinstance(value, list):
+                items = [str(item) for item in value]
+            else:
+                items = []
+            clean = [item.strip() for item in items if item and item.strip()]
+            if clean:
+                aliases[key] = clean
+        return aliases
+    if not isinstance(raw, str):
+        return aliases
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        entity_id, values = line.split(":", 1)
+        key = entity_id.strip().lower()
+        if not key:
+            continue
+        clean = [item.strip() for item in re.split(r"[,;]+", values) if item.strip()]
+        if clean:
+            aliases[key] = clean
+    return aliases
+
+
+def _friendly_name(item: dict[str, Any]) -> str:
+    return str(item.get("friendly_name") or item.get("entity_id") or "")
+
+
+def _display_list(items: list[dict[str, Any]], limit: int = 3) -> str:
+    names: list[str] = []
+    for item in items[:limit]:
+        name = _friendly_name(item)
+        if name and name not in names:
+            names.append(name)
+    return ", ".join(names)
+
+
+def _split_target_terms(text: str) -> tuple[list[str], list[str]]:
+    target_terms = _entity_match_terms(text)
+    filtered: list[str] = []
+    area_terms: list[str] = []
+    for term in target_terms:
+        if term.isdigit():
+            continue
+        if term in _ALL_TERMS or term in _ONLY_TERMS or term in _COLOR_WORDS or term in _BRIGHTNESS_WORDS:
+            continue
+        if any(color.startswith(term) or term.startswith(color) for color in _COLOR_RGB):
+            continue
+        if term.startswith(("isik", "isig", "lamba", "lamb")):
+            continue
+        if term.startswith("oda"):
+            if "oda" not in area_terms:
+                area_terms.append("oda")
+            if term != "oda":
+                continue
+        if term in {"yap", "al", "ayarla", "normal", "normale"}:
+            continue
+        if term not in filtered:
+            filtered.append(term)
+        if term in _ROOM_TERMS and term not in area_terms:
+            area_terms.append(term)
+    return filtered, area_terms
+
+
 class HomeAssistantBridge:
     def __init__(self, config_store: ConfigStore, log_bus: LogBus) -> None:
         self._config_store = config_store
         self._log_bus = log_bus
+
+    def parse_intent(self, text: str) -> HaIntent:
+        text_norm = _normalize_tr(text)
+        text_compact = _compact_text(text_norm)
+        words = _words(text)
+        intent = HaIntent()
+        intent.domain_hint = self._domain_hint(text)
+        intent.only_requested = any(word in _ONLY_TERMS for word in words)
+        intent.all_requested = self._all_requested(words)
+
+        color_name, rgb_color, color_temp_kelvin = self._parse_color(text_norm, text_compact)
+        if color_name:
+            intent.action = "set_color"
+            intent.color_name = color_name
+            intent.rgb_color = rgb_color
+            intent.color_temp_kelvin = color_temp_kelvin
+            if not intent.domain_hint or intent.domain_hint in {"sensor", "weather"}:
+                intent.domain_hint = "light"
+            if any(word.startswith("renkler") for word in words):
+                intent.all_requested = True
+
+        brightness_pct, brightness_step_pct = self._parse_brightness(text_norm, words)
+        if brightness_pct is not None or brightness_step_pct is not None:
+            if intent.domain_hint == "media_player" or "ses" in words:
+                intent.action = "set_media_volume"
+            elif not intent.action:
+                intent.action = "set_brightness"
+            intent.brightness_pct = brightness_pct
+            intent.brightness_step_pct = brightness_step_pct
+            if not intent.domain_hint:
+                intent.domain_hint = "light"
+
+        temperature = self._parse_temperature(text_norm, words)
+        if temperature is not None and intent.domain_hint == "climate":
+            intent.action = "set_temperature"
+            intent.temperature = temperature
+
+        hvac_mode = self._parse_hvac_mode(words)
+        if hvac_mode and intent.domain_hint == "climate":
+            intent.action = "set_hvac"
+            intent.hvac_mode = hvac_mode
+
+        if not intent.action:
+            intent.action = self._detect_action(text)
+
+        intent.target_terms, intent.area_terms = _split_target_terms(text)
+        specific_terms = [term for term in intent.target_terms if term not in intent.area_terms]
+        intent.room_group_requested = bool(
+            intent.domain_hint == "light"
+            and intent.area_terms
+            and not specific_terms
+            and not intent.only_requested
+        )
+        return intent
+
+    def _parse_color(self, text_norm: str, text_compact: str) -> tuple[str, tuple[int, int, int] | None, int | None]:
+        for phrase, (name, kelvin) in sorted(_COLOR_TEMPERATURES.items(), key=lambda item: len(item[0]), reverse=True):
+            if _phrase_in_text(phrase, text_norm, text_compact):
+                return name, None, kelvin
+        words = set(_words(text_norm))
+        for key, (name, rgb) in _COLOR_RGB.items():
+            if key in words or _phrase_in_text(key, text_norm, text_compact):
+                return name, rgb, None
+        return "", None, None
+
+    def _parse_brightness(self, text_norm: str, words: list[str]) -> tuple[int | None, int | None]:
+        match = re.search(r"(?:yuzde|%)\s*(\d{1,3})", text_norm)
+        if not match:
+            match = re.search(r"\b(\d{1,3})\s*(?:yuzde|%)", text_norm)
+        if match:
+            return _clamp_pct(int(match.group(1))), None
+        word_set = set(words)
+        if word_set & {"yari", "yariya", "yarim"}:
+            return 50, None
+        if word_set & {"full", "ful", "tam", "son"}:
+            return 100, None
+        if "los" in word_set:
+            return 20, None
+        has_softener = "biraz" in word_set
+        if any(word.startswith(("kis", "azalt", "dusur")) for word in words):
+            return None, -15 if has_softener else -25
+        if any(word.startswith(("artir", "yukselt", "cogalt")) for word in words):
+            return None, 15 if has_softener else 25
+        if has_softener and any(_matches_action_word(word, _TURN_ON_TERMS) for word in words):
+            return None, 15
+        return None, None
+
+    def _parse_temperature(self, text_norm: str, words: list[str]) -> float | None:
+        if not any(word in {"derece", "sicaklik", "klima", "termostat"} for word in words):
+            return None
+        match = re.search(r"\b(\d{1,2}(?:[,.]\d)?)\s*(?:derece|c)\b", text_norm)
+        if not match:
+            return None
+        try:
+            return float(match.group(1).replace(",", "."))
+        except ValueError:
+            return None
+
+    def _parse_hvac_mode(self, words: list[str]) -> str:
+        word_set = set(words)
+        if word_set & {"isit", "isitma", "sicak"}:
+            return "heat"
+        if word_set & {"sogut", "sogutma", "serinlet"}:
+            return "cool"
+        if word_set & {"oto", "otomatik", "auto"}:
+            return "auto"
+        return ""
+
+    def _all_requested(self, words: list[str]) -> bool:
+        if any(word in _ALL_TERMS for word in words):
+            return True
+        return any(word.startswith(("isiklar", "isiklari", "lambalar", "lambalari")) for word in words)
 
     async def status(self) -> dict[str, Any]:
         cfg = await self._cfg()
@@ -399,6 +733,7 @@ class HomeAssistantBridge:
                 "strict_allowlist": True,
                 "allowlist_count": len(_allowed_entity_patterns(cfg)),
                 "explicit_entity_count": len(_explicit_entity_ids(cfg)),
+                "alias_count": len(_alias_map(cfg)),
                 "entity_scope": self.has_entity_scope(cfg),
             }
         if not token:
@@ -409,6 +744,7 @@ class HomeAssistantBridge:
                 "strict_allowlist": True,
                 "allowlist_count": len(_allowed_entity_patterns(cfg)),
                 "explicit_entity_count": len(_explicit_entity_ids(cfg)),
+                "alias_count": len(_alias_map(cfg)),
                 "entity_scope": self.has_entity_scope(cfg),
             }
         try:
@@ -424,6 +760,7 @@ class HomeAssistantBridge:
                         "strict_allowlist": True,
                         "allowlist_count": len(_allowed_entity_patterns(cfg)),
                         "explicit_entity_count": len(_explicit_entity_ids(cfg)),
+                        "alias_count": len(_alias_map(cfg)),
                         "entity_scope": self.has_entity_scope(cfg),
                     }
         except Exception as exc:
@@ -434,6 +771,7 @@ class HomeAssistantBridge:
                 "strict_allowlist": True,
                 "allowlist_count": len(_allowed_entity_patterns(cfg)),
                 "explicit_entity_count": len(_explicit_entity_ids(cfg)),
+                "alias_count": len(_alias_map(cfg)),
                 "entity_scope": self.has_entity_scope(cfg),
             }
 
@@ -501,19 +839,24 @@ class HomeAssistantBridge:
         return slimmed
 
     async def search_states(self, query: str, domain: str = "", limit: int = 8) -> list[dict[str, Any]]:
-        query_terms = [term for term in re.split(r"\s+", _normalize_tr(query)) if term]
+        cfg = await self._cfg()
+        query_terms = _entity_match_terms(query)
         if not query_terms:
             return []
         states = await self.list_states(domain=domain, limit=256)
+        aliases = _alias_map(cfg)
         scored: list[tuple[int, dict[str, Any]]] = []
         for item in states:
             entity_id = str(item.get("entity_id") or "")
             friendly_name = str(item.get("friendly_name") or "")
-            haystack = _normalize_tr(f"{entity_id} {friendly_name}")
+            haystack = _normalize_tr(f"{entity_id} {friendly_name} {' '.join(aliases.get(entity_id.lower(), []))}")
+            compact = _compact_text(haystack)
             score = 0
             for term in query_terms:
                 if term in haystack:
                     score += 3
+                if term in compact:
+                    score += 2
                 if haystack.startswith(term) or f".{term}" in haystack:
                     score += 2
             if score > 0:
@@ -541,9 +884,8 @@ class HomeAssistantBridge:
 
     async def handle_text_command(self, text: str) -> dict[str, Any]:
         cfg = await self._cfg()
-        action = self._detect_action(text)
-        domain_hint = self._domain_hint(text)
-        if not action:
+        intent = self.parse_intent(text)
+        if not intent.action:
             return {"handled": False, "ok": False, "reason": "no_home_assistant_intent"}
         if not bool(cfg.get("enabled", True)):
             return {"handled": True, "ok": False, "speech": "Home Assistant baglantisi kapali."}
@@ -554,20 +896,56 @@ class HomeAssistantBridge:
         if not await self.is_ready():
             return {"handled": True, "ok": False, "speech": "Home Assistant API hazir degil."}
 
-        entity, alternatives = await self._select_entity(text, domain_hint)
-        if entity is None:
-            if domain_hint:
-                names = ", ".join(str(item.get("friendly_name") or item.get("entity_id")) for item in alternatives[:3])
-                suffix = f" Adaylar: {names}." if names else ""
-                return {"handled": True, "ok": False, "speech": f"Allowlist icinde uygun Home Assistant entity bulamadim.{suffix}"}
+        entities, alternatives, clarification = await self._select_entities_for_intent(text, intent, cfg)
+        if clarification:
+            return {
+                "handled": True,
+                "ok": False,
+                "speech": clarification,
+                "requires_clarification": True,
+            }
+        if not entities:
+            if intent.domain_hint:
+                suffix = f" Adaylar: {_display_list(alternatives)}." if alternatives else ""
+                return {"handled": True, "ok": False, "speech": f"Allowlist icinde uygun cihaz bulamadim.{suffix}"}
             return {"handled": False, "ok": False, "reason": "no_matching_entity"}
 
-        entity_id = str(entity.get("entity_id") or "")
-        friendly = str(entity.get("friendly_name") or entity_id)
-        domain = entity_id.split(".", 1)[0] if "." in entity_id else ""
-        if action == "read":
+        domains = {str(item.get("entity_id") or "").split(".", 1)[0] for item in entities if "." in str(item.get("entity_id") or "")}
+        if len(domains) != 1:
+            return {
+                "handled": True,
+                "ok": False,
+                "speech": "Bu komut icin tek bir cihaz turu secmem gerekiyor. Hangisini istedigini soyler misin?",
+                "requires_clarification": True,
+            }
+        domain = next(iter(domains))
+        friendly = self._friendly_selection_name(entities, intent)
+        entity_ids = [str(item.get("entity_id") or "") for item in entities if str(item.get("entity_id") or "")]
+
+        if not self._domain_supports_intent(domain, intent):
+            return {
+                "handled": True,
+                "ok": False,
+                "entity_id": entity_ids[0] if entity_ids else "",
+                "domain": domain,
+                "speech": self._domain_mismatch_speech(friendly, domain, intent),
+            }
+
+        if intent.action == "read":
+            if len(entities) > 1:
+                speech = await self._multi_state_speech(entities, text)
+                await self._log_bus.emit("INFO", "HA", "Allowlisted HA state group read", {"count": len(entities), "domain": domain})
+                return {
+                    "handled": True,
+                    "ok": True,
+                    "action": intent.action,
+                    "domain": domain,
+                    "speech": speech,
+                    "entity_ids": entity_ids,
+                }
+            entity_id = entity_ids[0]
             state = await self.get_state(entity_id)
-            state_doc = state or entity
+            state_doc = state or entities[0]
             if domain == "weather":
                 forecast_response = await self.get_weather_forecast_response(entity_id)
                 if forecast_response:
@@ -577,7 +955,7 @@ class HomeAssistantBridge:
             return {
                 "handled": True,
                 "ok": True,
-                "action": action,
+                "action": intent.action,
                 "entity_id": entity_id,
                 "domain": domain,
                 "speech": speech,
@@ -585,24 +963,31 @@ class HomeAssistantBridge:
                 "narration_kind": "weather" if entity_id.startswith("weather.") else "",
             }
 
-        service = self._service_for_action(domain, action)
+        service, data = self._service_for_intent(domain, intent, entity_ids)
         if not service:
             return {
                 "handled": True,
                 "ok": False,
-                "entity_id": entity_id,
+                "entity_id": entity_ids[0] if entity_ids else "",
+                "domain": domain,
                 "speech": f"{friendly} icin bu komut henuz desteklenmiyor.",
             }
-        result = await self.call_service(domain, service, {"entity_id": entity_id})
-        await self._log_bus.emit("INFO", "HA", "Allowlisted HA service call", {"entity_id": entity_id, "domain": domain, "service": service})
+        result = await self.call_service(domain, service, data)
+        await self._log_bus.emit(
+            "INFO",
+            "HA",
+            "Allowlisted HA service call",
+            {"entity_ids": entity_ids, "domain": domain, "service": service, "action": intent.action},
+        )
         return {
             "handled": True,
             "ok": True,
-            "action": action,
-            "entity_id": entity_id,
+            "action": intent.action,
+            "entity_id": entity_ids[0] if len(entity_ids) == 1 else "",
+            "entity_ids": entity_ids,
             "domain": domain,
             "service": service,
-            "speech": self._service_speech(friendly, action),
+            "speech": self._service_speech(friendly, intent, len(entity_ids)),
             "result": result,
         }
 
@@ -611,49 +996,129 @@ class HomeAssistantBridge:
         if not bool(cfg.get("route_home_control", True)):
             return False
         normalized = _normalize_tr(text)
+        intent = self.parse_intent(text)
+        if intent.action in {"set_color", "set_brightness", "set_temperature", "set_hvac", "set_media_volume"}:
+            return True
         weather_terms = ["hava", "derece", "sicaklik", "nem", "ruzgar", "yagmur"]
-        device_terms = ["isik", "lamba", "priz", "klima", "perde", "panjur", "isitici", "fan", "sensor", "kamera"]
-        action_terms = ["ac", "kapat", "yak", "sondur", "calistir", "durdur", "ayarla", "durum", "kac"]
+        device_terms = ["isik", "lamba", "led", "renk", "priz", "klima", "perde", "panjur", "isitici", "fan", "sensor", "kamera", "ses", "muzik", "tv"]
+        action_terms = ["ac", "kapat", "yak", "sondur", "calistir", "durdur", "ayarla", "durum", "kac", "yap", "kis", "artir", "azalt", "oku"]
         return any(term in normalized for term in weather_terms) or (
-            any(term in normalized for term in device_terms) and any(term in normalized for term in action_terms)
+            bool(intent.action) and any(term in normalized for term in device_terms) and any(term in normalized for term in action_terms)
         )
 
-    async def _select_entity(self, text: str, domain_hint: str = "") -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    async def _select_entities_for_intent(
+        self,
+        text: str,
+        intent: HaIntent,
+        cfg: dict[str, Any],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
+        domain_hint = intent.domain_hint
         states = await self.list_states(domain=domain_hint, limit=256) if domain_hint else await self.list_states(limit=256)
-        if not states and domain_hint:
-            states = await self.list_states(limit=256)
         if not states:
-            return None, []
+            return [], [], ""
 
-        text_norm = _normalize_tr(text)
-        terms = _entity_match_terms(text)
-        scored: list[tuple[int, dict[str, Any]]] = []
-        for item in states:
-            entity_id = str(item.get("entity_id") or "").lower()
-            friendly_name = str(item.get("friendly_name") or "")
-            friendly_norm = _normalize_tr(friendly_name)
-            haystack = f"{entity_id} {friendly_norm}"
-            score = 0
-            if entity_id and entity_id in text_norm:
-                score += 40
-            if domain_hint and entity_id.startswith(f"{domain_hint}."):
-                score += 5
-            for term in terms:
-                if term in friendly_norm:
-                    score += 8
-                elif term in haystack:
-                    score += 4
-            if score > 0:
-                scored.append((score, item))
+        if intent.all_requested and not domain_hint:
+            domains = sorted({str(item.get("entity_id") or "").split(".", 1)[0] for item in states if "." in str(item.get("entity_id") or "")})
+            names = ", ".join(self._domain_label(domain) for domain in domains[:3])
+            return [], states[:5], f"Hepsini derken hangi grubu kastediyorsun: {names}?"
 
-        scored.sort(key=lambda pair: (-pair[0], str(pair[1].get("entity_id") or "")))
+        scored = self._score_entities(text, intent, states, cfg)
+        alternatives = [entry.item for entry in scored[:5]] if scored else states[:5]
+
+        if intent.all_requested:
+            if intent.target_terms or intent.area_terms:
+                selected = [entry.item for entry in scored if entry.score >= 8]
+                if not selected:
+                    return [], alternatives, self._no_match_speech(intent, alternatives)
+                return selected, alternatives, ""
+            return states, alternatives, ""
+
+        if intent.room_group_requested:
+            selected = [entry.item for entry in scored if entry.score >= 8]
+            if not selected:
+                return [], alternatives, self._no_match_speech(intent, alternatives)
+            return selected, alternatives, ""
+
         if not scored:
             if domain_hint and len(states) == 1:
-                return states[0], []
-            return None, states[:5]
-        if len(scored) > 1 and scored[0][0] == scored[1][0] and scored[0][0] < 14:
-            return None, [item for _score, item in scored[:5]]
-        return scored[0][1], [item for _score, item in scored[1:6]]
+                return [states[0]], [], ""
+            return [], alternatives, self._clarify_speech(alternatives) if domain_hint and len(states) > 1 else ""
+
+        top = scored[0]
+        if top.score < 8:
+            if domain_hint and len(states) == 1:
+                return [states[0]], [], ""
+            return [], alternatives, self._clarify_speech(alternatives)
+
+        if len(scored) > 1:
+            second = scored[1]
+            close_scores = second.score >= max(8, top.score - 5)
+            weak_top = top.score < 35
+            if close_scores and weak_top:
+                return [], [entry.item for entry in scored[:5]], self._clarify_speech([entry.item for entry in scored[:5]])
+
+        return [top.item], [entry.item for entry in scored[1:6]], ""
+
+    def _score_entities(self, text: str, intent: HaIntent, states: list[dict[str, Any]], cfg: dict[str, Any]) -> list[EntityScore]:
+        text_norm = _normalize_tr(text)
+        text_compact = _compact_text(text_norm)
+        aliases = _alias_map(cfg)
+        scored: list[EntityScore] = []
+        for item in states:
+            entity_id = str(item.get("entity_id") or "").lower()
+            friendly_name = _friendly_name(item)
+            friendly_norm = _normalize_tr(friendly_name)
+            entity_words = _words(entity_id.replace(".", " ") + " " + friendly_name)
+            alias_values = aliases.get(entity_id, [])
+            alias_text = " ".join(alias_values)
+            haystack = _normalize_tr(f"{entity_id} {friendly_name} {alias_text}")
+            haystack_compact = _compact_text(haystack)
+            score = 0
+            reasons: list[str] = []
+            if entity_id and entity_id in text_norm:
+                score += 60
+                reasons.append("entity_id")
+            if friendly_norm and _compact_text(friendly_norm) and _compact_text(friendly_norm) in text_compact:
+                score += 45
+                reasons.append("friendly_phrase")
+            for alias in alias_values:
+                if _phrase_in_text(alias, text_norm, text_compact):
+                    score += 50
+                    reasons.append("alias_phrase")
+            if intent.domain_hint and entity_id.startswith(f"{intent.domain_hint}."):
+                score += 4
+                reasons.append("domain")
+            for term in intent.target_terms:
+                if term in entity_words:
+                    score += 12
+                    reasons.append(f"word:{term}")
+                elif term in haystack_compact:
+                    score += 8
+                    reasons.append(f"compact:{term}")
+                elif term in haystack:
+                    score += 5
+                    reasons.append(f"contains:{term}")
+            for term in intent.area_terms:
+                if term in entity_words or term in haystack_compact:
+                    score += 8
+                    reasons.append(f"area:{term}")
+            if score > 0:
+                scored.append(EntityScore(score=score, item=item, reasons=reasons))
+        scored.sort(key=lambda entry: (-entry.score, str(entry.item.get("entity_id") or "")))
+        return scored
+
+    def _clarify_speech(self, alternatives: list[dict[str, Any]]) -> str:
+        names = _display_list(alternatives)
+        if not names:
+            return "Hangi cihazi kastettigini biraz daha net soyler misin?"
+        return f"Birden fazla aday buldum: {names}. Hangisini istiyorsun?"
+
+    def _no_match_speech(self, intent: HaIntent, alternatives: list[dict[str, Any]]) -> str:
+        names = _display_list(alternatives)
+        suffix = f" Adaylar: {names}." if names else ""
+        if intent.area_terms:
+            return f"Bu oda veya hedef icin allowlist icinde uygun cihaz bulamadim.{suffix}"
+        return f"Allowlist icinde uygun cihaz bulamadim.{suffix}"
 
     def _detect_action(self, text: str) -> str:
         words = _words(text)
@@ -675,7 +1140,7 @@ class HomeAssistantBridge:
         return ""
 
     def _service_for_action(self, domain: str, action: str) -> str:
-        if action == "toggle" and domain in {"light", "switch", "fan", "input_boolean"}:
+        if action == "toggle" and domain in {"light", "switch", "fan", "input_boolean", "media_player"}:
             return "toggle"
         if action == "turn_on":
             if domain == "cover":
@@ -693,14 +1158,118 @@ class HomeAssistantBridge:
                 return "turn_off"
         return ""
 
-    def _service_speech(self, friendly_name: str, action: str) -> str:
-        if action == "turn_on":
-            return f"{friendly_name} acildi."
-        if action == "turn_off":
-            return f"{friendly_name} kapatildi."
-        if action == "toggle":
-            return f"{friendly_name} degistirildi."
-        return f"{friendly_name} icin komut uygulandi."
+    def _service_for_intent(self, domain: str, intent: HaIntent, entity_ids: list[str]) -> tuple[str, dict[str, Any]]:
+        entity_value: str | list[str] = entity_ids[0] if len(entity_ids) == 1 else entity_ids
+        data: dict[str, Any] = {"entity_id": entity_value}
+        if intent.action == "set_color":
+            if domain != "light":
+                return "", {}
+            if intent.rgb_color is not None:
+                data["rgb_color"] = list(intent.rgb_color)
+            if intent.color_temp_kelvin is not None:
+                data["color_temp_kelvin"] = intent.color_temp_kelvin
+            return "turn_on", data
+        if intent.action == "set_brightness":
+            if domain != "light":
+                return "", {}
+            if intent.brightness_pct is not None:
+                data["brightness_pct"] = intent.brightness_pct
+            if intent.brightness_step_pct is not None:
+                data["brightness_step_pct"] = intent.brightness_step_pct
+            return "turn_on", data
+        if intent.action == "set_temperature":
+            if domain != "climate" or intent.temperature is None:
+                return "", {}
+            data["temperature"] = intent.temperature
+            return "set_temperature", data
+        if intent.action == "set_hvac":
+            if domain != "climate" or not intent.hvac_mode:
+                return "", {}
+            data["hvac_mode"] = intent.hvac_mode
+            return "set_hvac_mode", data
+        if intent.action == "set_media_volume":
+            if domain != "media_player" or intent.brightness_pct is None:
+                return "", {}
+            data["volume_level"] = round(intent.brightness_pct / 100, 2)
+            return "volume_set", data
+        service = self._service_for_action(domain, intent.action)
+        return service, data if service else {}
+
+    def _domain_supports_intent(self, domain: str, intent: HaIntent) -> bool:
+        if intent.action in {"set_color", "set_brightness"}:
+            return domain == "light"
+        if intent.action in {"set_temperature", "set_hvac"}:
+            return domain == "climate"
+        if intent.action == "set_media_volume":
+            return domain == "media_player"
+        return True
+
+    def _domain_mismatch_speech(self, friendly_name: str, domain: str, intent: HaIntent) -> str:
+        if intent.action in {"set_color", "set_brightness"}:
+            return f"Bunu yapamam; {friendly_name} bir isik degil."
+        if intent.action in {"set_temperature", "set_hvac"}:
+            return f"Bunu yapamam; {friendly_name} klima veya termostat degil."
+        if intent.action == "set_media_volume":
+            return f"Bunu yapamam; {friendly_name} medya oynatici degil."
+        return f"{friendly_name} icin bu komut uygun degil."
+
+    def _friendly_selection_name(self, entities: list[dict[str, Any]], intent: HaIntent) -> str:
+        if len(entities) == 1:
+            return _friendly_name(entities[0])
+        if intent.area_terms:
+            area = "oturma odasi" if "oturma" in intent.area_terms and "oda" in intent.area_terms else " ".join(intent.area_terms)
+            return f"{area} isiklari"
+        domain = str(entities[0].get("entity_id") or "").split(".", 1)[0]
+        return f"{len(entities)} {self._domain_label(domain)}"
+
+    def _domain_label(self, domain: str) -> str:
+        return {
+            "light": "isik",
+            "switch": "priz/anahtar",
+            "fan": "fan",
+            "climate": "klima",
+            "media_player": "medya oynatici",
+            "weather": "hava durumu",
+            "sensor": "sensor",
+            "cover": "perde/panjur",
+            "lock": "kilit",
+        }.get(domain, domain or "cihaz")
+
+    def _service_speech(self, friendly_name: str, intent: HaIntent, count: int = 1) -> str:
+        target = friendly_name
+        if intent.action == "turn_on":
+            return f"{target} acildi."
+        if intent.action == "turn_off":
+            return f"{target} kapatildi."
+        if intent.action == "toggle":
+            return f"{target} degistirildi."
+        if intent.action == "set_color":
+            color = intent.color_name or "istenen renge"
+            return f"{target} {color} rengine aldim."
+        if intent.action == "set_brightness":
+            if intent.brightness_pct is not None:
+                return f"{target} parlakligini yuzde {intent.brightness_pct} yaptim."
+            if intent.brightness_step_pct is not None and intent.brightness_step_pct < 0:
+                return f"{target} biraz kisildi."
+            if intent.brightness_step_pct is not None:
+                return f"{target} biraz acildi."
+        if intent.action == "set_temperature" and intent.temperature is not None:
+            return f"{target} {int(intent.temperature) if intent.temperature.is_integer() else intent.temperature} dereceye ayarlandi."
+        if intent.action == "set_hvac":
+            return f"{target} modu ayarlandi."
+        if intent.action == "set_media_volume" and intent.brightness_pct is not None:
+            return f"{target} sesi yuzde {intent.brightness_pct} yapildi."
+        return f"{target} icin komut uygulandi."
+
+    async def _multi_state_speech(self, entities: list[dict[str, Any]], user_text: str) -> str:
+        pieces: list[str] = []
+        for entity in entities[:5]:
+            entity_id = str(entity.get("entity_id") or "")
+            state = await self.get_state(entity_id)
+            pieces.append(self._state_speech(state or entity, _friendly_name(entity), user_text=user_text).rstrip("."))
+        if len(entities) > 5:
+            pieces.append(f"ve {len(entities) - 5} cihaz daha")
+        return ". ".join(piece for piece in pieces if piece) + "."
 
     def _state_speech(self, state: dict[str, Any], friendly_name: str, user_text: str = "") -> str:
         value = str(state.get("state") or "bilinmiyor")
@@ -747,6 +1316,9 @@ class HomeAssistantBridge:
             if advice:
                 sentence += " " + advice[0] + "."
             return sentence
+        domain = entity_id.split(".", 1)[0] if "." in entity_id else ""
+        if domain in {"light", "switch", "fan", "input_boolean"} and value in {"on", "off"}:
+            return f"{friendly_name} {'acik' if value == 'on' else 'kapali'}."
         return f"{friendly_name}: {value}{(' ' + unit) if unit else ''}."
 
     def has_entity_scope(self, cfg: dict[str, Any]) -> bool:

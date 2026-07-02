@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.139"
+version: "0.1.140"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -118,6 +118,7 @@ options:
     route_home_control: true
     strict_allowlist: true
     exposed_entities: ""
+    aliases: ""
     expose_all_entities: false
     exposed_domains: ""
     blocked_entities: ""
@@ -260,6 +261,7 @@ schema:
     route_home_control: bool
     strict_allowlist: bool
     exposed_entities: str
+    aliases: str
     expose_all_entities: bool
     exposed_domains: str
     blocked_entities: str
