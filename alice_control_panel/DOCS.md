@@ -245,6 +245,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
 - Panel logs are kept in the backend memory buffer, not persisted to a log file; an add-on restart/update or explicit Clear resets the visible buffer.
+- `0.1.152` moves Timing and Messages out of the Voice Pipeline tabs into dedicated Latency Timeline and Conversation panels.
 - `0.1.151` adds detailed Google TTS timing traces for request, first byte, audio decode, ESP transfer, and speaker start latency.
 - `0.1.150` reports ESP speaker-first-PCM timing in the Voice Pipeline so TTS text delay and real speaker delay can be separated.
 - `0.1.149` shows the loaded frontend version beside backend status so stale panel JavaScript is obvious after updates.

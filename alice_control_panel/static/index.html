@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.151" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.151" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.152" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.152" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.151" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.152" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.151" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.152" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -151,11 +151,6 @@
             <header>
               <h2>Voice Pipeline</h2>
               <div class="pipeline-actions">
-                <div class="pipeline-tabs" role="tablist" aria-label="Pipeline view">
-                  <button class="active" data-pipeline-tab="trace" type="button">Trace</button>
-                  <button data-pipeline-tab="messages" type="button">Messages</button>
-                  <button data-pipeline-tab="timing" type="button">Timing</button>
-                </div>
                 <span id="session-pill" class="pill info">SESSION OFF</span>
                 <span id="stream-pill" class="pill info">STREAM OFF</span>
               </div>
@@ -168,28 +163,13 @@
                   <button id="pipeline-tts-send">TTS only</button>
                   <button id="pipeline-tts-benchmark">Latency test</button>
                 </div>
-                <div class="pipeline-message-actions">
-                  <button id="pipeline-messages-download" type="button">Download</button>
-                  <button id="pipeline-messages-clear" type="button">Clear</button>
-                </div>
                 <div class="session-controls">
                   <button id="session-start">Start session</button>
                   <button id="session-stop">Stop session</button>
                   <button id="response-cancel">Cancel response</button>
                   <span id="session-meta">manual session idle</span>
                 </div>
-                <div class="pipeline-tab-panel active" data-pipeline-panel="trace">
-                  <div id="pipeline-feed" class="pipeline-feed" data-autoscroll></div>
-                </div>
-                <div class="pipeline-tab-panel" data-pipeline-panel="messages">
-                  <div id="pipeline-messages" class="pipeline-messages" data-autoscroll></div>
-                </div>
-                <div class="pipeline-tab-panel" data-pipeline-panel="timing">
-                  <div id="realtime-latency" class="latency-strip"></div>
-                  <div id="turn-summary" class="turn-summary"></div>
-                  <div id="timeline" class="turn-timeline"></div>
-                  <div id="turn-history" class="turn-history"></div>
-                </div>
+                <div id="pipeline-feed" class="pipeline-feed" data-autoscroll></div>
               </div>
             </div>
           </section>
@@ -287,6 +267,30 @@
                 </section>
               </div>
             </div>
+          </section>
+
+          <section id="latency-panel" class="panel span-12 latency-panel">
+            <header>
+              <h2>Latency Timeline</h2>
+              <span class="panel-subtle">TTS, Google, ESP ve hoparlor gecikme kirilimlari</span>
+            </header>
+            <div class="latency-layout">
+              <div id="realtime-latency" class="latency-strip"></div>
+              <div id="turn-summary" class="turn-summary"></div>
+              <div id="timeline" class="turn-timeline"></div>
+              <div id="turn-history" class="turn-history"></div>
+            </div>
+          </section>
+
+          <section id="conversation" class="panel span-12 conversation-panel">
+            <header>
+              <h2>Conversation</h2>
+              <div class="actions">
+                <button id="pipeline-messages-download" type="button">Download</button>
+                <button id="pipeline-messages-clear" type="button">Clear</button>
+              </div>
+            </header>
+            <div id="pipeline-messages" class="pipeline-messages conversation-messages" data-autoscroll></div>
           </section>
 
           <section id="prompts" class="panel span-12 prompt-panel">
@@ -535,6 +539,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.151"></script>
+  <script src="/app.js?v=0.1.152"></script>
   </body>
 </html>

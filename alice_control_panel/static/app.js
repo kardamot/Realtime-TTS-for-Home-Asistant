@@ -2,7 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.151";
+const UI_VERSION = "0.1.152";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -768,34 +768,17 @@ function initCommandTabs() {
 }
 
 function syncPipelineTabs() {
-  if (!["trace", "messages", "timing"].includes(pipelineView)) pipelineView = "trace";
-  document.querySelectorAll("[data-pipeline-tab]").forEach((button) => {
-    const active = button.dataset.pipelineTab === pipelineView;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-selected", active ? "true" : "false");
-  });
-  document.querySelectorAll("[data-pipeline-panel]").forEach((panel) => {
-    panel.classList.toggle("active", panel.dataset.pipelinePanel === pipelineView);
-  });
+  pipelineView = "trace";
   const pipeline = $("pipeline");
-  pipeline?.classList.toggle("timing-expanded", pipelineView === "timing");
-  pipeline?.classList.toggle("messages-view", pipelineView === "messages");
-  if (pipelineView === "messages") {
-    window.requestAnimationFrame(() => {
-      const messages = $("pipeline-messages");
-      if (messages) messages.scrollTop = messages.scrollHeight;
-    });
-  }
+  pipeline?.classList.remove("timing-expanded", "messages-view");
+  window.requestAnimationFrame(() => {
+    const messages = $("pipeline-messages");
+    if (messages) messages.scrollTop = messages.scrollHeight;
+  });
 }
 
 function initPipelineTabs() {
-  document.querySelectorAll("[data-pipeline-tab]").forEach((button) => {
-    button.onclick = () => {
-      pipelineView = button.dataset.pipelineTab || "trace";
-      localStorage.setItem("alice_pipeline_view", pipelineView);
-      syncPipelineTabs();
-    };
-  });
+  localStorage.setItem("alice_pipeline_view", "trace");
   syncPipelineTabs();
 }
 
