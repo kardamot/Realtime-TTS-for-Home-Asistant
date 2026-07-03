@@ -5,9 +5,10 @@ import base64
 import binascii
 import json
 import re
+import time
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Awaitable, Callable
 from urllib.parse import urlencode
 
 import aiohttp
@@ -34,6 +35,55 @@ PCM_PACE_MAX_SLEEP = 0.05
 RELAY_CHUNK_BYTES = 4096
 API_KEY_QUERY_RE = re.compile(r"((?:api_key|key)=)[^&\s]+")
 PCM_OUTPUT_RE = re.compile(r"^pcm_(\d+)$")
+TtsTraceHandler = Callable[[dict[str, Any]], Awaitable[None]]
+
+
+class TtsTrace:
+    def __init__(
+        self,
+        log_bus: LogBus,
+        handler: TtsTraceHandler | None,
+        provider: str,
+        model: str,
+        text: str,
+        transport: str,
+    ) -> None:
+        self.trace_id = f"tts-{uuid.uuid4().hex[:10]}"
+        self._log_bus = log_bus
+        self._handler = handler
+        self._provider = provider
+        self._model = model
+        self._transport = transport
+        self._text_chars = len(text)
+        self._text_bytes = len(text.encode("utf-8", errors="ignore"))
+        self._started_monotonic = time.monotonic()
+
+    async def mark(self, event: str, **details: Any) -> None:
+        elapsed_ms = max(0, int((time.monotonic() - self._started_monotonic) * 1000))
+        clean = {
+            key: value
+            for key, value in details.items()
+            if value is None or isinstance(value, (str, int, float, bool))
+        }
+        payload: dict[str, Any] = {
+            "event": event,
+            "name": event,
+            "trace_id": self.trace_id,
+            "ms": elapsed_ms,
+            "at": time.time(),
+            "provider": self._provider,
+            "model": self._model,
+            "transport": self._transport,
+            "text_chars": self._text_chars,
+            "text_bytes": self._text_bytes,
+            **clean,
+        }
+        if self._handler is not None:
+            try:
+                await self._handler(dict(payload))
+            except Exception as exc:
+                await self._log_bus.emit("WARN", "TTS", "TTS trace handler failed", {"event": event, "error": safe_exc_message(exc)})
+        await self._log_bus.emit("INFO", "TTS", f"TTS trace {event}", payload)
 
 
 @dataclass(slots=True)
@@ -78,6 +128,9 @@ class StreamCommand:
 class PcmOutput:
     pace_pcm = True
 
+    def set_trace(self, trace: TtsTrace | None) -> None:
+        return
+
     async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
         raise NotImplementedError
 
@@ -94,11 +147,20 @@ class PcmOutput:
 class WebSocketPcmOutput(PcmOutput):
     def __init__(self, ws: WebSocket) -> None:
         self._ws = ws
+        self._trace: TtsTrace | None = None
+        self._first_chunk_sent = False
+
+    def set_trace(self, trace: TtsTrace | None) -> None:
+        self._trace = trace
 
     async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
         await send_pcm_start(self._ws, sample_rate, channels)
 
     async def write(self, pcm: bytes) -> None:
+        if pcm and not self._first_chunk_sent:
+            self._first_chunk_sent = True
+            if self._trace is not None:
+                await self._trace.mark("first_chunk_sent_to_esp", chunk_bytes=len(pcm), output="tts_relay_ws")
         await self._ws.send_bytes(pcm)
 
     async def done(self) -> None:
@@ -129,9 +191,15 @@ class EspPcmOutput(PcmOutput):
         self._initial_buffer_ms = max(0, int(initial_buffer_ms))
         self._silence_prefix_ms = max(0, int(silence_prefix_ms))
         self._cancel_event = cancel_event
+        self._trace: TtsTrace | None = None
+        self._first_chunk_sent = False
+        self._prebuffer_bytes = 0
         self.bytes_sent = 0
         self.failed = False
         self.error_message = ""
+
+    def set_trace(self, trace: TtsTrace | None) -> None:
+        self._trace = trace
 
     async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
         self._raise_if_cancelled()
@@ -182,6 +250,7 @@ class EspPcmOutput(PcmOutput):
         self._started = True
         await self._log_bus.emit("INFO", "TTS", "ESP audio stream acknowledged", {"stream_id": self._stream_id})
         silence = self._silence_prefix_bytes()
+        self._prebuffer_bytes = len(self._buffer)
         if silence:
             for offset in range(0, len(silence), RELAY_CHUNK_BYTES):
                 await self._send_chunk(silence[offset : offset + RELAY_CHUNK_BYTES], count_bytes=False)
@@ -201,6 +270,18 @@ class EspPcmOutput(PcmOutput):
         self._raise_if_cancelled()
         if not pcm:
             return
+        if count_bytes and not self._first_chunk_sent:
+            self._first_chunk_sent = True
+            if self._trace is not None:
+                await self._trace.mark(
+                    "first_chunk_sent_to_esp",
+                    chunk_bytes=len(pcm),
+                    prebuffer_bytes=self._prebuffer_bytes,
+                    initial_buffer_ms=self._initial_buffer_ms,
+                    silence_prefix_ms=self._silence_prefix_ms,
+                    stream_id=self._stream_id,
+                    output="esp_ws",
+                )
         await self._esp_client.send_audio_chunk(pcm, stream_id=self._stream_id)
         if count_bytes:
             self.bytes_sent += len(pcm)
@@ -536,6 +617,58 @@ class TtsRelay:
     def __init__(self, config_store: ConfigStore, log_bus: LogBus) -> None:
         self._config_store = config_store
         self._log_bus = log_bus
+        self._trace_handler: TtsTraceHandler | None = None
+
+    def set_trace_handler(self, handler: TtsTraceHandler | None) -> None:
+        self._trace_handler = handler
+
+    def _new_trace(self, provider: str, model: str, text: str, transport: str) -> TtsTrace:
+        return TtsTrace(self._log_bus, self._trace_handler, provider, model, text, transport)
+
+    async def _read_response_body(
+        self,
+        resp: aiohttp.ClientResponse,
+        trace: TtsTrace,
+        provider_label: str,
+    ) -> bytes:
+        chunks: list[bytes] = []
+        total = 0
+        chunk_count = 0
+        first = True
+        async for chunk in resp.content.iter_chunked(RELAY_CHUNK_BYTES):
+            if not chunk:
+                continue
+            chunk_count += 1
+            total += len(chunk)
+            if first:
+                first = False
+                await trace.mark(
+                    f"{provider_label}_tts_first_byte_received",
+                    http_status=resp.status,
+                    first_chunk_bytes=len(chunk),
+                    response_content_type=str(resp.headers.get("content-type") or ""),
+                    response_content_length=str(resp.headers.get("content-length") or ""),
+                )
+            chunks.append(bytes(chunk))
+        body = b"".join(chunks)
+        await trace.mark(
+            f"{provider_label}_tts_response_body_buffered",
+            response_bytes=len(body),
+            response_chunk_count=chunk_count,
+            streaming_response=False,
+            response_buffered=True,
+        )
+        return body
+
+    @staticmethod
+    def _decode_json_response(body: bytes) -> dict[str, Any]:
+        if not body:
+            return {}
+        return json.loads(body.decode("utf-8", errors="replace"))
+
+    @staticmethod
+    def _safe_body_text(body: bytes) -> str:
+        return body.decode("utf-8", errors="replace")
 
     async def status(self) -> dict[str, Any]:
         cfg = relay_config_from_panel(await self._config_store.get(include_secrets=False))
@@ -575,10 +708,10 @@ class TtsRelay:
                     await self._relay_elevenlabs_stream(session, output, cfg, text)
                 elif cfg.provider == "google_ai":
                     text = first_cmd.text if first_cmd.final else await self._collect_buffered_stream_text(ws, first_cmd)
-                    await self._relay_google_ai(session, output, cfg, text)
+                    await self._relay_google_ai(session, output, cfg, text, transport="relay_ws")
                 elif cfg.provider == "google_cloud":
                     text = first_cmd.text if first_cmd.final else await self._collect_buffered_stream_text(ws, first_cmd)
-                    await self._relay_google_cloud(session, output, cfg, text)
+                    await self._relay_google_cloud(session, output, cfg, text, transport="relay_ws")
                 else:
                     await output.error(f"TTS provider '{cfg.provider}' is configured but not implemented in this preview.", 501)
         except WebSocketDisconnect:
@@ -627,9 +760,9 @@ class TtsRelay:
                 elif cfg.provider == "elevenlabs":
                     await self._relay_elevenlabs_stream(session, output, cfg, text)
                 elif cfg.provider == "google_ai":
-                    await self._relay_google_ai(session, output, cfg, text)
+                    await self._relay_google_ai(session, output, cfg, text, transport="direct_esp")
                 elif cfg.provider == "google_cloud":
-                    await self._relay_google_cloud(session, output, cfg, text)
+                    await self._relay_google_cloud(session, output, cfg, text, transport="direct_esp")
                 else:
                     await output.error(f"TTS provider '{cfg.provider}' is configured but not implemented in this preview.", 501)
                     return {"ok": False, "status": "provider_not_implemented", "provider": cfg.provider}
@@ -781,10 +914,20 @@ class TtsRelay:
         output: PcmOutput,
         cfg: TtsRelayConfig,
         text: str,
+        transport: str = "relay_ws",
     ) -> None:
         if not cfg.google_ai_api_key:
             await output.error("Google AI API key is not configured.", 500)
             return
+        trace = self._new_trace("google_ai", cfg.google_ai_model, text, transport)
+        output.set_trace(trace)
+        await trace.mark("tts_text_queued")
+        await trace.mark("tts_worker_started")
+        if transport == "relay_ws":
+            await trace.mark("tts_relay_ws_connect_start", note="ESP initiated relay websocket before first TTS command")
+            await trace.mark("tts_relay_ws_connected")
+        await trace.mark("google_tts_request_build_start")
+        build_started = time.monotonic()
         prompt = text
         if cfg.google_ai_prompt_prefix.strip():
             prompt = f"{cfg.google_ai_prompt_prefix.strip()}\n\n{text}"
@@ -821,24 +964,90 @@ class TtsRelay:
             params = {"key": cfg.google_ai_api_key}
             headers = None
             audio_extractor = extract_inline_audio
+        request_payload_bytes = len(json.dumps(payload, ensure_ascii=False).encode("utf-8", errors="ignore"))
+        await trace.mark(
+            "google_tts_request_built",
+            payload_build_ms=max(0, int((time.monotonic() - build_started) * 1000)),
+            request_payload_bytes=request_payload_bytes,
+            prompt_chars=len(prompt),
+            endpoint="interactions" if cfg.google_ai_model.startswith("gemini-3.1-") else "generateContent",
+        )
         timeout = aiohttp.ClientTimeout(total=90, connect=15, sock_read=90)
         try:
+            await trace.mark("google_tts_request_send_start")
             async with session.post(url, params=params, headers=headers, json=payload, timeout=timeout) as resp:
-                doc = await resp.json(content_type=None)
+                await trace.mark(
+                    "google_tts_response_headers_received",
+                    http_status=resp.status,
+                    response_content_type=str(resp.headers.get("content-type") or ""),
+                    response_content_length=str(resp.headers.get("content-length") or ""),
+                    retry_after=str(resp.headers.get("retry-after") or ""),
+                )
+                await trace.mark(
+                    "google_tts_request_sent",
+                    http_status=resp.status,
+                    note="aiohttp returns after response headers; first byte is measured separately",
+                )
+                body = await self._read_response_body(resp, trace, "google")
+                doc = self._decode_json_response(body)
                 if resp.status != 200:
-                    await self._log_bus.emit("ERROR", "TTS", "Google AI TTS failed", {"status": resp.status, "body": str(doc)[:500]})
-                    await output.error(f"Google AI TTS error: {str(doc)[:300]}", resp.status)
+                    body_text = self._safe_body_text(body)
+                    await trace.mark(
+                        "google_tts_error",
+                        http_status=resp.status,
+                        error_body=body_text,
+                        retry_after=str(resp.headers.get("retry-after") or ""),
+                    )
+                    await self._log_bus.emit(
+                        "ERROR",
+                        "TTS",
+                        "Google AI TTS failed",
+                        {
+                            "status": resp.status,
+                            "body": body_text,
+                            "retry_after": str(resp.headers.get("retry-after") or ""),
+                            "provider": "google_ai",
+                            "model": cfg.google_ai_model,
+                            "trace_id": trace.trace_id,
+                        },
+                    )
+                    await output.error(f"Google AI TTS error: {body_text[:300]}", resp.status)
                     return
             audio = audio_extractor(doc, "Google AI")
+            await trace.mark(
+                "google_tts_first_audio_chunk_received",
+                audio_bytes=len(audio),
+                audio_chunk_count=1,
+                response_buffered=True,
+                streaming_response=False,
+                note="Google AI response is JSON/base64 buffered before audio can be extracted",
+            )
+            await trace.mark("google_tts_first_audio_chunk_decoded", decoded_audio_bytes=len(audio))
+            await trace.mark("audio_resample_start", operation="wav_header_parse", input_audio_bytes=len(audio))
             pcm, wav_rate, wav_channels = strip_wav_header_if_present(audio)
             sample_rate = wav_rate or GOOGLE_AI_PCM_SAMPLE_RATE
             channels = wav_channels or DEFAULT_PCM_CHANNELS
+            await trace.mark(
+                "audio_resample_done",
+                resample=False,
+                audio_format="wav" if wav_rate or wav_channels else "raw_pcm",
+                sample_rate=sample_rate,
+                channels=channels,
+                pcm_bytes=len(pcm),
+                total_audio_bytes=len(audio),
+            )
             await output.start(sample_rate, channels)
             pacer = PcmPacer(sample_rate, channels) if output.pace_pcm else None
             await send_pcm_bytes_to_output(output, pcm, pacer)
             await output.done()
         except Exception as exc:
-            await self._log_bus.emit("ERROR", "TTS", "Google AI TTS stream failed", {"error": safe_exc_message(exc)})
+            await trace.mark("google_tts_error", error=safe_exc_message(exc))
+            await self._log_bus.emit(
+                "ERROR",
+                "TTS",
+                "Google AI TTS stream failed",
+                {"error": safe_exc_message(exc), "provider": "google_ai", "model": cfg.google_ai_model, "trace_id": trace.trace_id},
+            )
             await output.error(f"Google AI stream error: {safe_exc_message(exc)}", 502)
 
     async def _relay_google_cloud(
@@ -847,16 +1056,27 @@ class TtsRelay:
         output: PcmOutput,
         cfg: TtsRelayConfig,
         text: str,
+        transport: str = "relay_ws",
     ) -> None:
         if not cfg.google_cloud_credentials_json.strip():
             await output.error("Google Cloud credentials JSON is not configured.", 500)
             return
+        trace = self._new_trace("google_cloud", cfg.google_cloud_voice_name, text, transport)
+        output.set_trace(trace)
+        await trace.mark("tts_text_queued")
+        await trace.mark("tts_worker_started")
+        if transport == "relay_ws":
+            await trace.mark("tts_relay_ws_connect_start", note="ESP initiated relay websocket before first TTS command")
+            await trace.mark("tts_relay_ws_connected")
         try:
             token = await self._google_cloud_access_token(cfg.google_cloud_credentials_json)
         except Exception as exc:
+            await trace.mark("google_tts_error", error=safe_exc_message(exc), stage="credentials")
             await output.error(f"Google Cloud credentials error: {safe_exc_message(exc)}", 500)
             return
 
+        await trace.mark("google_tts_request_build_start")
+        build_started = time.monotonic()
         payload: dict[str, Any] = {
             "input": {"text": text},
             "voice": {
@@ -869,29 +1089,96 @@ class TtsRelay:
                 "sampleRateHertz": cfg.pcm_sample_rate,
             },
         }
+        request_payload_bytes = len(json.dumps(payload, ensure_ascii=False).encode("utf-8", errors="ignore"))
+        await trace.mark(
+            "google_tts_request_built",
+            payload_build_ms=max(0, int((time.monotonic() - build_started) * 1000)),
+            request_payload_bytes=request_payload_bytes,
+            prompt_chars=len(text),
+            endpoint="google_cloud_synthesize",
+        )
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         timeout = aiohttp.ClientTimeout(total=90, connect=15, sock_read=90)
         try:
+            await trace.mark("google_tts_request_send_start")
             async with session.post(GOOGLE_CLOUD_SYNTH_URL, headers=headers, json=payload, timeout=timeout) as resp:
-                doc = await resp.json(content_type=None)
+                await trace.mark(
+                    "google_tts_response_headers_received",
+                    http_status=resp.status,
+                    response_content_type=str(resp.headers.get("content-type") or ""),
+                    response_content_length=str(resp.headers.get("content-length") or ""),
+                    retry_after=str(resp.headers.get("retry-after") or ""),
+                )
+                await trace.mark(
+                    "google_tts_request_sent",
+                    http_status=resp.status,
+                    note="aiohttp returns after response headers; first byte is measured separately",
+                )
+                body = await self._read_response_body(resp, trace, "google")
+                doc = self._decode_json_response(body)
                 if resp.status != 200:
-                    await self._log_bus.emit("ERROR", "TTS", "Google Cloud TTS failed", {"status": resp.status, "body": str(doc)[:500]})
-                    await output.error(f"Google Cloud TTS error: {str(doc)[:300]}", resp.status)
+                    body_text = self._safe_body_text(body)
+                    await trace.mark(
+                        "google_tts_error",
+                        http_status=resp.status,
+                        error_body=body_text,
+                        retry_after=str(resp.headers.get("retry-after") or ""),
+                    )
+                    await self._log_bus.emit(
+                        "ERROR",
+                        "TTS",
+                        "Google Cloud TTS failed",
+                        {
+                            "status": resp.status,
+                            "body": body_text,
+                            "retry_after": str(resp.headers.get("retry-after") or ""),
+                            "provider": "google_cloud",
+                            "model": cfg.google_cloud_voice_name,
+                            "trace_id": trace.trace_id,
+                        },
+                    )
+                    await output.error(f"Google Cloud TTS error: {body_text[:300]}", resp.status)
                     return
             audio_b64 = str(doc.get("audioContent") or "")
             if not audio_b64:
+                await trace.mark("google_tts_error", error="missing audioContent", http_status=200)
                 await output.error("Google Cloud TTS did not return audioContent.", 502)
                 return
             audio = decode_audio_b64(audio_b64, "Google Cloud")
+            await trace.mark(
+                "google_tts_first_audio_chunk_received",
+                audio_bytes=len(audio),
+                audio_chunk_count=1,
+                response_buffered=True,
+                streaming_response=False,
+                note="Google Cloud response is JSON/base64 buffered before audio can be extracted",
+            )
+            await trace.mark("google_tts_first_audio_chunk_decoded", decoded_audio_bytes=len(audio))
+            await trace.mark("audio_resample_start", operation="wav_header_parse", input_audio_bytes=len(audio))
             pcm, wav_rate, wav_channels = strip_wav_header_if_present(audio)
             sample_rate = wav_rate or cfg.pcm_sample_rate
             channels = wav_channels or DEFAULT_PCM_CHANNELS
+            await trace.mark(
+                "audio_resample_done",
+                resample=False,
+                audio_format="wav" if wav_rate or wav_channels else "raw_pcm",
+                sample_rate=sample_rate,
+                channels=channels,
+                pcm_bytes=len(pcm),
+                total_audio_bytes=len(audio),
+            )
             await output.start(sample_rate, channels)
             pacer = PcmPacer(sample_rate, channels) if output.pace_pcm else None
             await send_pcm_bytes_to_output(output, pcm, pacer)
             await output.done()
         except Exception as exc:
-            await self._log_bus.emit("ERROR", "TTS", "Google Cloud TTS stream failed", {"error": safe_exc_message(exc)})
+            await trace.mark("google_tts_error", error=safe_exc_message(exc))
+            await self._log_bus.emit(
+                "ERROR",
+                "TTS",
+                "Google Cloud TTS stream failed",
+                {"error": safe_exc_message(exc), "provider": "google_cloud", "model": cfg.google_cloud_voice_name, "trace_id": trace.trace_id},
+            )
             await output.error(f"Google Cloud stream error: {safe_exc_message(exc)}", 502)
 
     async def _google_cloud_access_token(self, credentials_json: str) -> str:

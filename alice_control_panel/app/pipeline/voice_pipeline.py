@@ -164,6 +164,11 @@ class VoicePipeline:
             await self._realtime_bridge.record_esp_tts_timing(payload)
         await self._ws_hub.publish("pipeline_status", await self.status())
 
+    async def handle_tts_trace(self, payload: dict[str, Any]) -> None:
+        if self._realtime_bridge and hasattr(self._realtime_bridge, "record_tts_trace"):
+            await self._realtime_bridge.record_tts_trace(payload)
+        await self._ws_hub.publish("pipeline_status", await self.status())
+
     async def message_history_text(self) -> str:
         status = await self.status()
         lines: list[str] = []
@@ -257,7 +262,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.150",
+                "version": "0.1.151",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -471,7 +476,11 @@ class VoicePipeline:
         self._tts_status = "queued"
         self._mark("TTS", "direct TTS test accepted")
         await self._ws_hub.publish("pipeline_status", await self.status())
+        trace_started = False
         try:
+            if self._realtime_bridge and hasattr(self._realtime_bridge, "start_tts_trace_turn"):
+                self._realtime_bridge.start_tts_trace_turn(text, "tts_test")
+                trace_started = True
             config = await self._config_store.get(include_secrets=False)
             await self._stream_tts_to_esp(text, config, run_cancel_event)
             self._state = "IDLE" if not run_cancel_event.is_set() else "CANCELLED"
@@ -481,11 +490,19 @@ class VoicePipeline:
             await self._log_bus.emit("ERROR", "TTS", "Direct TTS test failed", {"error": str(exc)})
             raise
         finally:
+            if trace_started and self._realtime_bridge and hasattr(self._realtime_bridge, "finish_tts_trace_turn"):
+                self._realtime_bridge.finish_tts_trace_turn(
+                    "tts_test_cancelled" if run_cancel_event.is_set() else "tts_test_done",
+                    text,
+                )
             self._stream_active = False
             if self._session_active:
                 self._session_last_event = "tts_completed" if not run_cancel_event.is_set() else "tts_cancelled"
             await self._ws_hub.publish("pipeline_status", await self.status())
         return await self.status()
+
+    async def run_tts_latency_test(self) -> dict[str, Any]:
+        return await self.run_tts_text("Alice TTS gecikme testi. Kisa ve net bir ses kontrolu yapiliyor.")
 
     async def run_audio_capture(self, metadata: dict[str, Any], audio: bytes) -> dict[str, Any]:
         config = await self._config_store.get(include_secrets=False)

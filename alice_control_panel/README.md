@@ -33,6 +33,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - Version `0.1.94` adds radar jump rejection, continuity confidence, and empty-room calibration commands.
 - Version `0.1.93` fixes the RD-03D radar X orientation and makes radar tracking updates more responsive.
 - Version `0.1.92` compacts the Voice Pipeline transcript and realtime timeline so short RT rows do not create unnecessary scrollbars.
+- Version `0.1.151` adds detailed Google TTS timing traces for request, first byte, audio decode, ESP transfer, and speaker start latency.
 - Version `0.1.150` reports ESP speaker-first-PCM timing in the Voice Pipeline so TTS text delay and real speaker delay can be separated.
 - Version `0.1.149` shows the loaded frontend version beside backend status so stale panel JavaScript is obvious after updates.
 - Version `0.1.148` makes every log row expandable through delegated list clicks and shows a compact summary when a log has no extra details.

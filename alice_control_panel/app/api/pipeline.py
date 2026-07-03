@@ -50,6 +50,12 @@ async def pipeline_tts_text(payload: dict[str, Any], request: Request, _: None =
     return {"ok": True, "pipeline": status}
 
 
+@router.post("/tts/benchmark")
+async def pipeline_tts_benchmark(request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
+    status = await request.app.state.voice_pipeline.run_tts_latency_test()
+    return {"ok": True, "pipeline": status}
+
+
 @router.get("/session")
 async def pipeline_session(request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
     status = await request.app.state.voice_pipeline.status()

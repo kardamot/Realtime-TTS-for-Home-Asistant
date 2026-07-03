@@ -962,14 +962,34 @@ nav a:hover { background: #121a25; color: var(--text); }
   border-left-color: rgba(190,126,255,.72);
 }
 .turn-stage-row.first_tts_chunk,
+.turn-stage-row.tts_text_queued,
+.turn-stage-row.tts_worker_started,
+.turn-stage-row.tts_relay_ws_connect_start,
+.turn-stage-row.tts_relay_ws_connected,
+.turn-stage-row.google_tts_request_build_start,
+.turn-stage-row.google_tts_request_built,
+.turn-stage-row.google_tts_request_send_start,
+.turn-stage-row.google_tts_request_sent,
+.turn-stage-row.google_tts_response_headers_received,
+.turn-stage-row.google_tts_first_byte_received,
+.turn-stage-row.google_tts_response_body_buffered,
+.turn-stage-row.google_tts_first_audio_chunk_received,
+.turn-stage-row.google_tts_first_audio_chunk_decoded,
+.turn-stage-row.audio_resample_start,
+.turn-stage-row.audio_resample_done,
+.turn-stage-row.first_chunk_sent_to_esp,
+.turn-stage-row.esp_first_pcm_reported,
+.turn-stage-row.speaker_started,
 .turn-stage-row.tts_relay_connected,
 .turn-stage-row.tts_relay_request_sent,
 .turn-stage-row.tts_relay_started,
 .turn-stage-row.speaker_first_audio,
 .turn-stage-row.speaker_audio_finished,
+.turn-stage-row.speaker_finished,
 .turn-stage-row.session_completed {
   border-left-color: rgba(255,189,84,.78);
 }
+.turn-stage-row.google_tts_error,
 .turn-stage-row.response_cancelled,
 .turn-stage-row.client_cancelled {
   border-left-color: rgba(255,105,97,.78);

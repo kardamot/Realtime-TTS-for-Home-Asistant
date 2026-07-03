@@ -2,7 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.150";
+const UI_VERSION = "0.1.151";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -919,6 +919,7 @@ async function boot() {
   $("unlock-btn").onclick = () => guard("Unlock failed", unlock);
   $("pipeline-send").onclick = () => guard("Pipeline failed", runPipeline);
   $("pipeline-tts-send").onclick = () => guard("TTS test failed", runTtsTest);
+  $("pipeline-tts-benchmark").onclick = () => guard("TTS latency test failed", runTtsLatencyBenchmark);
   $("pipeline-messages-download").onclick = () => guard("Pipeline message download failed", downloadPipelineMessages);
   $("pipeline-messages-clear").onclick = () => guard("Clear pipeline messages failed", clearPipelineMessages);
   $("session-start").onclick = () => guard("Session start failed", startVoiceSession);
@@ -1973,6 +1974,11 @@ function renderRealtimeLatency(latency) {
     ["Speech -> STT", summary.speech_stop_to_transcript_ms ?? summary.speech_to_transcript_ms],
     ["STT -> LLM", summary.transcript_to_first_delta_ms],
     ["LLM -> TTS text", summary.first_delta_to_first_chunk_ms],
+    ["TTS req -> headers", summary.tts_request_to_headers_ms],
+    ["TTS req -> first byte", summary.tts_request_to_first_byte_ms],
+    ["TTS req -> audio", summary.tts_request_to_first_audio_ms],
+    ["Audio -> ESP chunk", summary.tts_decode_to_esp_chunk_ms],
+    ["ESP chunk -> speaker", summary.esp_chunk_to_speaker_ms],
     ["TTS text -> speaker", summary.tts_text_to_speaker_ms],
     ["Wake -> speaker", summary.wake_to_speaker_ms],
     ["Wake -> TTS text", summary.wake_to_first_tts_ms],
@@ -2059,11 +2065,31 @@ function fallbackLatencyStages(events) {
     response_requested: "LLM requested",
     first_llm_delta: "First LLM text",
     first_tts_chunk: "TTS text queued",
+    tts_text_queued: "TTS backend queued",
+    tts_worker_started: "TTS worker started",
+    tts_relay_ws_connect_start: "TTS relay WS start",
+    tts_relay_ws_connected: "TTS relay WS connected",
+    google_tts_request_build_start: "Google build start",
+    google_tts_request_built: "Google request built",
+    google_tts_request_send_start: "Google request start",
+    google_tts_request_sent: "Google request sent",
+    google_tts_response_headers_received: "Google headers",
+    google_tts_first_byte_received: "Google first byte",
+    google_tts_response_body_buffered: "Google body buffered",
+    google_tts_first_audio_chunk_received: "Google audio found",
+    google_tts_first_audio_chunk_decoded: "Google audio decoded",
+    audio_resample_start: "Audio convert start",
+    audio_resample_done: "Audio convert done",
+    first_chunk_sent_to_esp: "First ESP chunk",
+    esp_first_pcm_reported: "ESP first PCM",
+    speaker_started: "Speaker started",
     tts_relay_connected: "TTS relay connected",
     tts_relay_request_sent: "TTS request sent",
     tts_relay_started: "TTS stream started",
     speaker_first_audio: "Speaker first PCM",
     speaker_audio_finished: "Speaker finished",
+    speaker_finished: "Speaker finished",
+    google_tts_error: "Google TTS error",
     response_done: "LLM done",
     session_completed: "Turn completed",
   };
@@ -2080,7 +2106,35 @@ function fallbackLatencyStages(events) {
 function formatEventFallbackDetail(event) {
   const parts = [];
   if (event.reason) parts.push(String(event.reason).replaceAll("_", " "));
+  if (event.trace_id) parts.push(String(event.trace_id));
+  if (event.provider) parts.push(String(event.provider));
+  if (event.transport) parts.push(String(event.transport));
   if (event.chars != null) parts.push(`${event.chars} chars`);
+  if (event.text_chars != null) parts.push(`text ${event.text_chars} chars`);
+  if (event.text_bytes != null) parts.push(`${event.text_bytes} text bytes`);
+  if (event.provider_ms != null) parts.push(`provider +${event.provider_ms}ms`);
+  if (event.payload_build_ms != null) parts.push(`payload ${event.payload_build_ms}ms`);
+  if (event.request_payload_bytes != null) parts.push(`payload ${event.request_payload_bytes} bytes`);
+  if (event.http_status != null) parts.push(`HTTP ${event.http_status}`);
+  if (event.retry_after) parts.push(`retry-after ${event.retry_after}`);
+  if (event.response_content_type) parts.push(String(event.response_content_type));
+  if (event.response_content_length) parts.push(`content-length ${event.response_content_length}`);
+  if (event.response_bytes != null) parts.push(`response ${event.response_bytes} bytes`);
+  if (event.response_chunk_count != null) parts.push(`${event.response_chunk_count} response chunks`);
+  if (event.first_chunk_bytes != null) parts.push(`first byte chunk ${event.first_chunk_bytes} bytes`);
+  if (event.audio_bytes != null) parts.push(`audio ${event.audio_bytes} bytes`);
+  if (event.decoded_audio_bytes != null) parts.push(`decoded ${event.decoded_audio_bytes} bytes`);
+  if (event.audio_chunk_count != null) parts.push(`${event.audio_chunk_count} audio chunks`);
+  if (event.response_buffered != null) parts.push(`buffered=${Boolean(event.response_buffered)}`);
+  if (event.streaming_response != null) parts.push(`streaming=${Boolean(event.streaming_response)}`);
+  if (event.operation) parts.push(String(event.operation));
+  if (event.audio_format) parts.push(String(event.audio_format));
+  if (event.resample != null) parts.push(`resample=${Boolean(event.resample)}`);
+  if (event.pcm_bytes != null) parts.push(`pcm ${event.pcm_bytes} bytes`);
+  if (event.total_audio_bytes != null) parts.push(`total audio ${event.total_audio_bytes} bytes`);
+  if (event.chunk_bytes != null) parts.push(`chunk ${event.chunk_bytes} bytes`);
+  if (event.initial_buffer_ms != null) parts.push(`initial buffer ${event.initial_buffer_ms}ms`);
+  if (event.silence_prefix_ms != null) parts.push(`silence prefix ${event.silence_prefix_ms}ms`);
   if (event.audio_ms != null) parts.push(`audio ${event.audio_ms}ms`);
   if (event.audio_ts != null) parts.push(`audioTs ${event.audio_ts}ms`);
   if (event.esp_offset_ms != null) parts.push(`ESP stream +${event.esp_offset_ms}ms`);
@@ -2088,6 +2142,7 @@ function formatEventFallbackDetail(event) {
   if (event.prebuffer_bytes != null) parts.push(`prebuffer ${event.prebuffer_bytes} bytes`);
   if (event.source_rate && event.target_rate) parts.push(`${event.source_rate}Hz -> ${event.target_rate}Hz`);
   if (event.sample_rate) parts.push(`${event.sample_rate}Hz x${event.channels || 1}`);
+  if (event.note) parts.push(String(event.note));
   return parts.join("; ") || String(event.name || "event").replaceAll("_", " ");
 }
 
@@ -2162,7 +2217,7 @@ function renderTurnTiming(latency = {}, items = []) {
   renderTurnSummary(latency, selected);
   renderTurnHistory(history);
   box.innerHTML = "";
-  const visibleStages = stages.slice(-14);
+  const visibleStages = stages.slice(-24);
   if (!visibleStages.length) {
     const idle = document.createElement("div");
     idle.className = "turn-stage-row idle";
@@ -2453,6 +2508,12 @@ async function runTtsTest() {
   if (!input.value.trim()) return;
   await api("/api/pipeline/tts/text", { method: "POST", body: JSON.stringify({ text: input.value }) });
   input.value = "";
+  await loadStatus();
+}
+
+async function runTtsLatencyBenchmark() {
+  await api("/api/pipeline/tts/benchmark", { method: "POST", body: JSON.stringify({}) });
+  notice("TTS latency test queued");
   await loadStatus();
 }
 

@@ -52,12 +52,20 @@ REALTIME_LATENCY_DELTAS = (
     ("commit_to_first_delta_ms", "input_committed", "first_llm_delta"),
     ("response_to_first_delta_ms", "response_requested", "first_llm_delta"),
     ("first_delta_to_first_chunk_ms", "first_llm_delta", "first_tts_chunk"),
+    ("tts_text_to_worker_ms", "first_tts_chunk", "tts_worker_started"),
+    ("tts_worker_to_request_ms", "tts_worker_started", "google_tts_request_send_start"),
+    ("tts_request_to_headers_ms", "google_tts_request_send_start", "google_tts_response_headers_received"),
+    ("tts_request_to_first_byte_ms", "google_tts_request_send_start", "google_tts_first_byte_received"),
+    ("tts_request_to_first_audio_ms", "google_tts_request_send_start", "google_tts_first_audio_chunk_received"),
+    ("tts_first_audio_to_decoded_ms", "google_tts_first_audio_chunk_received", "google_tts_first_audio_chunk_decoded"),
+    ("tts_decode_to_esp_chunk_ms", "google_tts_first_audio_chunk_decoded", "first_chunk_sent_to_esp"),
+    ("esp_chunk_to_speaker_ms", "first_chunk_sent_to_esp", "speaker_started"),
     ("tts_text_to_relay_connect_ms", "first_tts_chunk", "tts_relay_connected"),
     ("tts_text_to_relay_request_ms", "first_tts_chunk", "tts_relay_request_sent"),
     ("tts_text_to_relay_start_ms", "first_tts_chunk", "tts_relay_started"),
-    ("tts_text_to_speaker_ms", "first_tts_chunk", "speaker_first_audio"),
-    ("wake_to_speaker_ms", "start_received", "speaker_first_audio"),
-    ("llm_to_speaker_ms", "first_llm_delta", "speaker_first_audio"),
+    ("tts_text_to_speaker_ms", "first_tts_chunk", "speaker_started"),
+    ("wake_to_speaker_ms", "start_received", "speaker_started"),
+    ("llm_to_speaker_ms", "first_llm_delta", "speaker_started"),
     ("wake_to_first_tts_ms", "start_received", "first_tts_chunk"),
     ("wake_to_response_done_ms", "start_received", "response_done"),
     ("wake_to_complete_ms", "start_received", "session_completed"),
@@ -82,11 +90,31 @@ REALTIME_STAGE_DEFINITIONS = (
     ("response_created", "LLM started", "OpenAI started the response"),
     ("first_llm_delta", "First LLM text", "First assistant text token arrived"),
     ("first_tts_chunk", "TTS text queued", "First text chunk sent toward the firmware TTS player"),
+    ("tts_text_queued", "TTS backend queued", "TTS relay accepted the text for provider synthesis"),
+    ("tts_worker_started", "TTS worker started", "Provider-specific TTS worker started"),
+    ("tts_relay_ws_connect_start", "TTS relay WS start", "ESP relay WebSocket connection was initiated before provider work"),
+    ("tts_relay_ws_connected", "TTS relay WS connected", "ESP relay WebSocket is connected to the add-on"),
+    ("google_tts_request_build_start", "Google build start", "Google TTS request payload build started"),
+    ("google_tts_request_built", "Google request built", "Google TTS request payload is ready"),
+    ("google_tts_request_send_start", "Google request start", "Google TTS HTTP request is being sent"),
+    ("google_tts_request_sent", "Google request sent", "HTTP request has been sent; response headers may already be available"),
+    ("google_tts_response_headers_received", "Google headers", "Google TTS response headers arrived"),
+    ("google_tts_first_byte_received", "Google first byte", "First byte from Google TTS response arrived"),
+    ("google_tts_response_body_buffered", "Google body buffered", "Google JSON/base64 response body finished buffering"),
+    ("google_tts_first_audio_chunk_received", "Google audio found", "First audio payload extracted from Google response"),
+    ("google_tts_first_audio_chunk_decoded", "Google audio decoded", "Base64 audio payload decoded"),
+    ("audio_resample_start", "Audio convert start", "Audio format parse/resample stage started"),
+    ("audio_resample_done", "Audio convert done", "Audio format parse/resample stage completed"),
+    ("first_chunk_sent_to_esp", "First ESP chunk", "First real audio chunk was sent toward ESP"),
+    ("esp_first_pcm_reported", "ESP first PCM", "ESP reported the first PCM write"),
+    ("speaker_started", "Speaker started", "ESP speaker output actually started"),
     ("tts_relay_connected", "TTS relay connected", "ESP connected to the TTS relay WebSocket"),
     ("tts_relay_request_sent", "TTS request sent", "ESP sent the text request to the TTS relay"),
     ("tts_relay_started", "TTS stream started", "TTS relay returned audio format/start metadata"),
     ("speaker_first_audio", "Speaker first PCM", "ESP started writing the first PCM frames to the speaker"),
     ("speaker_audio_finished", "Speaker finished", "ESP finished draining the speaker PCM stream"),
+    ("speaker_finished", "Speaker finished", "ESP finished draining the speaker PCM stream"),
+    ("google_tts_error", "Google TTS error", "Google TTS returned an error or failed locally"),
     ("response_done", "LLM done", "Assistant response completed"),
     ("session_completed", "Turn completed", "Add-on finished the voice turn"),
     ("response_cancelled", "Cancelled", "Assistant response was cancelled"),
@@ -354,6 +382,25 @@ class OpenAIRealtimeBridge:
     def clear_message_history(self) -> None:
         self._message_history.clear()
 
+    def start_tts_trace_turn(self, text: str, reason: str = "manual_tts") -> str:
+        session_id = f"tts-{uuid.uuid4().hex[:10]}"
+        self._session_id = session_id
+        self._last_event = reason
+        self._last_transcript = str(text or "").strip()
+        self._last_assistant_text = ""
+        self._last_tts_text = str(text or "").strip()
+        self._reset_latency(session_id, model=self._model or "tts", source=reason, text_chars=len(self._last_tts_text))
+        self._mark_latency("start_received", reason=reason)
+        return session_id
+
+    def finish_tts_trace_turn(self, reason: str = "manual_tts_done", text: str = "") -> None:
+        if not self._latency_session_id:
+            return
+        final_text = str(text or self._last_tts_text or "").strip()
+        self._last_event = reason
+        self._mark_latency("session_completed", reason=reason)
+        self._remember_latency_turn(reason, final_text, final_text, 0)
+
     def _reset_latency(self, session_id: str, **data: Any) -> None:
         self._latency_session_id = session_id
         self._latency_started_monotonic = time.monotonic()
@@ -372,7 +419,7 @@ class OpenAIRealtimeBridge:
         }
         event = {"name": name, "ms": elapsed_ms, "at": time.time(), **clean}
         self._latency_events.append(event)
-        self._latency_events = self._latency_events[-32:]
+        self._latency_events = self._latency_events[-64:]
         self._latency_summary = self._build_latency_summary()
         self._latency_updated_at = event["at"]
 
@@ -404,6 +451,64 @@ class OpenAIRealtimeBridge:
             parts.append(f"{int(event['chars'])} chars")
         if event.get("wait_ms") is not None:
             parts.append(f"wait {int(event['wait_ms'])}ms")
+        if event.get("trace_id"):
+            parts.append(str(event["trace_id"]))
+        if event.get("turn_id"):
+            parts.append(f"turn {event['turn_id']}")
+        if event.get("provider"):
+            parts.append(str(event["provider"]))
+        if event.get("transport"):
+            parts.append(str(event["transport"]))
+        if event.get("text_chars") is not None:
+            parts.append(f"text {int(event['text_chars'])} chars")
+        if event.get("text_bytes") is not None:
+            parts.append(f"{int(event['text_bytes'])} text bytes")
+        if event.get("provider_ms") is not None:
+            parts.append(f"provider +{int(event['provider_ms'])}ms")
+        if event.get("payload_build_ms") is not None:
+            parts.append(f"payload {int(event['payload_build_ms'])}ms")
+        if event.get("request_payload_bytes") is not None:
+            parts.append(f"payload {int(event['request_payload_bytes'])} bytes")
+        if event.get("http_status") is not None:
+            parts.append(f"HTTP {int(event['http_status'])}")
+        if event.get("retry_after"):
+            parts.append(f"retry-after {event['retry_after']}")
+        if event.get("response_content_type"):
+            parts.append(str(event["response_content_type"]))
+        if event.get("response_content_length"):
+            parts.append(f"content-length {event['response_content_length']}")
+        if event.get("response_bytes") is not None:
+            parts.append(f"response {int(event['response_bytes'])} bytes")
+        if event.get("response_chunk_count") is not None:
+            parts.append(f"{int(event['response_chunk_count'])} response chunks")
+        if event.get("first_chunk_bytes") is not None:
+            parts.append(f"first byte chunk {int(event['first_chunk_bytes'])} bytes")
+        if event.get("audio_bytes") is not None:
+            parts.append(f"audio {int(event['audio_bytes'])} bytes")
+        if event.get("decoded_audio_bytes") is not None:
+            parts.append(f"decoded {int(event['decoded_audio_bytes'])} bytes")
+        if event.get("audio_chunk_count") is not None:
+            parts.append(f"{int(event['audio_chunk_count'])} audio chunks")
+        if event.get("response_buffered") is not None:
+            parts.append(f"buffered={bool(event['response_buffered'])}")
+        if event.get("streaming_response") is not None:
+            parts.append(f"streaming={bool(event['streaming_response'])}")
+        if event.get("operation"):
+            parts.append(str(event["operation"]))
+        if event.get("audio_format"):
+            parts.append(str(event["audio_format"]))
+        if event.get("resample") is not None:
+            parts.append(f"resample={bool(event['resample'])}")
+        if event.get("pcm_bytes") is not None:
+            parts.append(f"pcm {int(event['pcm_bytes'])} bytes")
+        if event.get("total_audio_bytes") is not None:
+            parts.append(f"total audio {int(event['total_audio_bytes'])} bytes")
+        if event.get("chunk_bytes") is not None:
+            parts.append(f"chunk {int(event['chunk_bytes'])} bytes")
+        if event.get("initial_buffer_ms") is not None:
+            parts.append(f"initial buffer {int(event['initial_buffer_ms'])}ms")
+        if event.get("silence_prefix_ms") is not None:
+            parts.append(f"silence prefix {int(event['silence_prefix_ms'])}ms")
         if event.get("esp_offset_ms") is not None:
             parts.append(f"ESP stream +{int(event['esp_offset_ms'])}ms")
         if event.get("relay_ms") is not None:
@@ -417,6 +522,8 @@ class OpenAIRealtimeBridge:
             parts.append(f"{int(event['sample_rate'])}Hz x{channels}")
         if event.get("model"):
             parts.append(str(event["model"]))
+        if event.get("note"):
+            parts.append(str(event["note"]))
         return "; ".join(parts) or fallback
 
     def _first_latency_event(
@@ -468,7 +575,7 @@ class OpenAIRealtimeBridge:
             "audio_ms": int(audio_ms or 0),
             "summary": dict(self._latency_summary),
             "stages": self._latency_stages(events),
-            "events": events[-32:],
+            "events": events[-64:],
         }
         if self._latency_history and self._latency_history[-1].get("session_id") == self._latency_session_id:
             self._latency_history[-1] = turn
@@ -484,7 +591,7 @@ class OpenAIRealtimeBridge:
         events = [dict(event) for event in self._latency_events]
         self._latency_history[-1]["summary"] = dict(self._latency_summary)
         self._latency_history[-1]["stages"] = self._latency_stages(events)
-        self._latency_history[-1]["events"] = events[-32:]
+        self._latency_history[-1]["events"] = events[-64:]
 
     async def record_esp_tts_timing(self, payload: dict[str, Any]) -> None:
         if not self._latency_session_id or not isinstance(payload, dict):
@@ -505,10 +612,51 @@ class OpenAIRealtimeBridge:
                 data[key] = value
         self._last_event = event_name
         self._mark_latency(event_name, **data)
+        if event_name == "speaker_first_audio":
+            self._mark_latency("esp_first_pcm_reported", **data)
+            self._mark_latency("speaker_started", **data)
+        elif event_name == "speaker_audio_finished":
+            self._mark_latency("speaker_finished", **data)
+        self._refresh_latest_latency_turn()
+
+    async def record_tts_trace(self, payload: dict[str, Any]) -> None:
+        if not self._latency_session_id or not isinstance(payload, dict):
+            return
+        event_name = str(payload.get("event") or payload.get("name") or "").strip()
+        if event_name not in {
+            "tts_text_queued",
+            "tts_worker_started",
+            "tts_relay_ws_connect_start",
+            "tts_relay_ws_connected",
+            "google_tts_request_build_start",
+            "google_tts_request_built",
+            "google_tts_request_send_start",
+            "google_tts_request_sent",
+            "google_tts_response_headers_received",
+            "google_tts_first_byte_received",
+            "google_tts_response_body_buffered",
+            "google_tts_first_audio_chunk_received",
+            "google_tts_first_audio_chunk_decoded",
+            "audio_resample_start",
+            "audio_resample_done",
+            "first_chunk_sent_to_esp",
+            "google_tts_error",
+        }:
+            return
+        data = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"event", "name", "ms", "at"} and (value is None or isinstance(value, (str, int, float, bool)))
+        }
+        if payload.get("ms") is not None:
+            data["provider_ms"] = payload.get("ms")
+        data["turn_id"] = self._latency_session_id
+        self._last_event = event_name
+        self._mark_latency(event_name, **data)
         self._refresh_latest_latency_turn()
 
     def _speaker_first_audio_snapshot(self) -> dict[str, Any]:
-        event = self._first_latency_event("speaker_first_audio")
+        event = self._first_latency_event("speaker_started") or self._first_latency_event("speaker_first_audio")
         if not event:
             return {
                 "available": False,
@@ -910,7 +1058,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.150",
+                version="0.1.151",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
