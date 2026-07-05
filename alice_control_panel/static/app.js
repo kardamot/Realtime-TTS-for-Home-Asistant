@@ -2,7 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.160";
+const UI_VERSION = "0.1.161";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -1139,6 +1139,7 @@ function formatTouchSensor(hw) {
 }
 
 function radarStateTone(state, fresh, ready) {
+  if (state === "sleep") return "info";
   if (!ready) return "bad";
   if (!fresh && state !== "clear") return "warn";
   if (state === "tracking") return "good";
