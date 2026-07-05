@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.155" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.155" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.156" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.156" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.155" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.156" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.155" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.156" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -111,13 +111,6 @@
               <button type="button" data-log-preset="esp">ESP</button>
               <button type="button" data-log-preset="ha">HA</button>
               <button type="button" id="log-focus-toggle">Focus</button>
-            </div>
-            <div id="log-detail-view" class="log-detail-view hidden" aria-live="polite">
-              <header>
-                <span id="log-detail-title">Selected log detail</span>
-                <button id="log-detail-close" type="button">Close</button>
-              </header>
-              <pre id="log-detail-content"></pre>
             </div>
             <div id="log-list" class="log-list" data-autoscroll></div>
           </section>
@@ -546,6 +539,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.155"></script>
+  <script src="/app.js?v=0.1.156"></script>
   </body>
 </html>
