@@ -2,7 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.159";
+const UI_VERSION = "0.1.160";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -783,6 +783,52 @@ function initPipelineTabs() {
   syncPipelineTabs();
 }
 
+function syncCollapsiblePanel(panel) {
+  const button = panel.querySelector("[data-panel-toggle]");
+  if (!button) return;
+  const expanded = !panel.classList.contains("is-collapsed");
+  button.textContent = expanded ? "-" : "+";
+  button.title = expanded ? "Collapse panel" : "Expand panel";
+  button.setAttribute("aria-label", expanded ? "Collapse panel" : "Expand panel");
+  button.setAttribute("aria-expanded", expanded ? "true" : "false");
+}
+
+function expandCollapsiblePanel(panel) {
+  if (!panel) return;
+  panel.classList.remove("is-collapsed");
+  syncCollapsiblePanel(panel);
+}
+
+function expandPanelFromHash() {
+  const id = window.location.hash ? window.location.hash.slice(1) : "";
+  if (!id) return;
+  const target = document.getElementById(id);
+  const panel = target?.closest("[data-collapsible-panel]");
+  if (panel) expandCollapsiblePanel(panel);
+}
+
+function initCollapsiblePanels() {
+  document.querySelectorAll("[data-collapsible-panel]").forEach((panel) => {
+    const button = panel.querySelector("[data-panel-toggle]");
+    if (!button) return;
+    panel.classList.add("is-collapsed");
+    button.onclick = () => {
+      panel.classList.toggle("is-collapsed");
+      syncCollapsiblePanel(panel);
+      if (!panel.classList.contains("is-collapsed")) {
+        window.requestAnimationFrame(() => {
+          panel.scrollIntoView({ block: "nearest" });
+          const autoscroll = panel.querySelector("[data-autoscroll]");
+          if (autoscroll) autoscroll.scrollTo({ top: autoscroll.scrollHeight });
+        });
+      }
+    };
+    syncCollapsiblePanel(panel);
+  });
+  window.addEventListener("hashchange", expandPanelFromHash);
+  expandPanelFromHash();
+}
+
 function readStoredIndex(key, fallback) {
   const value = Number(localStorage.getItem(key));
   return Number.isFinite(value) ? Math.max(0, Math.min(2, Math.round(value))) : fallback;
@@ -895,6 +941,7 @@ async function boot() {
   initRadarControls();
   initCommandTabs();
   initPipelineTabs();
+  initCollapsiblePanels();
   initDriveControls();
   renderButtons();
   initDailyCommandButtons();

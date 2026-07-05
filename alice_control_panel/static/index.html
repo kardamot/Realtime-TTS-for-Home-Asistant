@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.159" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.159" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.160" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.160" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.159" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.160" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.159" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.160" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -269,12 +269,15 @@
             </div>
           </section>
 
-          <section id="latency-panel" class="panel span-12 latency-panel">
+          <section id="latency-panel" class="panel span-12 latency-panel collapsible-panel is-collapsed" data-collapsible-panel>
             <header>
-              <h2>Latency Timeline</h2>
-              <span class="panel-subtle">TTS, Google, ESP ve hoparlor gecikme kirilimlari</span>
+              <div class="panel-title-stack">
+                <h2>Latency Timeline</h2>
+                <span class="panel-subtle">TTS, Google, ESP ve hoparlor gecikme kirilimlari</span>
+              </div>
+              <button class="panel-collapse-toggle" type="button" data-panel-toggle aria-expanded="false" title="Expand panel">+</button>
             </header>
-            <div class="latency-layout">
+            <div class="panel-body latency-layout">
               <div id="realtime-latency" class="latency-strip"></div>
               <div id="turn-summary" class="turn-summary"></div>
               <div id="timeline" class="turn-timeline"></div>
@@ -282,48 +285,61 @@
             </div>
           </section>
 
-          <section id="conversation" class="panel span-12 conversation-panel">
+          <section id="conversation" class="panel span-12 conversation-panel collapsible-panel is-collapsed" data-collapsible-panel>
             <header>
               <h2>Conversation</h2>
-              <div class="actions">
-                <button id="pipeline-messages-download" type="button">Download</button>
-                <button id="pipeline-messages-clear" type="button">Clear</button>
+              <div class="panel-header-actions">
+                <div class="actions">
+                  <button id="pipeline-messages-download" type="button">Download</button>
+                  <button id="pipeline-messages-clear" type="button">Clear</button>
+                </div>
+                <button class="panel-collapse-toggle" type="button" data-panel-toggle aria-expanded="false" title="Expand panel">+</button>
               </div>
             </header>
-            <div id="pipeline-messages" class="pipeline-messages conversation-messages" data-autoscroll></div>
-          </section>
-
-          <section id="prompts" class="panel span-12 prompt-panel">
-            <header>
-              <h2>Prompt Editor</h2>
-              <div class="actions">
-                <button id="prompt-new">New</button>
-                <button id="prompt-copy">Copy</button>
-                <button id="prompt-delete">Delete</button>
-                <button id="prompt-activate">Activate</button>
-                <button id="prompt-save">Save</button>
-              </div>
-            </header>
-            <div class="prompt-box">
-              <select id="prompt-select"></select>
-              <input id="prompt-name" />
-              <input id="prompt-description" placeholder="Description" />
-              <textarea id="prompt-text"></textarea>
+            <div class="panel-body">
+              <div id="pipeline-messages" class="pipeline-messages conversation-messages" data-autoscroll></div>
             </div>
           </section>
 
-          <section id="config" class="panel span-12">
+          <section id="prompts" class="panel span-12 prompt-panel collapsible-panel is-collapsed" data-collapsible-panel>
             <header>
-              <h2>Config</h2>
-              <div class="actions">
-                <label class="inline-check"><input id="config-export-secrets" type="checkbox" /> Secrets</label>
-                <button id="config-import">Import</button>
-                <button id="config-export">Export</button>
-                <button id="config-save">Save</button>
-                <input id="config-import-file" class="hidden" type="file" accept="application/json,.json" />
+              <h2>Prompt Editor</h2>
+              <div class="panel-header-actions">
+                <div class="actions">
+                  <button id="prompt-new">New</button>
+                  <button id="prompt-copy">Copy</button>
+                  <button id="prompt-delete">Delete</button>
+                  <button id="prompt-activate">Activate</button>
+                  <button id="prompt-save">Save</button>
+                </div>
+                <button class="panel-collapse-toggle" type="button" data-panel-toggle aria-expanded="false" title="Expand panel">+</button>
               </div>
             </header>
-            <div class="config-layout">
+            <div class="panel-body">
+              <div class="prompt-box">
+                <select id="prompt-select"></select>
+                <input id="prompt-name" />
+                <input id="prompt-description" placeholder="Description" />
+                <textarea id="prompt-text"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section id="config" class="panel span-12 collapsible-panel is-collapsed" data-collapsible-panel>
+            <header>
+              <h2>Config</h2>
+              <div class="panel-header-actions">
+                <div class="actions">
+                  <label class="inline-check"><input id="config-export-secrets" type="checkbox" /> Secrets</label>
+                  <button id="config-import">Import</button>
+                  <button id="config-export">Export</button>
+                  <button id="config-save">Save</button>
+                  <input id="config-import-file" class="hidden" type="file" accept="application/json,.json" />
+                </div>
+                <button class="panel-collapse-toggle" type="button" data-panel-toggle aria-expanded="false" title="Expand panel">+</button>
+              </div>
+            </header>
+            <div class="panel-body config-layout">
               <section class="config-group">
                 <h3>Panel & ESP</h3>
                 <div class="config-grid compact">
@@ -539,6 +555,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.159"></script>
+  <script src="/app.js?v=0.1.160"></script>
   </body>
 </html>

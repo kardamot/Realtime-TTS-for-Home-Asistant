@@ -188,6 +188,69 @@ nav a:hover { background: #121a25; color: var(--text); }
   line-height: 1.25;
   text-shadow: 0 0 18px rgba(178,112,255,.24);
 }
+.panel-title-stack {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+.panel-title-stack h2,
+.panel-title-stack .panel-subtle {
+  min-width: 0;
+}
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.panel-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 1px solid rgba(100,169,255,.42);
+  border-radius: 999px;
+  background: rgba(31,53,84,.86);
+  color: #cfe8ff;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.025) inset;
+}
+.panel-collapse-toggle:hover,
+.panel-collapse-toggle:focus {
+  border-color: rgba(99,231,220,.72);
+  background: rgba(15,86,88,.72);
+  color: #f7ffff;
+}
+.collapsible-panel {
+  transition: border-color .15s ease, background .15s ease;
+}
+.collapsible-panel .panel-body {
+  min-height: 0;
+}
+.collapsible-panel.is-collapsed {
+  height: auto;
+  min-height: 0;
+}
+.collapsible-panel.is-collapsed header {
+  margin-bottom: 0;
+}
+.collapsible-panel.is-collapsed .panel-body {
+  display: none;
+}
+.collapsible-panel.is-collapsed .actions {
+  display: none;
+}
+.collapsible-panel.is-collapsed .panel-subtle {
+  color: rgba(165,185,210,.62);
+}
 .help-title {
   display: inline-flex;
   align-items: center;
@@ -748,6 +811,11 @@ nav a:hover { background: #121a25; color: var(--text); }
   min-height: var(--conversation-panel-h);
   max-height: min(46vh, 440px);
 }
+.conversation-panel .panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 .conversation-panel .pipeline-messages {
   flex: 1 1 auto;
   height: 100%;
@@ -757,6 +825,11 @@ nav a:hover { background: #121a25; color: var(--text); }
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+.latency-panel.is-collapsed,
+.conversation-panel.is-collapsed {
+  min-height: 0;
+  max-height: none;
 }
 .timeline {
   display: grid;
