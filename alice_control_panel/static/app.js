@@ -2,7 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.153";
+const UI_VERSION = "0.1.154";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -91,6 +91,7 @@ const LOG_FOCUS_NOISE = [
   "OpenAI Realtime connected",
   "OpenAI Realtime client disconnected",
   "OpenAI Realtime mic packet header stripped",
+  "TTS trace ",
   "TTS relay websocket started",
   "TTS relay websocket disconnected",
   "Configuration updated",
@@ -2734,17 +2735,21 @@ function renderLogs(options = {}) {
       row.tabIndex = 0;
       row.setAttribute("role", "button");
       row.setAttribute("aria-expanded", isExpanded ? "true" : "false");
-      row.innerHTML = `<time>${new Date(entry.ts * 1000).toLocaleTimeString()}</time><b>${entry.level}</b><span>${entry.category}</span><p></p><pre></pre>`;
+      row.innerHTML = `<time>${new Date(entry.ts * 1000).toLocaleTimeString()}</time><b>${entry.level}</b><span>${entry.category}</span><p></p>`;
       row.querySelector("p").textContent = entry.message || "";
       row.classList.add("has-details");
-      const detailBlock = row.querySelector("pre");
-      detailBlock.textContent = details;
-      detailBlock.addEventListener("click", (event) => event.stopPropagation());
       if (isExpanded) {
         row.classList.add("expanded");
-        expandedTarget = row;
       }
       list.appendChild(row);
+      if (isExpanded) {
+        const detailBlock = document.createElement("pre");
+        detailBlock.className = "log-detail";
+        detailBlock.textContent = details;
+        detailBlock.addEventListener("click", (event) => event.stopPropagation());
+        list.appendChild(detailBlock);
+        expandedTarget = detailBlock;
+      }
     });
     if (!rows.length) {
       const empty = document.createElement("div");
@@ -2754,7 +2759,7 @@ function renderLogs(options = {}) {
     }
   }, Boolean(options.forceScroll));
   if (expandedTarget && options.revealExpanded !== false) {
-    window.requestAnimationFrame(() => keepChildVisible(list, expandedTarget, 18));
+    window.requestAnimationFrame(() => keepChildVisible(list, expandedTarget, 24));
   }
 }
 
