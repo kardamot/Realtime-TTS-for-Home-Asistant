@@ -2,7 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.154";
+const UI_VERSION = "0.1.155";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -938,6 +938,10 @@ async function boot() {
   $("log-search").oninput = () => renderLogs({ forceScroll: true });
   $("log-level").onchange = () => renderLogs({ forceScroll: true });
   $("log-category").onchange = () => renderLogs({ forceScroll: true });
+  $("log-detail-close").onclick = () => {
+    expandedLogKey = "";
+    renderLogs({ revealExpanded: false });
+  };
   initLogListInteractions();
   document.querySelectorAll("[data-log-preset]").forEach((button) => {
     button.onclick = () => setLogPreset(button.dataset.logPreset || "all");
@@ -2680,6 +2684,23 @@ function formatLogDetails(entry) {
   }, null, 2);
 }
 
+function renderLogDetailView(entry, details) {
+  const box = $("log-detail-view");
+  const title = $("log-detail-title");
+  const content = $("log-detail-content");
+  if (!box || !title || !content) return;
+  if (!entry) {
+    box.classList.add("hidden");
+    title.textContent = "Selected log detail";
+    content.textContent = "";
+    return;
+  }
+  const timeText = entry.ts ? new Date(entry.ts * 1000).toLocaleTimeString() : "--:--:--";
+  title.textContent = `${timeText} ${entry.level || ""} ${entry.category || ""} - ${entry.message || ""}`;
+  content.textContent = details || formatLogDetails(entry);
+  box.classList.remove("hidden");
+}
+
 function toggleLogDetails(key) {
   if (!key) return;
   expandedLogKey = expandedLogKey === key ? "" : key;
@@ -2721,6 +2742,8 @@ function renderLogs(options = {}) {
   }).slice(-220);
   const list = $("log-list");
   let expandedTarget = null;
+  const selected = rows.find(({ entry, index }) => logEntryKey(entry, index) === expandedLogKey);
+  renderLogDetailView(selected?.entry || null, selected ? formatLogDetails(selected.entry) : "");
   renderLogSummary();
   renderLogControls();
   keepAutoScrolled(list, () => {
@@ -2739,17 +2762,10 @@ function renderLogs(options = {}) {
       row.querySelector("p").textContent = entry.message || "";
       row.classList.add("has-details");
       if (isExpanded) {
-        row.classList.add("expanded");
+        row.classList.add("expanded", "selected");
+        expandedTarget = row;
       }
       list.appendChild(row);
-      if (isExpanded) {
-        const detailBlock = document.createElement("pre");
-        detailBlock.className = "log-detail";
-        detailBlock.textContent = details;
-        detailBlock.addEventListener("click", (event) => event.stopPropagation());
-        list.appendChild(detailBlock);
-        expandedTarget = detailBlock;
-      }
     });
     if (!rows.length) {
       const empty = document.createElement("div");

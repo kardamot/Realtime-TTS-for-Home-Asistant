@@ -33,6 +33,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - Version `0.1.94` adds radar jump rejection, continuity confidence, and empty-room calibration commands.
 - Version `0.1.93` fixes the RD-03D radar X orientation and makes radar tracking updates more responsive.
 - Version `0.1.92` compacts the Voice Pipeline transcript and realtime timeline so short RT rows do not create unnecessary scrollbars.
+- Version `0.1.155` moves expanded log details into a fixed inspector above the log list so full panels cannot clip the details.
 - Version `0.1.154` makes expanded log details a real scroll-list row so details are not clipped when the log panel is full.
 - Version `0.1.153` makes latency totals wait for ESP speaker-finished timing when available and separates speaker-start from speaker-finish metrics.
 - Version `0.1.152` moves Timing and Messages out of the Voice Pipeline tabs into dedicated Latency Timeline and Conversation panels.

@@ -245,6 +245,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
 - Panel logs are kept in the backend memory buffer, not persisted to a log file; an add-on restart/update or explicit Clear resets the visible buffer.
+- `0.1.155` moves expanded log details into a fixed inspector above the log list so full panels cannot clip the details.
 - `0.1.154` makes expanded log details a real scroll-list row so details are not clipped when the log panel is full.
 - `0.1.153` makes latency totals wait for ESP speaker-finished timing when available and separates speaker-start from speaker-finish metrics.
 - `0.1.152` moves Timing and Messages out of the Voice Pipeline tabs into dedicated Latency Timeline and Conversation panels.
