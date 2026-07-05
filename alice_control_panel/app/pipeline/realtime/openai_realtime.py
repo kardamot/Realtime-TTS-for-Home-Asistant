@@ -110,6 +110,7 @@ REALTIME_STAGE_DEFINITIONS = (
     ("google_tts_first_audio_chunk_decoded", "Google audio decoded", "Base64 audio payload decoded"),
     ("audio_resample_start", "Audio convert start", "Audio format parse/resample stage started"),
     ("audio_resample_done", "Audio convert done", "Audio format parse/resample stage completed"),
+    ("google_tts_stream_completed", "Google stream done", "Google streaming TTS response completed"),
     ("first_chunk_sent_to_esp", "First ESP chunk", "First real audio chunk was sent toward ESP"),
     ("esp_first_pcm_reported", "ESP first PCM", "ESP reported the first PCM write"),
     ("speaker_started", "Speaker started", "ESP speaker output actually started"),
@@ -646,6 +647,7 @@ class OpenAIRealtimeBridge:
             "google_tts_first_audio_chunk_decoded",
             "audio_resample_start",
             "audio_resample_done",
+            "google_tts_stream_completed",
             "first_chunk_sent_to_esp",
             "google_tts_error",
         }:
@@ -1065,7 +1067,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.156",
+                version="0.1.157",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",

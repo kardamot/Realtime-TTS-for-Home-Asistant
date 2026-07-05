@@ -2,7 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.156";
+const UI_VERSION = "0.1.157";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -2067,6 +2067,7 @@ function fallbackLatencyStages(events) {
     google_tts_first_audio_chunk_decoded: "Google audio decoded",
     audio_resample_start: "Audio convert start",
     audio_resample_done: "Audio convert done",
+    google_tts_stream_completed: "Google stream done",
     first_chunk_sent_to_esp: "First ESP chunk",
     esp_first_pcm_reported: "ESP first PCM",
     speaker_started: "Speaker started",

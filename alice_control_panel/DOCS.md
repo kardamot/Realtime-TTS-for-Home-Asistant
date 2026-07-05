@@ -245,6 +245,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
 - Panel logs are kept in the backend memory buffer, not persisted to a log file; an add-on restart/update or explicit Clear resets the visible buffer.
+- `0.1.157` switches Gemini 3.1 Google AI TTS to Interactions streaming and handles closed relay WebSockets without empty error logs.
 - `0.1.156` restores inline log details and gives the detail block a fixed readable height so it cannot collapse between rows.
 - `0.1.155` moves expanded log details into a fixed inspector above the log list so full panels cannot clip the details.
 - `0.1.154` makes expanded log details a real scroll-list row so details are not clipped when the log panel is full.
