@@ -60,16 +60,21 @@ REALTIME_LATENCY_DELTAS = (
     ("tts_first_audio_to_decoded_ms", "google_tts_first_audio_chunk_received", "google_tts_first_audio_chunk_decoded"),
     ("tts_decode_to_esp_chunk_ms", "google_tts_first_audio_chunk_decoded", "first_chunk_sent_to_esp"),
     ("esp_chunk_to_speaker_ms", "first_chunk_sent_to_esp", "speaker_started"),
+    ("esp_chunk_to_speaker_finished_ms", "first_chunk_sent_to_esp", "speaker_finished"),
     ("tts_text_to_relay_connect_ms", "first_tts_chunk", "tts_relay_connected"),
     ("tts_text_to_relay_request_ms", "first_tts_chunk", "tts_relay_request_sent"),
     ("tts_text_to_relay_start_ms", "first_tts_chunk", "tts_relay_started"),
     ("tts_text_to_speaker_ms", "first_tts_chunk", "speaker_started"),
+    ("tts_text_to_speaker_finished_ms", "first_tts_chunk", "speaker_finished"),
     ("wake_to_speaker_ms", "start_received", "speaker_started"),
+    ("wake_to_speaker_finished_ms", "start_received", "speaker_finished"),
     ("llm_to_speaker_ms", "first_llm_delta", "speaker_started"),
+    ("speaker_playback_ms", "speaker_started", "speaker_finished"),
     ("wake_to_first_tts_ms", "start_received", "first_tts_chunk"),
     ("wake_to_response_done_ms", "start_received", "response_done"),
-    ("wake_to_complete_ms", "start_received", "session_completed"),
-    ("total_ms", "start_received", "session_completed"),
+    ("wake_to_session_completed_ms", "start_received", "session_completed"),
+    ("wake_to_complete_ms", "start_received", "speaker_finished"),
+    ("total_ms", "start_received", "speaker_finished"),
 )
 REALTIME_STAGE_DEFINITIONS = (
     ("client_connected", "Client linked", "ESP voice WebSocket reached the add-on"),
@@ -111,8 +116,6 @@ REALTIME_STAGE_DEFINITIONS = (
     ("tts_relay_connected", "TTS relay connected", "ESP connected to the TTS relay WebSocket"),
     ("tts_relay_request_sent", "TTS request sent", "ESP sent the text request to the TTS relay"),
     ("tts_relay_started", "TTS stream started", "TTS relay returned audio format/start metadata"),
-    ("speaker_first_audio", "Speaker first PCM", "ESP started writing the first PCM frames to the speaker"),
-    ("speaker_audio_finished", "Speaker finished", "ESP finished draining the speaker PCM stream"),
     ("speaker_finished", "Speaker finished", "ESP finished draining the speaker PCM stream"),
     ("google_tts_error", "Google TTS error", "Google TTS returned an error or failed locally"),
     ("response_done", "LLM done", "Assistant response completed"),
@@ -592,6 +595,7 @@ class OpenAIRealtimeBridge:
         self._latency_history[-1]["summary"] = dict(self._latency_summary)
         self._latency_history[-1]["stages"] = self._latency_stages(events)
         self._latency_history[-1]["events"] = events[-64:]
+        self._latency_history[-1]["ended_at"] = self._latency_updated_at or time.time()
 
     async def record_esp_tts_timing(self, payload: dict[str, Any]) -> None:
         if not self._latency_session_id or not isinstance(payload, dict):
@@ -610,13 +614,16 @@ class OpenAIRealtimeBridge:
             value = payload.get(key)
             if value is not None:
                 data[key] = value
-        self._last_event = event_name
-        self._mark_latency(event_name, **data)
         if event_name == "speaker_first_audio":
+            self._last_event = "speaker_started"
             self._mark_latency("esp_first_pcm_reported", **data)
             self._mark_latency("speaker_started", **data)
         elif event_name == "speaker_audio_finished":
+            self._last_event = "speaker_finished"
             self._mark_latency("speaker_finished", **data)
+        else:
+            self._last_event = event_name
+            self._mark_latency(event_name, **data)
         self._refresh_latest_latency_turn()
 
     async def record_tts_trace(self, payload: dict[str, Any]) -> None:
@@ -1058,7 +1065,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.152",
+                version="0.1.153",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",

@@ -2,7 +2,7 @@ const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.152";
+const UI_VERSION = "0.1.153";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -1962,10 +1962,13 @@ function renderRealtimeLatency(latency) {
     ["TTS req -> audio", summary.tts_request_to_first_audio_ms],
     ["Audio -> ESP chunk", summary.tts_decode_to_esp_chunk_ms],
     ["ESP chunk -> speaker", summary.esp_chunk_to_speaker_ms],
+    ["ESP chunk -> finish", summary.esp_chunk_to_speaker_finished_ms],
     ["TTS text -> speaker", summary.tts_text_to_speaker_ms],
+    ["TTS text -> finish", summary.tts_text_to_speaker_finished_ms],
     ["Wake -> speaker", summary.wake_to_speaker_ms],
+    ["Wake -> finish", summary.wake_to_speaker_finished_ms],
     ["Wake -> TTS text", summary.wake_to_first_tts_ms],
-    ["Turn total", summary.wake_to_complete_ms ?? summary.total_ms],
+    ["Turn total", summary.total_ms ?? summary.wake_to_complete_ms ?? summary.wake_to_session_completed_ms],
   ];
   box.innerHTML = "";
   chips.forEach(([label, value]) => {
@@ -2008,7 +2011,7 @@ function isCurrentTimingActive(latency = {}) {
   const events = Array.isArray(latency.events) ? latency.events : [];
   if (!events.length) return false;
   const last = String(events[events.length - 1]?.name || "");
-  return !["session_completed", "speaker_audio_finished", "response_cancelled", "client_cancelled"].includes(last);
+  return !["session_completed", "speaker_audio_finished", "speaker_finished", "response_cancelled", "client_cancelled"].includes(last);
 }
 
 function selectTimingTurn(latency = {}) {
@@ -2069,8 +2072,6 @@ function fallbackLatencyStages(events) {
     tts_relay_connected: "TTS relay connected",
     tts_relay_request_sent: "TTS request sent",
     tts_relay_started: "TTS stream started",
-    speaker_first_audio: "Speaker first PCM",
-    speaker_audio_finished: "Speaker finished",
     speaker_finished: "Speaker finished",
     google_tts_error: "Google TTS error",
     response_done: "LLM done",
@@ -2132,11 +2133,15 @@ function formatEventFallbackDetail(event) {
 function renderTurnSummary(latency, selected) {
   const box = $("turn-summary");
   if (!box) return;
-  const note = latency.speaker_first_audio?.available === false
-    ? "Speaker first PCM is not reported by ESP yet; Wake -> TTS text is the current proxy."
-    : "";
   const source = selected.turn || {};
   const summary = source.summary || latency.summary || {};
+  const totalMs = summary.total_ms ?? summary.wake_to_complete_ms ?? summary.wake_to_session_completed_ms;
+  const speakerStartMissing = latency.speaker_first_audio?.available === false && summary.wake_to_speaker_finished_ms != null;
+  const note = speakerStartMissing
+    ? "ESP reports speaker finish, but speaker-start/first-PCM is missing; start metrics remain unavailable until firmware reports that event."
+    : latency.speaker_first_audio?.available === false
+      ? "Speaker first PCM is not reported by ESP yet; Wake -> TTS text is the current proxy."
+      : "";
   const textParts = [
     selected.source === "last_spoken" ? "Showing last spoken turn" : "",
     source.transcript ? `STT: ${compactSnippet(source.transcript, "")}` : "",
@@ -2144,7 +2149,9 @@ function renderTurnSummary(latency, selected) {
     summary.wake_to_first_tts_ms != null ? `Wake -> TTS text ${fmtMs(summary.wake_to_first_tts_ms)}` : "",
     summary.tts_text_to_speaker_ms != null ? `TTS text -> speaker ${fmtMs(summary.tts_text_to_speaker_ms)}` : "",
     summary.wake_to_speaker_ms != null ? `Wake -> speaker ${fmtMs(summary.wake_to_speaker_ms)}` : "",
-    summary.wake_to_complete_ms != null ? `Total ${fmtMs(summary.wake_to_complete_ms)}` : "",
+    summary.tts_text_to_speaker_finished_ms != null ? `TTS text -> finish ${fmtMs(summary.tts_text_to_speaker_finished_ms)}` : "",
+    summary.wake_to_speaker_finished_ms != null ? `Wake -> finish ${fmtMs(summary.wake_to_speaker_finished_ms)}` : "",
+    totalMs != null ? `Total ${fmtMs(totalMs)}` : "",
   ].filter(Boolean);
   box.innerHTML = "";
   const main = document.createElement("p");
@@ -2179,10 +2186,16 @@ function renderTurnHistory(history) {
     const when = Number(turn.ended_at || 0);
     const timeText = fmtClock(when);
     const speakerMs = summary.wake_to_speaker_ms;
+    const finishedMs = summary.wake_to_speaker_finished_ms ?? summary.wake_to_complete_ms;
     const ttsMs = summary.wake_to_first_tts_ms;
+    const totalMs = summary.total_ms ?? finishedMs ?? summary.wake_to_session_completed_ms;
     const meta = document.createElement("span");
     const textLine = document.createElement("p");
-    meta.textContent = `${timeText} | ${speakerMs != null ? `speaker ${fmtMs(speakerMs)}` : `TTS text ${fmtMs(ttsMs)}`} | total ${fmtMs(summary.wake_to_complete_ms ?? summary.total_ms)}`;
+    meta.textContent = `${timeText} | ${
+      speakerMs != null ? `speaker ${fmtMs(speakerMs)}`
+        : finishedMs != null ? `finish ${fmtMs(finishedMs)}`
+          : `TTS text ${fmtMs(ttsMs)}`
+    } | total ${fmtMs(totalMs)}`;
     textLine.textContent = turnHistoryText(turn);
     row.append(meta, textLine);
     box.appendChild(row);
