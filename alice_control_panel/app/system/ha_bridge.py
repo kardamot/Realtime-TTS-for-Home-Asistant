@@ -1090,6 +1090,8 @@ class HomeAssistantBridge:
         states: list[dict[str, Any]],
         cfg: dict[str, Any],
     ) -> bool:
+        if intent.domain_hint == "weather" and intent.action == "read":
+            return False
         if intent.all_requested or intent.room_group_requested:
             return False
         hinted_scores = self._score_entities(text, intent, states, cfg)
@@ -1147,9 +1149,16 @@ class HomeAssistantBridge:
         return scored
 
     def _clarify_speech(self, alternatives: list[dict[str, Any]]) -> str:
-        names = _display_list(alternatives)
+        unique_names: list[str] = []
+        for item in alternatives[:3]:
+            name = _friendly_name(item)
+            if name and name not in unique_names:
+                unique_names.append(name)
+        names = ", ".join(unique_names)
         if not names:
             return "Hangi cihazi kastettigini biraz daha net soyler misin?"
+        if len(unique_names) == 1:
+            return f"{names} mi demek istiyorsun?"
         return f"Birden fazla aday buldum: {names}. Hangisini istiyorsun?"
 
     def _no_match_speech(self, intent: HaIntent, alternatives: list[dict[str, Any]]) -> str:

@@ -33,6 +33,45 @@ HOME_ASSISTANT_RUNTIME_GUARDRAILS = (
     "- For home-control requests, speak only a short natural Turkish result or ask a brief clarification.\n"
     "- Do not expose internal command syntax to the user."
 )
+HOME_CONTROL_FRAGMENT_TERMS = {
+    "hava",
+    "derece",
+    "sicaklik",
+    "nem",
+    "ruzgar",
+    "yagmur",
+    "isik",
+    "isig",
+    "lamba",
+    "led",
+    "renk",
+    "priz",
+    "klima",
+    "perde",
+    "panjur",
+    "fan",
+    "sensor",
+    "kamera",
+    "ses",
+    "muzik",
+    "tv",
+}
+_TR_TRANSLATION_TABLE = str.maketrans(
+    {
+        "\u00e7": "c",
+        "\u011f": "g",
+        "\u0131": "i",
+        "\u00f6": "o",
+        "\u015f": "s",
+        "\u00fc": "u",
+        "\u00c7": "C",
+        "\u011e": "G",
+        "\u0130": "I",
+        "\u00d6": "O",
+        "\u015e": "S",
+        "\u00dc": "U",
+    }
+)
 REALTIME_LATENCY_DELTAS = (
     ("wake_to_openai_ms", "start_received", "openai_connected"),
     ("wake_to_first_audio_ms", "start_received", "first_audio_chunk"),
@@ -76,6 +115,11 @@ REALTIME_LATENCY_DELTAS = (
     ("wake_to_complete_ms", "start_received", "speaker_finished"),
     ("total_ms", "start_received", "speaker_finished"),
 )
+
+
+def looks_like_home_control_fragment(text: str) -> bool:
+    normalized = str(text or "").translate(_TR_TRANSLATION_TABLE).lower()
+    return any(term in normalized for term in HOME_CONTROL_FRAGMENT_TERMS)
 REALTIME_STAGE_DEFINITIONS = (
     ("client_connected", "Client linked", "ESP voice WebSocket reached the add-on"),
     ("start_received", "Turn start", "Wake/manual session reached backend"),
@@ -805,6 +849,19 @@ class OpenAIRealtimeBridge:
                 except asyncio.TimeoutError:
                     self._mark_latency("transcript_wait_timeout", wait_ms=wait_ms)
                     pass
+            if (
+                self._ha_bridge is not None
+                and transcript.strip()
+                and not transcript_event.is_set()
+                and looks_like_home_control_fragment(transcript)
+            ):
+                extra_wait_ms = max(0, int(realtime.get("home_control_transcript_wait_ms") or 1600))
+                if extra_wait_ms:
+                    try:
+                        await asyncio.wait_for(transcript_event.wait(), timeout=extra_wait_ms / 1000)
+                    except asyncio.TimeoutError:
+                        self._mark_latency("home_control_transcript_wait_timeout", wait_ms=extra_wait_ms)
+                        pass
             if response_requested or response_done:
                 return
             if bool(realtime.get("suppress_empty_transcript_response", True)) and not transcript.strip():
@@ -1067,7 +1124,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.157",
+                version="0.1.159",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
