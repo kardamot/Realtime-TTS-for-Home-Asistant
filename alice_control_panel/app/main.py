@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.162", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.163", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()

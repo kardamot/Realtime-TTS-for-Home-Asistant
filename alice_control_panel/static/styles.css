@@ -1585,6 +1585,30 @@ label.wide { grid-column: 1 / -1; }
   align-items: end;
 }
 .check-pair .check-row { margin: 0; }
+.power-sleep-layout {
+  display: grid;
+  gap: 10px;
+}
+.power-toggle-row,
+.power-time-row {
+  display: grid;
+  gap: 10px;
+}
+.power-toggle-row {
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  align-items: center;
+}
+.power-time-row {
+  grid-template-columns: minmax(160px,1.25fr) repeat(2,minmax(140px,1fr));
+  align-items: end;
+}
+.power-toggle-row .check-row {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid rgba(100,169,255,.16);
+  border-radius: 8px;
+  background: rgba(13,19,29,.42);
+}
 .inline-check {
   display: inline-flex;
   grid-auto-flow: column;
@@ -1842,6 +1866,8 @@ label.wide { grid-column: 1 / -1; }
   }
   .mic-debug-actions { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .config-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .power-toggle-row { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .power-time-row { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .live-provider-grid { grid-template-columns: 1fr; }
   .config-group-head { align-items: flex-start; flex-direction: column; }
   .provider-switch { justify-content: flex-start; }
@@ -1883,6 +1909,10 @@ label.wide { grid-column: 1 / -1; }
     font-size: 10px;
   }
   .pipeline, .config-grid { grid-template-columns: 1fr; }
+  .power-toggle-row,
+  .power-time-row {
+    grid-template-columns: 1fr;
+  }
   .log-control-row {
     grid-template-columns: 1fr;
     gap: 5px;
