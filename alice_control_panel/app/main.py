@@ -27,6 +27,7 @@ from app.pipeline.tts.relay import TtsRelay
 from app.pipeline.voice_pipeline import VoicePipeline
 from app.system.ha_bridge import HomeAssistantBridge
 from app.system.ha_narrator import HaNarrator
+from app.system.power_manager import PowerManager
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -38,20 +39,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await app.state.prompt_store.ensure_defaults()
     await app.state.log_bus.emit("INFO", "SYSTEM", "Alice Control Panel backend starting")
     await app.state.esp_client.start()
+    await app.state.power_manager.start()
     try:
         yield
     finally:
+        await app.state.power_manager.stop()
         await app.state.esp_client.stop()
         await app.state.log_bus.emit("INFO", "SYSTEM", "Alice Control Panel backend stopped")
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.161", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.162", lifespan=lifespan)
     config_store = ConfigStore()
     log_bus = LogBus(maxlen=1000)
     ws_hub = WsHub()
     prompt_store = PromptStore(config_store)
     esp_client = EspClient(config_store, log_bus, ws_hub)
+    power_manager = PowerManager(config_store, esp_client, log_bus)
     ha_bridge = HomeAssistantBridge(config_store, log_bus)
     ha_narrator = HaNarrator(config_store, prompt_store, log_bus)
     llm = OpenAICompatibleLlm(config_store, prompt_store, log_bus)
@@ -88,6 +92,7 @@ def create_app() -> FastAPI:
     app.state.ws_hub = ws_hub
     app.state.prompt_store = prompt_store
     app.state.esp_client = esp_client
+    app.state.power_manager = power_manager
     app.state.ha_bridge = ha_bridge
     app.state.ha_narrator = ha_narrator
     app.state.realtime_bridge = realtime_bridge

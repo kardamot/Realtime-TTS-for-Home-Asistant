@@ -23,7 +23,7 @@ async def health(request: Request) -> dict[str, Any]:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.159",
+        "version": "0.1.162",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": system_health(),
@@ -51,6 +51,7 @@ async def status(request: Request, _: None = Depends(require_request_auth)) -> d
         "llm": await request.app.state.llm.status(),
         "tts": await request.app.state.tts_relay.status(),
         "ha_bridge": await request.app.state.ha_bridge.status(),
+        "power": await request.app.state.power_manager.status(),
         "config": await request.app.state.config_store.get(include_secrets=False),
     }
 
@@ -71,11 +72,12 @@ async def events_ws(websocket: WebSocket) -> None:
                     "health": {
                         "ok": True,
                         "service": "alice_control_panel",
-                        "version": "0.1.159",
+                        "version": "0.1.162",
                         "system": system_health(),
                     },
                     "esp": await websocket.app.state.esp_client.status(),
                     "pipeline": await websocket.app.state.voice_pipeline.status(),
+                    "power": await websocket.app.state.power_manager.status(),
                 },
             }
         )

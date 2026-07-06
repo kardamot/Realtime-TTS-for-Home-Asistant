@@ -1,8 +1,9 @@
 const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
+  "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.161";
+const UI_VERSION = "0.1.162";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -1109,7 +1110,7 @@ async function loadStatus() {
   text("hw-servo", esp.hardware?.servo_position || "center");
   text("hw-amp", esp.hardware?.amp_muted == null ? "unknown" : esp.hardware.amp_muted ? "muted" : "active");
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");
-  text("hw-state", esp.state || "OFFLINE");
+  text("hw-state", formatPowerMode(esp));
   syncDailyBehaviorButtons(esp, pipe);
   renderPipelineTrace(pipe, realtime, data);
   renderPipelineMessages(pipe.messages || []);
@@ -1136,6 +1137,14 @@ function formatTouchSensor(hw) {
     return hw.touch_reactions_enabled === false ? "ready / off" : "active";
   }
   return hw.touch_sensor || "unknown";
+}
+
+function formatPowerMode(esp) {
+  const mode = String(esp?.power_mode || esp?.sleep_level || "").toLowerCase();
+  if (mode === "soft_sleep") return "SOFT SLEEP";
+  if (mode === "night_sleep") return "NIGHT SLEEP";
+  if (esp?.sleep_mode) return "SLEEP";
+  return esp?.state || "OFFLINE";
 }
 
 function radarStateTone(state, fresh, ready) {

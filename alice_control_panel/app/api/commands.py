@@ -26,6 +26,7 @@ SERVER_COMMANDS = {
 async def command(payload: dict[str, Any], request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
     name = str(payload.get("command") or "").strip()
     args = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+    request.app.state.power_manager.notify_activity(f"command:{name or 'unknown'}")
     if name in SERVER_COMMANDS:
         return await _run_server_command(name, args, request)
     return await request.app.state.esp_client.send_command(name, args)

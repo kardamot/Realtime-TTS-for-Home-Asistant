@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.161"
+version: "0.1.162"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -47,6 +47,13 @@ options:
     live_vad_pre_roll_ms: 300
     live_vad_max_utterance_ms: 12000
     live_vad_max_buffer_sec: 20
+  power:
+    enabled: false
+    soft_sleep_enabled: false
+    soft_sleep_idle_minutes: 30
+    night_sleep_enabled: false
+    night_sleep_start: "23:00"
+    night_sleep_end: "07:00"
   llm:
     provider: "openai"
     model: "gpt-5-mini"
@@ -190,6 +197,13 @@ schema:
     live_vad_pre_roll_ms: int
     live_vad_max_utterance_ms: int
     live_vad_max_buffer_sec: int
+  power:
+    enabled: bool
+    soft_sleep_enabled: bool
+    soft_sleep_idle_minutes: int
+    night_sleep_enabled: bool
+    night_sleep_start: str
+    night_sleep_end: str
   llm:
     provider: list(openai|openrouter|groq|gemini|openai_compatible|mock|none)
     model: str

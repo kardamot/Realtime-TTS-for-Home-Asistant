@@ -185,6 +185,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "live_vad_max_buffer_sec": 20,
         "suppress_hallucination_phrases": True,
     },
+    "power": {
+        "enabled": False,
+        "soft_sleep_enabled": False,
+        "soft_sleep_idle_minutes": 30,
+        "night_sleep_enabled": False,
+        "night_sleep_start": "23:00",
+        "night_sleep_end": "07:00",
+    },
     "ui": {
         "dark_mode": True,
         "compact": False,
@@ -234,7 +242,7 @@ def _addon_options_to_config(raw: dict[str, Any]) -> dict[str, Any]:
         esp["audio_ack_timeout_sec"] = raw["esp_audio_ack_timeout_sec"]
     if esp:
         mapped["esp"] = esp
-    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "ha_bridge", "tts", "pipeline", "ui"):
+    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "ha_bridge", "tts", "pipeline", "power", "ui"):
         if key in raw:
             mapped[key] = raw[key]
     return mapped

@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.161" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.161" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.162" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.162" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.161" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.162" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.161" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.162" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -233,7 +233,7 @@
                       <button data-daily-toggle="touch_reactions" data-on-command="touch_reactions_on" data-off-command="touch_reactions_off" type="button">Touch</button>
                       <button data-daily-toggle="lift_reactions" data-on-command="lift_reactions_on" data-off-command="lift_reactions_off" type="button">Lift</button>
                       <button data-daily-toggle="wake" data-on-command="wake_on" data-off-command="wake_off" type="button">Wake</button>
-                      <button data-daily-toggle="sleep_mode" data-on-command="sleep_mode_on" data-off-command="sleep_mode_off" type="button">Sleep</button>
+                      <button data-daily-toggle="sleep_mode" data-on-command="soft_sleep_on" data-off-command="sleep_mode_off" type="button">Sleep</button>
                       <button data-daily-command="reconnect" type="button">Reconnect</button>
                       <button class="danger" data-daily-command="reboot" type="button">Reboot</button>
                     </div>
@@ -354,6 +354,18 @@
                     <label class="check-row"><input data-path="debug_logs" type="checkbox" /><span>Debug logs</span></label>
                     <label class="check-row"><input data-path="safe_mode" type="checkbox" /><span>Safe mode</span></label>
                   </div>
+                </div>
+              </section>
+
+              <section class="config-group">
+                <h3>Power &amp; Sleep</h3>
+                <div class="config-grid compact">
+                  <label class="check-row"><input data-path="power.enabled" type="checkbox" /><span>Power scheduler</span></label>
+                  <label class="check-row"><input data-path="power.soft_sleep_enabled" type="checkbox" /><span>Soft sleep after idle</span></label>
+                  <label><span>Soft idle minutes</span><input data-path="power.soft_sleep_idle_minutes" type="number" min="1" step="1" /></label>
+                  <label class="check-row"><input data-path="power.night_sleep_enabled" type="checkbox" /><span>Night sleep schedule</span></label>
+                  <label><span>Night start</span><input data-path="power.night_sleep_start" type="time" /></label>
+                  <label><span>Night end</span><input data-path="power.night_sleep_end" type="time" /></label>
                 </div>
               </section>
 
@@ -555,6 +567,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.161"></script>
+  <script src="/app.js?v=0.1.162"></script>
   </body>
 </html>

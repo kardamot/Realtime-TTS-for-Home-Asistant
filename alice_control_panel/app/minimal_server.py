@@ -130,6 +130,14 @@ DEFAULT_CONFIG = {
         "live_vad_max_buffer_sec": 20,
         "suppress_hallucination_phrases": True,
     },
+    "power": {
+        "enabled": False,
+        "soft_sleep_enabled": False,
+        "soft_sleep_idle_minutes": 30,
+        "night_sleep_enabled": False,
+        "night_sleep_start": "23:00",
+        "night_sleep_end": "07:00",
+    },
     "debug_logs": True,
     "safe_mode": False,
 }
@@ -206,7 +214,7 @@ def options_to_config(raw: dict) -> dict:
         esp["audio_ack_timeout_sec"] = raw["esp_audio_ack_timeout_sec"]
     if esp:
         mapped["esp"] = esp
-    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "ha_bridge", "tts", "pipeline"):
+    for key in ("debug_logs", "safe_mode", "stt", "llm", "realtime", "ha_bridge", "tts", "pipeline", "power"):
         if key in raw:
             mapped[key] = raw[key]
     return mapped
@@ -352,7 +360,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.159"
+    server_version = "AliceControlPanel/0.1.162"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -513,7 +521,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-                "version": "0.1.159",
+                "version": "0.1.162",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
