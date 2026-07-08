@@ -766,6 +766,7 @@ class OpenAIRealtimeBridge:
         assistant_text = ""
         text_chunker = RealtimeTextChunker()
         tts_chunk_started = False
+        emotion_sent = False
         response_requested = False
         response_done = False
         stt_result_sent = False
@@ -856,6 +857,16 @@ class OpenAIRealtimeBridge:
                     self._mark_latency("first_tts_chunk", chars=len(text))
             await send_event("llm_chunk", text=text, final=final)
 
+        async def send_emotion_once(emotions: list[str]) -> None:
+            nonlocal emotion_sent
+            if emotion_sent:
+                return
+            clean_emotions = [str(emotion or "").strip() for emotion in emotions if str(emotion or "").strip()]
+            if not clean_emotions:
+                return
+            emotion_sent = True
+            await send_event("emotion", name=clean_emotions[0])
+
         async def request_response_after_transcript_wait(reason: str = "realtime_committed") -> None:
             if response_requested or response_done:
                 return
@@ -907,8 +918,7 @@ class OpenAIRealtimeBridge:
                 ready_emotions, ready_chunks = text_chunker.push(assistant_text)
 
             emotions, final_chunks, spoken_text = text_chunker.finish()
-            for emotion in [*ready_emotions, *emotions]:
-                await send_event("emotion", name=emotion)
+            await send_emotion_once([*ready_emotions, *emotions])
             if spoken_text:
                 assistant_text = spoken_text
 
@@ -1076,8 +1086,7 @@ class OpenAIRealtimeBridge:
                     if display_delta:
                         self._last_assistant_text = text_chunker.all_text
                         await send_event("llm_delta", text=display_delta)
-                    for emotion in emotions:
-                        await send_event("emotion", name=emotion)
+                    await send_emotion_once(emotions)
                     for chunk in chunks:
                         await send_tts_chunk(chunk, final=False)
                 return
@@ -1143,7 +1152,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.168",
+                version="0.1.169",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
