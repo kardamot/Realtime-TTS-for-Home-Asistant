@@ -95,6 +95,7 @@ ESP_COMMANDS = {
     "touch_reactions_off",
     "lift_reactions_on",
     "lift_reactions_off",
+    "behavior_recover",
     "behavior_normal",
     "behavior_happy",
     "behavior_curious",

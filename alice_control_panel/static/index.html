@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.164" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.164" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.166" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.166" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.164" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.166" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.164" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.166" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -223,24 +223,6 @@
                     </section>
                     <small id="speaker-volume-meta" class="speaker-volume-meta">Device gain waiting</small>
                   </section>
-                  <section class="daily-card behavior-card">
-                    <div class="daily-card-head">
-                      <b>Behavior</b>
-                      <span>eyes + motion</span>
-                    </div>
-                    <div class="daily-action-grid compact-actions">
-                      <button data-daily-command="behavior_happy" type="button">Happy</button>
-                      <button data-daily-command="behavior_curious" type="button">Curious</button>
-                      <button data-daily-command="behavior_thinking" type="button">Thinking</button>
-                      <button data-daily-command="behavior_surprised" type="button">Surprise</button>
-                      <button data-daily-command="behavior_fear" type="button">Fear</button>
-                      <button data-daily-command="behavior_love" type="button">Love</button>
-                      <button data-daily-command="behavior_worried" type="button">Worried</button>
-                      <button data-daily-command="behavior_focused" type="button">Focus</button>
-                      <button data-daily-command="behavior_angry" type="button">Angry</button>
-                      <button data-daily-command="behavior_normal" type="button">Normal</button>
-                    </div>
-                  </section>
                   <section class="daily-card controls-card">
                     <div class="daily-card-head">
                       <b>Controls</b>
@@ -260,6 +242,22 @@
                 </div>
               </div>
               <div class="command-tab-panel" data-command-panel="advanced">
+                <div class="advanced-command-section">
+                  <div class="advanced-command-title">Behavior</div>
+                  <div class="commands behavior-commands">
+                    <button data-panel-command="behavior_recover" type="button">Recover</button>
+                    <button data-panel-command="behavior_happy" type="button">Happy</button>
+                    <button data-panel-command="behavior_curious" type="button">Curious</button>
+                    <button data-panel-command="behavior_thinking" type="button">Thinking</button>
+                    <button data-panel-command="behavior_surprised" type="button">Surprise</button>
+                    <button data-panel-command="behavior_fear" type="button">Fear</button>
+                    <button data-panel-command="behavior_love" type="button">Love</button>
+                    <button data-panel-command="behavior_worried" type="button">Worried</button>
+                    <button data-panel-command="behavior_focused" type="button">Focus</button>
+                    <button data-panel-command="behavior_angry" type="button">Angry</button>
+                    <button data-panel-command="behavior_normal" type="button">Normal</button>
+                  </div>
+                </div>
                 <div class="advanced-command-section">
                   <div class="advanced-command-title">ESP commands</div>
                   <div id="esp-commands" class="commands"></div>
@@ -590,6 +588,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.164"></script>
+  <script src="/app.js?v=0.1.166"></script>
   </body>
 </html>

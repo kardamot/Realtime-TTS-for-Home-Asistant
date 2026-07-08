@@ -1,27 +1,15 @@
 const espCommands = [
   "test_speaker", "test_mic", "capture_mic", "wake_on", "wake_off",
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
-  "behavior_normal", "behavior_happy", "behavior_curious", "behavior_thinking", "behavior_surprised",
-  "behavior_fear", "behavior_focused", "behavior_angry", "behavior_love", "behavior_worried",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.164";
+const UI_VERSION = "0.1.166";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
   "safe_mode_on", "safe_mode_off"
 ];
 const commandLabels = {
-  behavior_normal: "behavior normal",
-  behavior_happy: "behavior happy",
-  behavior_curious: "behavior curious",
-  behavior_thinking: "behavior thinking",
-  behavior_surprised: "behavior surprised",
-  behavior_fear: "behavior fear",
-  behavior_focused: "behavior focused",
-  behavior_angry: "behavior angry",
-  behavior_love: "behavior love",
-  behavior_worried: "behavior worried",
   radar_calibrate_empty: "radar empty calib",
   radar_clear_empty: "radar clear calib",
 };
@@ -912,8 +900,8 @@ function driveCommandPayload() {
 }
 
 function initDailyCommandButtons() {
-  document.querySelectorAll("[data-daily-command]").forEach((button) => {
-    const command = button.dataset.dailyCommand;
+  document.querySelectorAll("[data-daily-command], [data-panel-command]").forEach((button) => {
+    const command = button.dataset.dailyCommand || button.dataset.panelCommand;
     button.onclick = () => guard("Command failed", () => {
       if (isDriveMoveCommand(command)) {
         if (motionLocked) {
@@ -1121,7 +1109,9 @@ async function loadStatus() {
   text("hw-touch", formatTouchSensor(esp.hardware || {}));
   const behavior = esp.hardware?.behavior || "normal";
   const behaviorSource = esp.hardware?.behavior_source || "";
-  text("hw-behavior", behaviorSource ? `${behavior}/${behaviorSource}` : behavior);
+  const behaviorEmotion = esp.hardware?.behavior_emotion || "";
+  const behaviorLabel = behaviorSource ? `${behavior}/${behaviorSource}` : behavior;
+  text("hw-behavior", behaviorEmotion ? `${behaviorLabel} · ${behaviorEmotion}` : behaviorLabel);
   text("hw-servo", esp.hardware?.servo_position || "center");
   text("hw-amp", esp.hardware?.amp_muted == null ? "unknown" : esp.hardware.amp_muted ? "muted" : "active");
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");
