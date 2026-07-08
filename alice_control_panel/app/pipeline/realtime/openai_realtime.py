@@ -33,6 +33,12 @@ HOME_ASSISTANT_RUNTIME_GUARDRAILS = (
     "- For home-control requests, speak only a short natural Turkish result or ask a brief clarification.\n"
     "- Do not expose internal command syntax to the user."
 )
+ROBOT_BEHAVIOR_RUNTIME_HINT = (
+    "Robot behavior cue:\n"
+    "- When a visible emotion would help, include at most one short tag such as <emotion: happy>, <emotion: curious>, "
+    "<emotion: thinking>, <emotion: surprised>, <emotion: fear>, <emotion: focused>, <emotion: angry>, or <emotion: neutral>.\n"
+    "- The tag is consumed by Alice's eyes/motion controller and is not spoken."
+)
 HOME_CONTROL_FRAGMENT_TERMS = {
     "hava",
     "derece",
@@ -1124,7 +1130,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.163",
+                version="0.1.164",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -1369,11 +1375,12 @@ class OpenAIRealtimeBridge:
 
     def _with_runtime_guardrails(self, text: str) -> str:
         clean = str(text or "").strip()
-        if HOME_ASSISTANT_RUNTIME_GUARDRAILS in clean:
-            return clean
-        if not clean:
-            return HOME_ASSISTANT_RUNTIME_GUARDRAILS
-        return f"{clean}\n\n{HOME_ASSISTANT_RUNTIME_GUARDRAILS}"
+        blocks = [HOME_ASSISTANT_RUNTIME_GUARDRAILS, ROBOT_BEHAVIOR_RUNTIME_HINT]
+        for block in blocks:
+            if block in clean:
+                continue
+            clean = block if not clean else f"{clean}\n\n{block}"
+        return clean
 
     def _turn_detection(self, realtime: dict[str, Any]) -> dict[str, Any]:
         mode = str(realtime.get("turn_detection") or "server_vad").strip().lower()
