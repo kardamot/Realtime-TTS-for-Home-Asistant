@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.166";
+const UI_VERSION = "0.1.167";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",

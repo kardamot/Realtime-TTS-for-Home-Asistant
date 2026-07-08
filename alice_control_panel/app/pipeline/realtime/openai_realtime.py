@@ -266,10 +266,15 @@ class RealtimeTextChunker:
         self._raw_pending = ""
         self._spoken_pending = ""
         self._all_spoken_text = ""
+        self._display_delta = ""
 
     @property
     def all_text(self) -> str:
         return self._all_spoken_text.strip()
+
+    @property
+    def display_delta(self) -> str:
+        return self._display_delta
 
     def _strip_emotions(self) -> list[str]:
         emotions: list[str] = []
@@ -295,6 +300,7 @@ class RealtimeTextChunker:
             return
         self._spoken_pending += safe_text
         self._all_spoken_text += safe_text
+        self._display_delta += safe_text
 
     def _find_boundary(self) -> int:
         text = self._spoken_pending
@@ -328,6 +334,7 @@ class RealtimeTextChunker:
         return parts
 
     def push(self, delta: str) -> tuple[list[str], list[str]]:
+        self._display_delta = ""
         self._raw_pending += delta
         emotions = self._strip_emotions()
         self._flush_safe_text()
@@ -1060,9 +1067,11 @@ class OpenAIRealtimeBridge:
                         first_llm_delta_marked = True
                         self._mark_latency("first_llm_delta", chars=len(delta))
                     assistant_text += delta
-                    self._last_assistant_text = assistant_text.strip()
-                    await send_event("llm_delta", text=delta)
                     emotions, chunks = text_chunker.push(delta)
+                    display_delta = text_chunker.display_delta
+                    if display_delta:
+                        self._last_assistant_text = text_chunker.all_text
+                        await send_event("llm_delta", text=display_delta)
                     for emotion in emotions:
                         await send_event("emotion", name=emotion)
                     for chunk in chunks:
@@ -1130,7 +1139,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.166",
+                version="0.1.167",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
