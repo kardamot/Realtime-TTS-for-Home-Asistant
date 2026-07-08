@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.167";
+const UI_VERSION = "0.1.168";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -97,6 +97,11 @@ const LOG_FOCUS_NOISE = [
   "TTS relay websocket disconnected",
   "Configuration updated",
 ];
+const EMOTION_TAG_DISPLAY_RE = /<emotion:\s*[^>]+>/gi;
+
+function stripEmotionTags(value) {
+  return String(value || "").replace(EMOTION_TAG_DISPLAY_RE, "").replace(/\s{2,}/g, " ").trim();
+}
 
 const HELP_TEXTS = {
   connections: {
@@ -1888,7 +1893,7 @@ async function selectProvider(kind, provider) {
 }
 
 function compactPipelineText(value, fallback) {
-  const textValue = String(value || "").trim();
+  const textValue = stripEmotionTags(value);
   return textValue || fallback;
 }
 
@@ -1897,7 +1902,7 @@ function lastPipelineMessage(messages, roles) {
   const accepted = Array.isArray(roles) ? roles : [roles];
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const item = list[index] || {};
-    if (accepted.includes(item.role) && String(item.text || "").trim()) return item;
+    if (accepted.includes(item.role) && stripEmotionTags(item.text)) return item;
   }
   return null;
 }
@@ -2003,7 +2008,7 @@ function renderPipelineMessages(messages) {
       timeEl.textContent = fmtClock(ts);
       roleEl.textContent = role.toUpperCase();
       sourceEl.textContent = String(item.source || "-").replaceAll("_", " ");
-      textEl.textContent = String(item.text || "");
+      textEl.textContent = stripEmotionTags(item.text);
       row.append(timeEl, roleEl, sourceEl, textEl);
       box.appendChild(row);
     });

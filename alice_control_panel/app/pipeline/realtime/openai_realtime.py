@@ -250,9 +250,13 @@ def extract_realtime_response_text(doc: dict[str, Any]) -> str:
     return "".join(parts).strip()
 
 
+def strip_emotion_tags(text: str) -> str:
+    return EMOTION_TAG_RE.sub("", str(text or "")).strip()
+
+
 def append_display_text(current: str, next_text: str) -> str:
-    current_clean = str(current or "").rstrip()
-    next_clean = str(next_text or "").strip()
+    current_clean = strip_emotion_tags(current).rstrip()
+    next_clean = strip_emotion_tags(next_text)
     if not next_clean:
         return current_clean
     if not current_clean:
@@ -421,7 +425,7 @@ class OpenAIRealtimeBridge:
         }
 
     def _remember_message(self, role: str, source: str, text: str, meta: dict[str, Any] | None = None) -> None:
-        clean = str(text or "").strip()
+        clean = strip_emotion_tags(text)
         if not clean:
             return
         last = self._message_history[-1] if self._message_history else {}
@@ -1139,7 +1143,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.167",
+                version="0.1.168",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
