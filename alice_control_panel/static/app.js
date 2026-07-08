@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.169";
+const UI_VERSION = "0.1.170";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -1116,7 +1116,13 @@ async function loadStatus() {
   const behaviorSource = esp.hardware?.behavior_source || "";
   const behaviorEmotion = esp.hardware?.behavior_emotion || "";
   const behaviorLabel = behaviorSource ? `${behavior}/${behaviorSource}` : behavior;
-  text("hw-behavior", behaviorEmotion ? `${behaviorLabel} · ${behaviorEmotion}` : behaviorLabel);
+  const idleEye = esp.idle_tracking || {};
+  const behaviorParts = [behaviorLabel];
+  if (behaviorEmotion) behaviorParts.push(behaviorEmotion);
+  if (esp.hardware?.idle_eye_tracking_active || idleEye.active) {
+    behaviorParts.push(`eye:${idleEye.direction || esp.hardware?.idle_eye_tracking || "tracking"}`);
+  }
+  text("hw-behavior", behaviorParts.join(" / "));
   text("hw-servo", esp.hardware?.servo_position || "center");
   text("hw-amp", esp.hardware?.amp_muted == null ? "unknown" : esp.hardware.amp_muted ? "muted" : "active");
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");

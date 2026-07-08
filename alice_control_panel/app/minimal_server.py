@@ -360,7 +360,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.169"
+    server_version = "AliceControlPanel/0.1.170"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -521,7 +521,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-                "version": "0.1.169",
+                "version": "0.1.170",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
@@ -563,9 +563,25 @@ def esp_status() -> dict:
             "touch_sensor_ready": None,
             "touch_sensor_active": None,
             "eyes_expression": "unknown",
+            "idle_eye_tracking": "disabled",
+            "idle_eye_tracking_active": False,
             "eyes_sleeping": None,
             "sleep_mode": None,
             "errors": [],
+        },
+        "idle_tracking": {
+            "enabled": False,
+            "active": False,
+            "state": "disabled",
+            "direction": "center",
+            "x_mm": 0,
+            "y_mm": 0,
+            "distance_mm": 0,
+            "confidence": 0,
+            "stable_frames": 0,
+            "gaze_x": 0.0,
+            "gaze_y": 0.0,
+            "last_seen_ms": 0,
         },
         "last_seen": None,
         "last_error": "Stdlib fallback mode: ESP polling disabled until FastAPI runtime is enabled.",
