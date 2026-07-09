@@ -64,6 +64,7 @@ DEFAULT_STATUS: dict[str, Any] = {
         "stable_frames": 0,
         "gaze_x": 0.0,
         "gaze_y": 0.0,
+        "pupil_attention": 0.0,
         "last_seen_ms": 0,
     },
     "radar": {

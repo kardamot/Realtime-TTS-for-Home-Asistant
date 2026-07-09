@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.170";
+const UI_VERSION = "0.1.172";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -329,20 +329,447 @@ const HELP_DETAIL_TEXTS = {
 };
 
 const HELP_TARGETS = [
-  [".connections-panel > header h2", "connections"],
-  ["#logs > header h2", "logs"],
-  ["#radar > header h2", "hardware"],
-  ["#pipeline > header h2", "pipeline"],
-  ["#commands > header h2", "commands"],
-  ["#prompts > header h2", "prompts"],
-  ["#config > header h2", "config"],
+  [".connections-panel > header h2", "connections", "connectionsFields"],
+  ["#logs > header h2", "logs", "logsFields"],
+  ["#radar > header h2", "radar", "radarFields"],
+  ["#pipeline > header h2", "pipeline", "pipelineFields"],
+  ["#commands > header h2", "commands", "commandsFields"],
+  ["#latency-panel > header h2", "latency", "latencyFields"],
+  ["#conversation > header h2", "conversation", "conversationFields"],
+  ["#prompts > header h2", "prompts", "promptsFields"],
+  ["#config > header h2", "config", "configFields"],
   ["#config .config-group:nth-of-type(1) h3", "panelEsp", "panelEspFields"],
-  ["#config .config-group:nth-of-type(2) h3", "liveVoice", "liveVoiceFields"],
-  ["#config .config-group:nth-of-type(3) h3", "sttVad", "sttVadFields"],
-  ["#config .config-group:nth-of-type(4) h3", "homeAssistant", "homeAssistantFields"],
-  ["#config .config-group:nth-of-type(5) h3", "llm", "llmFields"],
-  ["#config .config-group:nth-of-type(6) h3", "tts", "ttsFields"]
+  ["#config .config-group:nth-of-type(2) h3", "powerSleep", "powerSleepFields"],
+  ["#config .config-group:nth-of-type(3) h3", "liveVoice", "liveVoiceFields"],
+  ["#config .config-group:nth-of-type(4) h3", "sttVad", "sttVadFields"],
+  ["#config .config-group:nth-of-type(5) h3", "homeAssistant", "homeAssistantFields"],
+  ["#config .config-group:nth-of-type(6) h3", "llm", "llmFields"],
+  ["#config .config-group:nth-of-type(7) h3", "tts", "ttsFields"]
 ];
+
+Object.assign(HELP_TEXTS, {
+  connections: {
+    title: "Connections",
+    body: [
+      "Robot, canlı WebSocket, ses hattı ve Home Assistant köprüsünün o anki bağlantı özetidir.",
+      "ESP satırı HTTP status poll tarafını, ESP WS satırı canlı event/audio/mikrofon kanalını gösterir. HA Bridge yalnızca allowlist içindeki Home Assistant varlıkları için hazır kabul edilir.",
+      "Reconnects değeri otomatik yeniden bağlanma sayacıdır; limit dolarsa sistem manuel reconnect bekleyerek gereksiz ağ trafiğini keser."
+    ]
+  },
+  logs: {
+    title: "Logs",
+    body: [
+      "ESP, STT, LLM, TTS, Pipeline, HA ve sistem olaylarının tek canlı akışıdır.",
+      "Filtreler sadece görünümü daraltır. Satıra tıklayınca ayrıntı JSON'u açılır; Pause, Download ve Clear günlük inceleme akışını yönetir.",
+      "TTS sağlayıcı hataları, WebSocket kopmaları, barge-in iptalleri ve HA route kararları için ilk bakılacak panel burasıdır."
+    ]
+  },
+  radar: {
+    title: "Radar",
+    body: [
+      "RD-03D radar verisini teknik harita veya oda görünümüyle gösterir.",
+      "Seçili hedef, yön, açı, mesafe ve güven bilgileri robotun kişiye dönme ve takip davranışını anlamak için kullanılır.",
+      "Kalibrasyon butonları sadece panel görünümünü ve boş oda referansını düzeltir; robotun fiziksel montajını değiştirmez."
+    ]
+  },
+  pipeline: {
+    title: "Voice Pipeline",
+    body: [
+      "Ses ve metin hattının canlı özetidir: son durum, STT metni, LLM cevabı ve TTS'e giden son metin burada kalır.",
+      "Üstteki test kontrolleri klasik LLM+TTS ve sadece TTS denemesi yapar. Oturum kontrolleri canlı konuşma, kesme ve barge-in davranışını test eder.",
+      "Daha uzun konuşma geçmişi Conversation panelinde, milisaniye kırılımı ise Latency Timeline panelinde izlenir."
+    ]
+  },
+  commands: {
+    title: "Command Panel",
+    body: [
+      "Günlük robot kontrolü ve ileri seviye bakım komutlarının merkezidir.",
+      "Daily sekmesi sürüş, ses seviyesi, uyku, wake, takip ve reaksiyon anahtarlarını daha temiz kullanmak içindir. Advanced sekmesi test, davranış, server bakım ve mikrofon debug işlerini tutar.",
+      "ESP tarafında desteklenmeyen komutlar panelde kaybolmaz; loga düşer ve firmware hazır olana kadar güvenli şekilde cevap döner."
+    ]
+  },
+  latency: {
+    title: "Latency Timeline",
+    body: [
+      "Bir konuşma turunun nerede zaman kaybettiğini gösteren ayrıntılı zaman çizelgesidir.",
+      "Wake'ten mikrofon paketine, STT sonucuna, LLM cevabına, Google TTS isteğine, ESP chunk aktarımına ve hoparlör başlangıcına kadar süreler ayrı ayrı ölçülür.",
+      "TTS gecikmesi Google tarafında mı, bizim decode/resample tarafında mı, ESP aktarımında mı yoksa prebuffer/hoparlörde mi sorusunun cevabı burada aranır."
+    ]
+  },
+  conversation: {
+    title: "Conversation",
+    body: [
+      "Son kullanıcı ve asistan metinlerinin okunabilir konuşma geçmişidir.",
+      "STT sonucu, OpenAI Realtime cevabı, HA route ile üretilen cevaplar ve TTS'e giden metinler burada sırayla kalır.",
+      "Debug log gibi teknik değildir; konuşmanın gerçekten ne anlaşılıp ne söylendiğini hızlı kontrol etmek için kullanılır."
+    ]
+  },
+  prompts: {
+    title: "Prompt Editor",
+    body: [
+      "Alice'in genel karakter ve davranış profillerini yönetir.",
+      "Live instructions veya LLM system prompt boşsa aktif prompt profili fallback olarak kullanılır; bu yüzden genel kişilik metnini burada tutmak temizdir.",
+      "Profiller /data/prompts altında saklanır ve kaydetmek için server restart gerekmez."
+    ]
+  },
+  config: {
+    title: "Config",
+    body: [
+      "Add-on'un kalıcı ayar merkezidir: panel erişimi, ESP adresleri, sleep scheduler, live voice, STT/VAD, HA allowlist, LLM ve TTS provider profilleri buradan yönetilir.",
+      "Kaydedilen değerler /data/alice_config.json altında kalır; API keyler repo içine yazılmaz.",
+      "Import/Export yedek ve taşıma içindir. Secrets işaretlenmezse export gizli alanları maskeleyerek verir."
+    ]
+  },
+  panelEsp: {
+    title: "Panel & ESP",
+    body: [
+      "Panelin hangi porttan açılacağını, basit auth davranışını ve ESP ile hangi HTTP/WebSocket adreslerinden konuşacağını belirler.",
+      "ESP base URL status ve komutlar içindir; ESP WebSocket URL canlı event, mikrofon debug ve audio stream için kullanılır."
+    ]
+  },
+  powerSleep: {
+    title: "Power & Sleep",
+    body: [
+      "Alice'in boşta kalınca veya gece saatlerinde daha sakin/güç tasarruflu moda geçmesini yönetir.",
+      "Soft sleep gündüz boşta kalınca devreye girer; night sleep belirlenen saat aralığında daha derin uyku davranışı ister.",
+      "Bu scheduler ESP offline iken komut yağdırmaz; ESP tekrar bağlandığında hedef moda geçmeye çalışır."
+    ]
+  },
+  liveVoice: {
+    title: "Live Voice",
+    body: [
+      "Wake sonrası düşük gecikmeli karşılıklı konuşma hattını yönetir.",
+      "OpenAI Live şu an aktif canlı konuşma yoludur. Gemini Live profili hazır tutulur; None seçilirse canlı hat devre dışı kalır.",
+      "Live instructions canlı oturuma özel kişilik metnidir; boşsa LLM system prompt'a, o da boşsa aktif Prompt Editor profiline düşer."
+    ]
+  },
+  sttVad: {
+    title: "Classic STT & VAD",
+    body: [
+      "Live olmayan mikrofon yakalama, faster-whisper transkripsiyon ve yerel VAD ayarlarını tutar.",
+      "Silero VAD konuşma başlangıç/bitişini modelle algılar; energy modu daha basit RMS eşiğiyle çalışır.",
+      "Mikrofon dip gürültüsü varsa VAD eşikleri ve silence süreleri konuşma kalitesini doğrudan etkiler."
+    ]
+  },
+  homeAssistant: {
+    title: "Home Assistant",
+    body: [
+      "Alice'in Home Assistant varlıklarını kontrollü şekilde okumasını ve yönetmesini sağlar.",
+      "Sistem beyaz listeyle çalışır: yalnızca Allowed entity IDs içine yazdığın entityler görünür.",
+      "Route home control açıkken hava durumu ve bazı ev kontrol istekleri LLM cevabından önce HA bridge tarafından yakalanabilir."
+    ]
+  },
+  llm: {
+    title: "LLM",
+    body: [
+      "Klasik metin anlama ve cevap üretme sağlayıcısını seçer.",
+      "OpenAI, OpenRouter, Groq, Gemini, OpenAI Compatible, Mock ve None profilleri ayrı saklanır; provider değiştirince eski bilgiler silinmez.",
+      "Live Voice açıksa konuşmanın ana cevabı live modelden gelebilir; bu panel daha çok klasik LLM hattı ve fallback davranışı içindir."
+    ]
+  },
+  tts: {
+    title: "TTS",
+    body: [
+      "Yazıyı sese çeviren provider ve ESP audio aktarım ayarlarını yönetir.",
+      "OpenAI, Cartesia, ElevenLabs, Google AI ve Google Cloud profilleri ayrı saklanır. Aktif TTS seçimi sadece hangi profilin kullanılacağını belirler.",
+      "Buffer, silence prefix, streaming ve barge-in ayarları ilk ses gecikmesi, takılma ve konuşurken kesme davranışını etkiler."
+    ]
+  }
+});
+
+Object.assign(HELP_DETAIL_TEXTS, {
+  connectionsFields: {
+    title: "Connections detayları",
+    body: ["Bu alanlar bağlantıların hangi katmanda sağlam veya sorunlu olduğunu ayırmak için kullanılır."],
+    items: [
+      ["ESP", "Robotun HTTP status poll sonucudur. Online ise /api/status okunuyor demektir."],
+      ["ESP WS", "Robotun /ws canlı WebSocket bağlantısıdır. Audio, event, log ve mic debug için kritik yoldur."],
+      ["STT", "Aktif konuşmayı metne çevirme motorunu gösterir; classic hatta genelde faster_whisper görünür."],
+      ["LLM", "Aktif klasik LLM provider/model özetidir. Live Voice açıksa canlı model ayrıca Voice Pipeline'da görünür."],
+      ["TTS", "Aktif TTS provider ve hedef PCM rate özetidir."],
+      ["HA Bridge", "Home Assistant entegrasyonunun allowlist ile hazır olup olmadığını gösterir."],
+      ["Reconnects", "ESP kopunca yapılan otomatik reconnect sayısı ve limitidir."],
+      ["Last error", "Son bağlantı veya komut hatasını küçük fontla gösterir; uzun metinler paneli büyütmeden kaydırılır."]
+    ]
+  },
+  logsFields: {
+    title: "Logs kontrolleri",
+    body: ["Log paneli canlıdır; filtreler ve presetler sadece görünümü değiştirir, backend ring buffer'ını bozmaz."],
+    items: [
+      ["Pause", "Canlı akışı ekranda dondurur. Arka planda yeni loglar gelmeye devam edebilir."],
+      ["Download", "Mevcut log listesini dosya olarak indirir. TTS/HA hata detaylarını paylaşmak için en temiz yoldur."],
+      ["Clear", "Paneldeki log buffer'ını temizler."],
+      ["Search logs", "Mesaj, kategori veya detay içeriğinde metin arar."],
+      ["Level filter", "ALL, DEBUG, INFO, WARN veya ERROR seviyesine göre süzer."],
+      ["Category filter", "ESP, STT, LLM, TTS, PIPELINE, HA, SYSTEM gibi kaynağa göre süzer."],
+      ["Summary chips", "Total, Errors, Warns ve son log kaynağı/saatini hızlı gösterir."],
+      ["Preset buttons", "All, Errors, Warnings, Voice, ESP, HA gibi hazır filtreleri uygular."],
+      ["Focus", "Gürültülü tekrar loglarını azaltıp daha önemli satırlara odaklanmak için kullanılan görünüm modudur."],
+      ["Expandable rows", "Satırdaki + işaretine tıklayınca JSON detayını açar; provider error body, trace_id ve timing payload burada görünür."]
+    ]
+  },
+  radarFields: {
+    title: "Radar kontrolleri",
+    body: ["Radar paneli hem teknik ham hedefleri hem de oda içi konum yorumunu gösterir."],
+    items: [
+      ["X", "Paneldeki X eksenini ters çevirir. Sağ/sol görüntüsü fiziksel yerleşime tersse kullanılır."],
+      ["Y", "Paneldeki Y eksenini ters çevirir. İleri/geri görüntüsü tersse kullanılır."],
+      ["180", "Radar görüntüsünü 180 derece çevirir."],
+      ["Teknik", "Ham radar koordinatlarını ve hedef noktalarını teknik haritada gösterir."],
+      ["Oda", "Aynı veriyi daha okunabilir oda/varlık görünümünde gösterir."],
+      ["Targets", "Radarın o anda gördüğü hedef sayısıdır."],
+      ["Direction", "Seçili hedefe göre SOL/SAG/ORTA gibi yön yorumudur."],
+      ["Selected", "Robotun takip/karar için seçtiği hedef indeksidir."],
+      ["Angle", "Seçili hedefin yaklaşık açısıdır."],
+      ["Radar detail", "Karar mesafesi, x/y, açı, güven, frame ve boş oda kalibrasyon bilgisini yazar."]
+    ]
+  },
+  pipelineFields: {
+    title: "Voice Pipeline kontrolleri",
+    body: ["Bu panel kısa canlı özet ve manuel pipeline testleri içindir; uzun konuşma geçmişi Conversation panelindedir."],
+    items: [
+      ["SESSION pill", "Canlı konuşma oturumunun açık/kapalı durumunu gösterir."],
+      ["STREAM pill", "TTS/audio stream hattının aktif olup olmadığını gösterir."],
+      ["Pipeline input", "Elle test metni yazılır. Wake veya mikrofon kullanmadan pipeline denenir."],
+      ["LLM + TTS", "Yazdığın metni LLM'e gönderir, üretilen cevabı aktif TTS ile ESP'ye okutmaya çalışır."],
+      ["TTS only", "Yazdığın metni LLM'e sokmadan doğrudan aktif TTS ile okutur."],
+      ["Latency test", "Sabit kısa metinle TTS gecikme benchmark'ı çalıştırır ve Latency Timeline'a ölçüm düşürür."],
+      ["Start session", "Canlı voice oturumunu manuel başlatır."],
+      ["Stop session", "Canlı voice oturumunu kapatır."],
+      ["Cancel response", "Devam eden Realtime/voice cevabını keser; barge-in davranışını test etmek için kullanılır."],
+      ["Session meta", "Realtime bağlantı durumu, model ve son event özetini gösterir."],
+      ["STATE", "Pipeline'ın idle, tts idle, live websocket sayısı ve son bağlantı durumunu gösterir."],
+      ["STT", "Son kullanıcı transkripti veya manuel input sonucunu gösterir; yeni tur gelene kadar son değer kalır."],
+      ["LLM", "Son asistan cevabını gösterir."],
+      ["TTS", "Son TTS'e giden metni ve provider/rate durumunu gösterir."]
+    ]
+  },
+  commandsFields: {
+    title: "Command Panel kontrolleri",
+    body: ["Daily günlük kullanım, Advanced tanılama ve bakım içindir."],
+    items: [
+      ["Daily tab", "Sürüş, ses, wake, reaksiyonlar, sleep ve temel bağlantı komutlarını gösterir."],
+      ["Advanced tab", "Behavior efektleri, ESP test komutları, server bakım ve mic debug araçlarını gösterir."],
+      ["Speaker Volume", "ESP hoparlör gain seviyesini yüzde olarak ayarlar. Panel son bilinen değeri hatırlar."],
+      ["Mute", "Hoparlör sesini sessize alır veya önceki seviyeye geri getirir."],
+      ["Motors", "Motor sürüş hattını aktif/pasif yapar."],
+      ["Motion lock", "Panelden sürüş komutlarını kilitler; yanlışlıkla hareketi engeller."],
+      ["D-pad", "Forward, Back, Left, Right ve Stop motor komutlarını gönderir."],
+      ["Speed", "Motor komutlarına yavaş/normal/hızlı niyetini ekler. Firmware destekledikçe etkisi artar."],
+      ["Step", "Kısa/orta/uzun hareket süresi niyetini ekler."],
+      ["Listen", "Manuel dinleme oturumu başlatır veya durdurur."],
+      ["Follow-up", "Cevap sonrası tekrar dinleme penceresini açar/kapatır."],
+      ["Touch", "Dokunma reaksiyonlarını açar/kapatır."],
+      ["Lift", "Havaya kaldırma reaksiyonlarını açar/kapatır."],
+      ["Wake", "Wake word dinlemeyi açar/kapatır."],
+      ["Sleep", "Soft sleep moduna alır veya aktif moda döndürür."],
+      ["Reconnect", "ESP bağlantısını manuel yeniden dener."],
+      ["Reboot", "ESP'yi yeniden başlatır."],
+      ["Behavior buttons", "Göz/duygu davranışlarını test eder: happy, curious, thinking, love, normal gibi."],
+      ["ESP commands", "Hoparlör, mikrofon, wake, amp, radar kalibrasyon ve diğer düşük seviye ESP komutlarını gönderir."],
+      ["Server maintenance", "STT/TTS restart, prompt reload, voice session ve safe mode gibi add-on tarafı komutlarıdır."],
+      ["Record L / Record R", "Sol veya sağ mikrofon kanalından kısa WAV debug kaydı ister."],
+      ["Play L / Play R", "Son yakalanan sol/sağ kanal kaydını panelde çalar."],
+      ["Download L / Download R", "Son debug WAV kaydını indirir."],
+      ["Mic debug meta", "Kayıt sonrası duration, byte, RMS, peak, shift ve clip bilgisini gösterir."]
+    ]
+  },
+  latencyFields: {
+    title: "Latency Timeline detayları",
+    body: ["Buradaki ölçümler süre için monotonic clock, okunabilir saat için wall-clock kullanır."],
+    items: [
+      ["Wake -> mic", "Wake/manual start sonrası backend'in ilk mikrofon paketini gördüğü süre."],
+      ["Speech -> STT", "Konuşma bitişinden STT sonucuna kadar geçen süre."],
+      ["STT -> LLM", "Transkriptin LLM'e gitmesi ve LLM'in cevap üretmeye başlaması arasındaki süre."],
+      ["LLM -> TTS text", "LLM'in ilk/son kullanılabilir cevabından TTS metninin kuyruğa alınmasına kadar geçen süre."],
+      ["TTS req -> headers", "Google/aktif TTS isteği başladıktan HTTP response header gelene kadar geçen süre."],
+      ["TTS req -> first byte", "TTS isteğinden provider'ın ilk byte'ına kadar geçen süre."],
+      ["TTS req -> audio", "TTS isteğinden ilk gerçek audio chunk'ın bulunmasına kadar geçen süre."],
+      ["Audio -> ESP chunk", "Audio decode/convert sonrası ilk chunk'ın ESP'ye gönderilmesine kadar geçen süre."],
+      ["ESP chunk -> speaker", "ESP'ye ilk chunk gittikten hoparlörün ilk PCM/speaker started bildirimi yapmasına kadar geçen süre."],
+      ["ESP chunk -> finish", "İlk ESP chunk'tan speaker finished bildirimine kadar geçen süre."],
+      ["TTS text -> speaker", "TTS metni hazırlandıktan hoparlörden ilk ses başlangıcına kadar geçen toplam TTS/ESP süresi."],
+      ["TTS text -> finish", "TTS metninden ses oynatımının bitmesine kadar geçen süre."],
+      ["Wake -> speaker", "Wake veya manuel turn başlangıcından hoparlörün ilk sesine kadar geçen gerçek algılanan gecikme."],
+      ["Wake -> finish", "Turn başlangıcından ses bitimine kadar geçen süre."],
+      ["Turn total", "Backend'in o turn için bildirdiği toplam süre."],
+      ["Event list", "Her event için saat, turn başlangıcına göre +ms ve açıklama gösterir."],
+      ["Recent turns", "Son turların kısa özetidir; hangi turu analiz ettiğini anlamaya yardım eder."]
+    ]
+  },
+  conversationFields: {
+    title: "Conversation kontrolleri",
+    body: ["Teknik log değil, konuşma metni geçmişidir."],
+    items: [
+      ["USER rows", "STT veya manuel input ile gelen kullanıcı metnidir."],
+      ["ASSISTANT rows", "Realtime veya klasik LLM cevabıdır."],
+      ["TTS rows", "TTS'e gönderilen metin veya HA route gibi doğrudan seslendirilecek cevap olabilir."],
+      ["Provider/source", "Satırda openai realtime, HA route veya tts gibi kaynağı gösterir."],
+      ["Download", "Konuşma geçmişini metin dosyası olarak indirir."],
+      ["Clear", "Conversation panelindeki geçmişi temizler; backend config veya promptları etkilemez."],
+      ["Auto-scroll", "Yeni mesaj geldikçe log paneli gibi en alta kayar; kullanıcı yukarı kaydırdıysa konumu korumaya çalışır."]
+    ]
+  },
+  promptsFields: {
+    title: "Prompt Editor kontrolleri",
+    body: ["Prompt profilleri Alice'in genel kişiliğini ve fallback system talimatını taşır."],
+    items: [
+      ["Profile select", "Düzenlenecek prompt profilini seçer."],
+      ["Name", "Profilin dosya/başlık adıdır."],
+      ["Description", "Profilin kısa açıklamasıdır; çalışma mantığını etkilemeyebilir ama yönetimi kolaylaştırır."],
+      ["Prompt text", "Alice'in genel karakter ve davranış metnidir."],
+      ["New", "Boş yeni profil oluşturur."],
+      ["Copy", "Seçili profili yeni bir profile kopyalar."],
+      ["Delete", "Seçili profili siler. Aktif profil silinirse başka profil seçmek gerekir."],
+      ["Activate", "Seçili profili fallback aktif prompt yapar."],
+      ["Save", "Profil metnini /data/prompts altına kaydeder."]
+    ]
+  },
+  configFields: {
+    title: "Config kontrolleri",
+    body: ["Config panelindeki değişiklikler Save ile kalıcı hale gelir."],
+    items: [
+      ["Secrets", "Export sırasında gerçek API key/token değerlerini dahil eder. Kapalıyken secretlar maskelenir."],
+      ["Import", "JSON config dosyası seçip içe aktarır."],
+      ["Export", "Mevcut config'i indirir."],
+      ["Save", "Ekrandaki config değişikliklerini /data/alice_config.json içine yazar."],
+      ["Provider switches", "Live, LLM ve TTS kartlarında hangi provider alanlarının düzenleneceğini seçer."],
+      ["Password/API key inputs", "Gizli değerleri password input olarak tutar; repo içine yazılmaz."],
+      ["Checkboxes", "Özellikleri aç/kapatır; bazıları backend'de hemen etkili olur, bazıları ESP reconnect/yeniden komut bekleyebilir."]
+    ]
+  },
+  panelEspFields: {
+    title: "Panel & ESP alanları",
+    body: ["Panel erişimi ve ESP bağlantısının temel adresleri burada tutulur."],
+    items: [
+      ["Panel port", "Web panelinin dinlediği porttur. Varsayılan 8099."],
+      ["Panel token", "REST, WebSocket ve UI erişimi için basit token korumasıdır. Boşsa auth kapalı kalabilir."],
+      ["Panel password", "UI için basit password korumasıdır."],
+      ["ESP base URL", "Robotun HTTP API adresidir; status poll ve /api/command buradan gider."],
+      ["ESP WebSocket URL", "Robotun canlı /ws adresidir; event, log, mic debug ve audio stream için kullanılır."],
+      ["ESP max auto reconnects", "Otomatik reconnect deneme limitidir. Limit dolunca manuel reconnect beklenir."],
+      ["ESP audio ACK timeout sec", "ESP audio start/chunk onayı için beklenecek süredir. Kısa olursa yavaş ağda erken hata verebilir."],
+      ["Debug logs", "Daha ayrıntılı log üretir."],
+      ["Safe mode", "Riskli/aktif davranışları azaltmak için güvenli çalışma anahtarıdır."]
+    ]
+  },
+  powerSleepFields: {
+    title: "Power & Sleep alanları",
+    body: ["Bu ayarlar panelin ESP'ye otomatik uyku/uyanma komutu gönderip göndermeyeceğini belirler."],
+    items: [
+      ["Power scheduler", "Zamana veya idle durumuna göre otomatik sleep kararlarını tamamen açar/kapatır."],
+      ["Soft sleep after idle", "Robot belirlenen süre boyunca kullanılmazsa soft sleep moduna geçmeyi dener."],
+      ["Night sleep schedule", "Night start ve Night end arasındaki saatlerde night sleep modunu hedefler."],
+      ["Soft idle minutes", "Soft sleep için kaç dakika aktivite olmaması gerektiğidir."],
+      ["Night start", "Gece uyku penceresinin başlangıç saatidir."],
+      ["Night end", "Gece uyku penceresinin bitiş saatidir."],
+      ["Öncelik", "Night sleep saat aralığı soft sleep'ten daha baskındır; saat aralığı bitince aktif moda dönülür."]
+    ]
+  },
+  liveVoiceFields: {
+    title: "Live Voice alanları",
+    body: ["Live Voice ayarları wake sonrası canlı konuşma oturumunun modelini, VAD kararını ve prompt fallback'ini belirler."],
+    items: [
+      ["OpenAI Live / Gemini Live / None", "Aktif canlı provider görünümünü seçer. None live hattı kapatır."],
+      ["Active live", "Gerçekte kullanılacak realtime provider değeridir."],
+      ["Input rate", "ESP mikrofon PCM sample rate değeridir. ESP ile uyumlu olmalıdır."],
+      ["Response timeout ms", "Realtime cevap beklerken üst zaman sınırıdır."],
+      ["Transcript wait ms", "STT transkripti geç gelirse kısa süre daha beklemek için kullanılır."],
+      ["Turn detection", "Konuşma bitiş kararını server_vad veya semantic_vad ile belirler."],
+      ["Semantic eagerness", "semantic_vad seçiliyken modelin turn kapatmaya ne kadar istekli olduğunu ayarlar."],
+      ["VAD threshold", "server_vad hassasiyetidir. Düşük değer daha kolay tetikler, yüksek değer daha seçicidir."],
+      ["Silence ms", "Konuşma bittikten sonra turn kapanması için gereken sessizlik süresidir."],
+      ["Prefix padding ms", "Konuşma başındaki heceleri kaçırmamak için önceki kısa sesi de dahil eder."],
+      ["Noise reduction", "Realtime input noise reduction modudur: near_field, far_field veya none."],
+      ["Live instructions", "Canlı modele verilecek kişilik/davranış talimatıdır."],
+      ["OpenAI API key", "OpenAI Realtime erişim anahtarıdır."],
+      ["OpenAI Model", "Canlı konuşma modelidir; örneğin gpt-realtime-2."],
+      ["Realtime WS URL", "OpenAI Realtime WebSocket endpointidir; özel proxy yoksa varsayılan kalabilir."],
+      ["Realtime STT model", "OpenAI tarafındaki realtime transkripsiyon modelidir."],
+      ["Realtime STT prompt", "Transkripsiyon ipucudur; Türkçe isimler ve sık yanlış duyulan kelimeler için kullanılır."],
+      ["Gemini API key", "Gemini Live profili için API keydir."],
+      ["Gemini model", "Gemini Live için model adıdır."],
+      ["Voice name", "Gemini Live ses profili adıdır."],
+      ["API version", "Gemini Live API versiyonudur."],
+      ["Output rate", "Gemini Live audio output sample rate hedefidir."],
+      ["Start/End sensitivity", "Gemini Live konuşma başlangıç ve bitiş hassasiyetidir."]
+    ]
+  },
+  sttVadFields: {
+    title: "Classic STT & VAD alanları",
+    body: ["Classic STT ayarları faster-whisper ve yerel VAD denemeleri içindir."],
+    items: [
+      ["STT provider", "Kullanılacak classic STT motoru. Şu an faster_whisper hedeflenir."],
+      ["STT model", "Whisper model boyutudur; küçük model hızlı, büyük model daha doğru olabilir."],
+      ["Model cache", "Model dosyalarının saklanacağı dizindir; tekrar indirmeyi önler."],
+      ["Language", "Transkripsiyon dili. Türkçe için tr kullanmak dil kaymasını azaltır."],
+      ["Compute type", "Model hesaplama hassasiyetidir; int8 daha hafif, float türleri daha ağırdır."],
+      ["Beam size", "STT arama genişliğidir; artırmak gecikmeyi yükseltebilir."],
+      ["STT VAD filter", "Whisper/faster-whisper tarafındaki ek VAD filtresini açar."],
+      ["Live VAD provider", "silero veya energy tabanlı canlı VAD kararını seçer."],
+      ["Silero start prob", "Silero'nun konuşma başladı demesi için gereken olasılık eşiği."],
+      ["Silero end prob", "Silero'nun konuşma bitti demesi için gereken olasılık eşiği."],
+      ["Energy start RMS", "Energy VAD'de konuşma başlangıç RMS eşiği."],
+      ["Energy end RMS", "Energy VAD'de konuşma bitiş RMS eşiği."],
+      ["Live silence ms", "Konuşma bitişi için gereken sessizlik süresi."],
+      ["Live max utterance ms", "Tek konuşma turn'ü için maksimum süre."],
+      ["Live mic WS", "ESP'den canlı mikrofon WebSocket akışını kabul eder."],
+      ["Live VAD", "Canlı mikrofon akışında VAD kararını aktif eder."]
+    ]
+  },
+  homeAssistantFields: {
+    title: "Home Assistant alanları",
+    body: ["HA Bridge allowlist dışına çıkmadan Home Assistant kontrolü yapmayı hedefler."],
+    items: [
+      ["HA API base", "Add-on içinden Home Assistant API adresidir."],
+      ["HA bridge", "Home Assistant köprüsünü açar/kapatır."],
+      ["Route home control", "Ev kontrolü/hava durumu niyetlerini LLM'den önce HA bridge tarafında yakalamaya çalışır."],
+      ["Allowed entity IDs", "Alice'in görebileceği tek entity listesidir. Burada olmayan entity okunmaz/kontrol edilmez."],
+      ["Entity aliases", "Allowlist'teki entityler için Türkçe takma adlardır. Yeni izin vermez, sadece eşleştirmeyi iyileştirir."],
+      ["Weather kullanımı", "weather.* entity allowlist içindeyse hava durumu sorularında state ve attribute bilgileri bu yoldan okunabilir."],
+      ["Servis çağrıları", "Işık, switch ve benzeri komutlar allowlist'teki entityye bağlı güvenli servis çağrısına çevrilir."]
+    ]
+  },
+  llmFields: {
+    title: "LLM alanları",
+    body: ["Bu alanlar klasik metin modeli hattını yönetir; live konuşma açıkken ana cevap OpenAI Live'dan gelebilir."],
+    items: [
+      ["Provider buttons", "Düzenlenecek provider kartını seçer."],
+      ["Active LLM", "Klasik pipeline'ın kullanacağı provider değeridir."],
+      ["Temperature", "Cevap yaratıcılığıdır; düşük değer daha tutarlı, yüksek değer daha serbesttir."],
+      ["Streaming", "LLM cevabını parça parça almaya çalışır."],
+      ["LLM system prompt", "Doluysa aktif Prompt Editor profilinin önüne geçer."],
+      ["OpenAI", "OpenAI API key, model ve base URL bilgileri."],
+      ["OpenRouter", "OpenRouter üzerinden farklı modelleri denemek için API key/model/base URL."],
+      ["Groq", "Groq'un OpenAI uyumlu chat endpoint'i için API key/model/base URL."],
+      ["Gemini", "Gemini classic text modeli için API key/model/base URL."],
+      ["OpenAI Compatible", "LM Studio, Ollama proxy, vLLM veya başka uyumlu endpointler için genel profil."],
+      ["Mock", "Gerçek LLM çağrısı yapmadan test cevabı üretir."],
+      ["None", "Klasik LLM hattını kapatır veya sadece özel route/fallback kullanımına bırakır."]
+    ]
+  },
+  ttsFields: {
+    title: "TTS alanları",
+    body: ["TTS profilleri ayrı saklanır; aktif provider dışında kalan key ve ayarlar korunur."],
+    items: [
+      ["Active TTS", "Kullanılacak ses sağlayıcısını seçer."],
+      ["PCM rate", "ESP'ye hedeflenen PCM sample rate bilgisidir."],
+      ["ESP start buffer ms", "ESP tarafında ses başlamadan önce toplanacak tampon süresidir."],
+      ["ESP silence prefix ms", "Ses başına eklenecek kısa sessizliktir; ilk hece kesilmesini azaltabilir."],
+      ["Mic response", "Mic capture sonrası asistan cevabı, echo veya echo + assistant davranışını seçer."],
+      ["TTS enabled", "Kapalıysa metin üretilebilir ama seslendirme atlanır."],
+      ["Stream TTS to ESP", "Sesin ESP'ye WebSocket üzerinden gönderilip gönderilmeyeceğini belirler."],
+      ["Barge-in cancel", "Yeni konuşma algılanınca mevcut cevabı kesmeye izin verir."],
+      ["OpenAI API/model/voice", "OpenAI TTS profilidir. Instructions seslendirme tarzını yönlendirebilir."],
+      ["Cartesia API/model/voice", "Cartesia profilidir; kredi/limit hataları bu provider'dan gelebilir."],
+      ["ElevenLabs API/model/voice", "ElevenLabs profilidir. Output format ve latency mode ses biçimi/gecikme dengesini ayarlar."],
+      ["Google AI API/model/voice", "AI Studio tabanlı Gemini TTS profilidir. Stream destekli yanıtlarda ilk audio süresi Latency Timeline'da ölçülür."],
+      ["Google AI prompt prefix", "Sadece seslendirme metninin üslubunu yönlendirmek içindir; uzun karakter promptunu buraya yığmak yerine Prompt Editor/Live instructions kullan."],
+      ["Google Cloud credentials", "Google Cloud TTS service account JSON kimliğidir."],
+      ["Google Cloud voice/language/gender", "Cloud TTS ses adı, dil kodu ve SSML gender seçimidir."]
+    ]
+  }
+});
 
 const $ = (id) => document.getElementById(id);
 const text = (id, value) => { const el = $(id); if (el) el.textContent = value ?? "-"; };
