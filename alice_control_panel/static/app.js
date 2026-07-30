@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.177";
+const UI_VERSION = "0.1.178";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -228,8 +228,8 @@ const HELP_DETAIL_TEXTS = {
     items: [
       ["Temp", "ESP ic sicakligi. 70 C ustu WARM, 78 C ustu HOT olarak isaretlenir; surekli yuksekse reset veya kararsizlik nedeni olabilir."],
       ["CPU", "ESP tarafindaki ortalama CPU yuku ve varsa cekirdek dagilimi. Kisa anlik snapshot oldugu icin trend icin arka arkaya bakmak gerekir."],
-      ["RAM", "Internal RAM free/total ozetidir. Free veya largest block cok duserse audio, JSON veya task allocation sorunlari gorulebilir."],
-      ["PSRAM", "PSRAM free/total ozetidir. Ses bufferlari ve buyuk veri yapilari icin genel rahatlik payini gosterir."],
+      ["RAM", "Internal RAM kullanilan/toplam ozetidir. Free, min free veya largest block cok duserse audio, JSON veya task allocation sorunlari gorulebilir."],
+      ["PSRAM", "PSRAM kullanilan/toplam ozetidir. Ses bufferlari ve buyuk veri yapilari icin genel rahatlik payini gosterir."],
       ["Reset", "Son acilisin reset sebebidir. brownout, watchdog, panic, power_glitch veya cpu_lockup CHECK/WARN olarak degerlendirilir."],
       ["Freq", "ESP CPU frekansidir. Alice runtime genelde performans icin 240 MHz'e cikar."]
     ]
@@ -1589,11 +1589,13 @@ async function loadStatus() {
   text("wifi-rssi", esp.wifi?.rssi ? `${esp.wifi.rssi} dBm` : "RSSI n/a");
   text("cpu-status", health.cpu_percent == null ? "n/a" : `${health.cpu_percent}%`);
   text("ram-status", `RAM ${health.ram_used_mb || "n/a"} MB`);
-  text("heap-status", esp.heap_free || "n/a");
-  text("heap-min", esp.heap_min ? `min ${esp.heap_min}` : "offline");
+  const espSystem = esp.system && typeof esp.system === "object" ? esp.system : {};
+  const espRam = espSystem.ram && typeof espSystem.ram === "object" ? espSystem.ram : {};
+  text("heap-status", formatMemoryBrief({ ...espRam, free: espRam.free ?? esp.heap_free }));
+  text("heap-min", formatMemoryFreeBrief({ ...espRam, min_free: espRam.min_free ?? esp.heap_min }));
   text("server-uptime", fmtSeconds(health.uptime_sec));
   text("esp-uptime", `ESP ${fmtSeconds(esp.uptime_sec)}`);
-  renderEspHealth(esp.system || {});
+  renderEspHealth(espSystem);
   const liveMode = Boolean(realtime.enabled || realtime.active || realtime.connected);
   const liveProvider = `${realtime.provider || "openai"} realtime`;
   text("conn-stt", liveMode ? `${liveProvider} / ${realtime.transcription_model || "stt n/a"}` : data.stt?.provider || "faster_whisper");
@@ -1669,9 +1671,21 @@ function formatMemoryBrief(memory) {
   const free = finiteNumber(memory.free);
   const total = finiteNumber(memory.total);
   if (free === null && total === null) return "n/a";
-  if (free !== null && total !== null && total > 0) return `${formatBytes(free)}/${formatBytes(total)}`;
+  if (free !== null && total !== null && total > 0) {
+    const used = Math.max(0, total - free);
+    return `${formatBytes(used)}/${formatBytes(total)}`;
+  }
   if (free !== null) return `free ${formatBytes(free)}`;
-  return formatBytes(total);
+  return `total ${formatBytes(total)}`;
+}
+
+function formatMemoryFreeBrief(memory) {
+  const free = finiteNumber(memory.free);
+  const minFree = finiteNumber(memory.min_free);
+  const parts = [];
+  if (free !== null) parts.push(`free ${formatBytes(free)}`);
+  if (minFree !== null) parts.push(`min ${formatBytes(minFree)}`);
+  return parts.length ? parts.join(" / ") : "offline";
 }
 
 function formatMotionSensor(hw) {
