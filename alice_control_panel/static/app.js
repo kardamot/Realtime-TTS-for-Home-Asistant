@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.175";
+const UI_VERSION = "0.1.176";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -799,9 +799,9 @@ Object.assign(HELP_TEXTS, {
   connections: {
     title: "Connections",
     body: [
-      "Robot, canli WebSocket, ses hatti ve Home Assistant koprusunun kisa baglanti ozetidir.",
-      "ESP HTTP status, ESP WS canli event/audio/mikrofon kanali, STT/LLM/TTS secimleri ve HA Bridge hazirlik durumu burada kompakt sekilde gorunur.",
-      "Sicaklik, reset sebebi ve bellek gibi sistem sagligi bilgileri hemen altindaki ESP Health panelinde ayrica izlenir."
+      "Canli WebSocket, ses hatti ve provider durumlarinin kisa baglanti ozetidir.",
+      "Robot online ve Wi-Fi bilgisi ust durum kartlarinda, HA allowlist ise Config/HA ayarlarinda takip edilir; burada tekrar edilmez.",
+      "Baglanti koparsa ESP WS satiri, reconnect sayaci, son hata satiri ve Logs paneli birlikte ipucu verir."
     ]
   },
   espHealth: {
@@ -810,6 +810,24 @@ Object.assign(HELP_TEXTS, {
       "ESP tarafindan bildirilen hafif sistem sagligi ozetidir. Sicaklik, CPU, internal RAM, PSRAM ve son reset sebebini tek bakista gosterir.",
       "Bu panel terminaldeki SYS_MON bilgisinin kisa web karsiligidir. Resetler, isiya bagli riskler veya bellek daralmasi gibi ipuclari icin kullanilir.",
       "OK normal, WARM/HOT sicaklik uyarisi, CHECK ise watchdog/brownout/panic gibi dikkat isteyen son reset sebebi anlamina gelir."
+    ]
+  }
+});
+
+Object.assign(HELP_DETAIL_TEXTS, {
+  connectionsFields: {
+    title: "Connections detaylari",
+    body: [
+      "Bu panel tekrar eden Robot/Wi-Fi/HA allowlist bilgisini tasimaz; yalnizca canli servis ve aktarim kanallarini ozetler.",
+      "Kopma veya zaman asimi olursa kisa durum burada, ayrintili hata ise Logs panelinde gorunur."
+    ],
+    items: [
+      ["ESP WS", "Robotun /ws canli WebSocket baglantisidir. Audio, event, log ve mic debug icin kritik yoldur."],
+      ["STT", "Aktif konusmayi metne cevirme motorunu gosterir. Live Voice aciksa realtime STT modeli burada ozetlenir."],
+      ["LLM", "Aktif cevap uretme hatti ve modelidir. Live Voice aciksa realtime model burada gorunur."],
+      ["TTS", "Aktif TTS provider ve hedef PCM rate ozetidir."],
+      ["Reconnects", "ESP kopunca yapilan otomatik reconnect sayisi ve limitidir."],
+      ["Last error", "Son baglanti veya komut hatasini kucuk fontla gosterir; uzun metinler paneli buyutmeden kaydirilir."]
     ]
   }
 });
@@ -1580,20 +1598,9 @@ async function loadStatus() {
   renderEspHealth(esp.system || {});
   const liveMode = Boolean(realtime.enabled || realtime.active || realtime.connected);
   const liveProvider = `${realtime.provider || "openai"} realtime`;
-  text("conn-esp", esp.online ? "online" : "offline");
   text("conn-stt", liveMode ? `${liveProvider} / ${realtime.transcription_model || "stt n/a"}` : data.stt?.provider || "faster_whisper");
   text("conn-llm", liveMode ? `${liveProvider} / ${realtime.model || "model n/a"}` : `${data.llm?.provider || "openai"} / ${data.llm?.model || "n/a"}`);
   text("conn-tts", `${data.tts?.provider || "openai"} / ${data.tts?.pcm_sample_rate || "n/a"}`);
-  text(
-    "conn-ha",
-    data.ha_bridge?.connected
-      ? data.ha_bridge?.entity_scope
-        ? `allowlist ${data.ha_bridge?.explicit_entity_count || data.ha_bridge?.allowlist_count || 0}`
-        : "no allowlist"
-      : data.ha_bridge?.enabled
-        ? "not ready"
-        : "disabled"
-  );
   text("conn-reconnects", formatReconnects(esp));
   text("conn-esp-ws", esp.ws_connected ? "connected" : "offline");
   setAutoText("last-error", esp.last_error || esp.last_ws_error || "");

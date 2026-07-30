@@ -13,7 +13,7 @@
   --red: #ff6961;
   --cyan: #39c5bb;
   --dash-gap: 12px;
-  --connections-panel-h: 282px;
+  --connections-panel-h: 248px;
   --radar-panel-h: 548px;
   --pipeline-panel-h: 460px;
   --latency-panel-h: 620px;
@@ -367,7 +367,7 @@ nav a:hover { background: #121a25; color: var(--text); }
   height: var(--connections-panel-h);
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2,minmax(0,1fr));
+  grid-template-columns: minmax(0,.94fr) minmax(0,1.06fr);
   gap: var(--dash-gap);
 }
 
@@ -388,6 +388,33 @@ nav a:hover { background: #121a25; color: var(--text); }
 .connections-panel header,
 .esp-health-panel header {
   margin-bottom: 5px;
+  gap: 6px;
+}
+
+.connections-panel .help-title,
+.esp-health-panel .help-title {
+  gap: 4px;
+}
+
+.connections-panel h2,
+.esp-health-panel h2 {
+  font-size: 18px;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.connections-panel .help-trigger,
+.esp-health-panel .help-trigger {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  font-size: 10px;
+}
+
+.connections-panel .help-trigger-detail,
+.esp-health-panel .help-trigger-detail {
+  width: 24px;
+  padding: 0 5px;
 }
 
 .connections-panel .kv {
