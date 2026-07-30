@@ -13,7 +13,7 @@
   --red: #ff6961;
   --cyan: #39c5bb;
   --dash-gap: 12px;
-  --connections-panel-h: 248px;
+  --connections-panel-h: 216px;
   --radar-panel-h: 548px;
   --pipeline-panel-h: 460px;
   --latency-panel-h: 620px;
@@ -422,19 +422,6 @@ nav a:hover { background: #121a25; color: var(--text); }
   grid-template-columns: minmax(0,1fr);
   gap: 4px;
   flex: 0 0 auto;
-}
-
-.connections-panel .error {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: 24px;
-  margin: 4px 0 0;
-  overflow: auto;
-  font-size: 10px;
-  line-height: 1.25;
-}
-.connections-panel .error:empty {
-  display: none;
 }
 
 .health-grid {
@@ -1796,7 +1783,6 @@ label.wide { grid-column: 1 / -1; }
 }
 .log-panel .log-list { flex: 1 1 auto; }
 .log-list::-webkit-scrollbar,
-.connections-panel .error::-webkit-scrollbar,
 .pipeline-feed::-webkit-scrollbar,
 .pipeline-feed-text::-webkit-scrollbar,
 .pipeline-messages::-webkit-scrollbar,
@@ -1807,7 +1793,6 @@ label.wide { grid-column: 1 / -1; }
   width: 10px;
 }
 .log-list::-webkit-scrollbar-track,
-.connections-panel .error::-webkit-scrollbar-track,
 .pipeline-feed::-webkit-scrollbar-track,
 .pipeline-feed-text::-webkit-scrollbar-track,
 .pipeline-messages::-webkit-scrollbar-track,
@@ -1819,7 +1804,6 @@ label.wide { grid-column: 1 / -1; }
   border-radius: 999px;
 }
 .log-list::-webkit-scrollbar-thumb,
-.connections-panel .error::-webkit-scrollbar-thumb,
 .pipeline-feed::-webkit-scrollbar-thumb,
 .pipeline-feed-text::-webkit-scrollbar-thumb,
 .pipeline-messages::-webkit-scrollbar-thumb,

@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.176";
+const UI_VERSION = "0.1.177";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -511,8 +511,7 @@ Object.assign(HELP_DETAIL_TEXTS, {
       ["LLM", "Aktif klasik LLM provider/model özetidir. Live Voice açıksa canlı model ayrıca Voice Pipeline'da görünür."],
       ["TTS", "Aktif TTS provider ve hedef PCM rate özetidir."],
       ["HA Bridge", "Home Assistant entegrasyonunun allowlist ile hazır olup olmadığını gösterir."],
-      ["Reconnects", "ESP kopunca yapılan otomatik reconnect sayısı ve limitidir."],
-      ["Last error", "Son bağlantı veya komut hatasını küçük fontla gösterir; uzun metinler paneli büyütmeden kaydırılır."]
+      ["Reconnects", "ESP kopunca yapılan otomatik reconnect sayısı ve limitidir."]
     ]
   },
   logsFields: {
@@ -826,8 +825,7 @@ Object.assign(HELP_DETAIL_TEXTS, {
       ["STT", "Aktif konusmayi metne cevirme motorunu gosterir. Live Voice aciksa realtime STT modeli burada ozetlenir."],
       ["LLM", "Aktif cevap uretme hatti ve modelidir. Live Voice aciksa realtime model burada gorunur."],
       ["TTS", "Aktif TTS provider ve hedef PCM rate ozetidir."],
-      ["Reconnects", "ESP kopunca yapilan otomatik reconnect sayisi ve limitidir."],
-      ["Last error", "Son baglanti veya komut hatasini kucuk fontla gosterir; uzun metinler paneli buyutmeden kaydirilir."]
+      ["Reconnects", "ESP kopunca yapilan otomatik reconnect sayisi ve limitidir."]
     ]
   }
 });
@@ -1603,7 +1601,6 @@ async function loadStatus() {
   text("conn-tts", `${data.tts?.provider || "openai"} / ${data.tts?.pcm_sample_rate || "n/a"}`);
   text("conn-reconnects", formatReconnects(esp));
   text("conn-esp-ws", esp.ws_connected ? "connected" : "offline");
-  setAutoText("last-error", esp.last_error || esp.last_ws_error || "");
   text("hw-mic", esp.hardware?.mic || "unknown");
   text("hw-speaker", esp.hardware?.speaker || "unknown");
   updateSpeakerVolumeUi(esp);
