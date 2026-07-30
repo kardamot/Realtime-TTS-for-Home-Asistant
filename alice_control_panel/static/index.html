@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.172" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.172" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.174" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.174" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.172" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.174" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.172" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.174" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -68,19 +68,33 @@
         </section>
 
         <section class="grid">
-          <section class="panel span-4 connections-panel">
-            <header><h2>Connections</h2><span id="esp-pill" class="pill warn">MOCK</span></header>
-            <div class="kv">
-              <div><span>ESP</span><b id="conn-esp">offline</b></div>
-              <div><span>ESP WS</span><b id="conn-esp-ws">offline</b></div>
-              <div><span>STT</span><b id="conn-stt">faster_whisper</b></div>
-              <div><span>LLM</span><b id="conn-llm">openai</b></div>
-              <div><span>TTS</span><b id="conn-tts">openai</b></div>
-              <div><span>HA Bridge</span><b id="conn-ha">offline</b></div>
-              <div><span>Reconnects</span><b id="conn-reconnects">0</b></div>
-            </div>
-            <p id="last-error" class="error" data-autoscroll></p>
-          </section>
+          <div class="span-4 connection-stack">
+            <section class="panel connections-panel">
+              <header><h2>Connections</h2><span id="esp-pill" class="pill warn">MOCK</span></header>
+              <div class="kv">
+                <div><span>ESP</span><b id="conn-esp">offline</b></div>
+                <div><span>ESP WS</span><b id="conn-esp-ws">offline</b></div>
+                <div><span>STT</span><b id="conn-stt">faster_whisper</b></div>
+                <div><span>LLM</span><b id="conn-llm">openai</b></div>
+                <div><span>TTS</span><b id="conn-tts">openai</b></div>
+                <div><span>HA Bridge</span><b id="conn-ha">offline</b></div>
+                <div><span>Reconnects</span><b id="conn-reconnects">0</b></div>
+              </div>
+              <p id="last-error" class="error" data-autoscroll></p>
+            </section>
+
+            <section id="esp-health" class="panel esp-health-panel">
+              <header><h2>ESP Health</h2><span id="esp-health-pill" class="pill info">N/A</span></header>
+              <div class="health-grid">
+                <div><span>Temp</span><b id="esp-temp">n/a</b></div>
+                <div><span>CPU</span><b id="esp-cpu">n/a</b></div>
+                <div><span>RAM</span><b id="esp-ram">n/a</b></div>
+                <div><span>PSRAM</span><b id="esp-psram">n/a</b></div>
+                <div class="wide"><span>Reset</span><b id="esp-reset">n/a</b></div>
+                <div class="wide"><span>Freq</span><b id="esp-cpu-freq">n/a</b></div>
+              </div>
+            </section>
+          </div>
 
           <section id="logs" class="panel span-8 log-panel row-span-2">
             <header>
@@ -588,6 +602,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.172"></script>
+  <script src="/app.js?v=0.1.174"></script>
   </body>
 </html>

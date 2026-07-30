@@ -13,7 +13,7 @@
   --red: #ff6961;
   --cyan: #39c5bb;
   --dash-gap: 12px;
-  --connections-panel-h: 216px;
+  --connections-panel-h: 306px;
   --radar-panel-h: 548px;
   --pipeline-panel-h: 460px;
   --latency-panel-h: 620px;
@@ -363,10 +363,12 @@ nav a:hover { background: #121a25; color: var(--text); }
   line-height: 1.4;
 }
 
-.connections-panel {
+.connection-stack {
   height: var(--connections-panel-h);
   min-height: 0;
-  overflow: hidden;
+  display: grid;
+  grid-template-rows: minmax(168px, 1fr) minmax(112px, auto);
+  gap: var(--dash-gap);
 }
 
 .radar-panel {
@@ -375,33 +377,75 @@ nav a:hover { background: #121a25; color: var(--text); }
   overflow: hidden;
 }
 
-.connections-panel {
+.connections-panel,
+.esp-health-panel {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.connections-panel header {
-  margin-bottom: 8px;
+.connections-panel header,
+.esp-health-panel header {
+  margin-bottom: 5px;
 }
 
 .connections-panel .kv {
   display: grid;
   grid-template-columns: repeat(2,minmax(0,1fr));
-  gap: 5px;
+  gap: 4px;
   flex: 0 0 auto;
 }
 
 .connections-panel .error {
   flex: 0 1 auto;
   min-height: 0;
-  max-height: 42px;
-  margin: 6px 0 0;
+  max-height: 24px;
+  margin: 4px 0 0;
   overflow: auto;
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: 10px;
+  line-height: 1.25;
 }
 .connections-panel .error:empty {
   display: none;
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 4px;
+  min-height: 0;
+}
+
+.health-grid div {
+  min-width: 0;
+  min-height: 38px;
+  padding: 5px 6px;
+  border: 1px solid rgba(100,169,255,.14);
+  border-radius: 8px;
+  background: var(--panel2);
+}
+
+.health-grid .wide {
+  grid-column: span 1;
+}
+
+.health-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+.health-grid b {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pill { display: inline-flex; align-items: center; justify-content: center; min-height: 24px; border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 800; text-transform: uppercase; }
@@ -416,18 +460,18 @@ nav a:hover { background: #121a25; color: var(--text); }
 .kv span, label span { color: var(--muted); font-size: 12px; }
 .kv b { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .connections-panel .kv div {
-  min-height: 32px;
-  padding: 5px 7px;
+  min-height: 25px;
+  padding: 4px 6px;
   border: 1px solid rgba(100,169,255,.14);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--panel2);
 }
 .connections-panel .kv b {
   max-width: none;
-  font-size: 12px;
+  font-size: 11px;
 }
 .connections-panel .kv span {
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .radar-panel {
@@ -1833,6 +1877,7 @@ label.wide { grid-column: 1 / -1; }
   .metrics { grid-template-columns: repeat(auto-fit,minmax(76px,1fr)); gap: 6px; }
   .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: span 12; }
   .row-span-2 { grid-row: span 1; }
+  .connection-stack,
   .connections-panel,
   .radar-panel {
     height: auto;

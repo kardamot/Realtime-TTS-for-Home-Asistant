@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.172";
+const UI_VERSION = "0.1.174";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -120,6 +120,14 @@ const HELP_TEXTS = {
       "Hata ayıklarken en değerli yer burasıdır: bağlantı kopmaları, TTS sağlayıcı hataları, VAD/STT kararları ve HA allowlist okumaları burada görünür."
     ]
   },
+  espHealth: {
+    title: "ESP Health",
+    body: [
+      "ESP tarafindan bildirilen hafif sistem sagligi ozetidir. Sicaklik, CPU, internal RAM, PSRAM ve son reset sebebini tek bakista gosterir.",
+      "Bu panel terminaldeki SYS_MON bilgisinin kisa web karsiligidir. Resetler, isiya bagli riskler veya bellek daralmasi gibi ipuclari icin kullanilir.",
+      "OK normal, WARM/HOT sicaklik uyarisi, CHECK ise watchdog/brownout/panic gibi dikkat isteyen son reset sebebi anlamina gelir."
+    ]
+  },
   hardware: {
     title: "Hardware",
     body: [
@@ -212,6 +220,20 @@ const HELP_TEXTS = {
 };
 
 const HELP_DETAIL_TEXTS = {
+  espHealthFields: {
+    title: "ESP Health alanlari",
+    body: [
+      "Bu alanlar ESP'nin kendi status cevabindan gelir. Terminalde SYS_MON ile gordugun bilgilerin kisa ve panelde kalici gorunen halidir."
+    ],
+    items: [
+      ["Temp", "ESP ic sicakligi. 70 C ustu WARM, 78 C ustu HOT olarak isaretlenir; surekli yuksekse reset veya kararsizlik nedeni olabilir."],
+      ["CPU", "ESP tarafindaki ortalama CPU yuku ve varsa cekirdek dagilimi. Kisa anlik snapshot oldugu icin trend icin arka arkaya bakmak gerekir."],
+      ["RAM", "Internal RAM free/total ozetidir. Free veya largest block cok duserse audio, JSON veya task allocation sorunlari gorulebilir."],
+      ["PSRAM", "PSRAM free/total ozetidir. Ses bufferlari ve buyuk veri yapilari icin genel rahatlik payini gosterir."],
+      ["Reset", "Son acilisin reset sebebidir. brownout, watchdog, panic, power_glitch veya cpu_lockup CHECK/WARN olarak degerlendirilir."],
+      ["Freq", "ESP CPU frekansidir. Alice runtime genelde performans icin 240 MHz'e cikar."]
+    ]
+  },
   panelEspFields: {
     title: "Panel & ESP alanlari",
     body: [
@@ -330,6 +352,7 @@ const HELP_DETAIL_TEXTS = {
 
 const HELP_TARGETS = [
   [".connections-panel > header h2", "connections", "connectionsFields"],
+  ["#esp-health > header h2", "espHealth", "espHealthFields"],
   ["#logs > header h2", "logs", "logsFields"],
   ["#radar > header h2", "radar", "radarFields"],
   ["#pipeline > header h2", "pipeline", "pipelineFields"],
@@ -432,7 +455,7 @@ Object.assign(HELP_TEXTS, {
     body: [
       "Alice'in boşta kalınca veya gece saatlerinde daha sakin/güç tasarruflu moda geçmesini yönetir.",
       "Soft sleep gündüz boşta kalınca devreye girer; night sleep belirlenen saat aralığında daha derin uyku davranışı ister.",
-      "Bu scheduler ESP offline iken komut yağdırmaz; ESP tekrar bağlandığında hedef moda geçmeye çalışır."
+      "Radar taze hedef/kişi görüyorsa soft sleep'e geçilmez; Alice soft sleep'teyken radar tekrar kişi görürse aktif moda uyandırılır. Night sleep saat kuralı ise daha baskın kalır."
     ]
   },
   liveVoice: {
@@ -663,7 +686,8 @@ Object.assign(HELP_DETAIL_TEXTS, {
       ["Soft idle minutes", "Soft sleep için kaç dakika aktivite olmaması gerektiğidir."],
       ["Night start", "Gece uyku penceresinin başlangıç saatidir."],
       ["Night end", "Gece uyku penceresinin bitiş saatidir."],
-      ["Öncelik", "Night sleep saat aralığı soft sleep'ten daha baskındır; saat aralığı bitince aktif moda dönülür."]
+      ["Radar presence", "Radar taze hedef/kişi görüyorsa gündüz soft sleep engellenir. Soft sleep sırasında radar kişi görürse power manager sleep_mode_off göndererek uyandırır."],
+      ["Öncelik", "Night sleep saat aralığı soft sleep ve radar presence kuralından daha baskındır; saat aralığı bitince aktif moda dönülür."]
     ]
   },
   liveVoiceFields: {
@@ -767,6 +791,25 @@ Object.assign(HELP_DETAIL_TEXTS, {
       ["Google AI prompt prefix", "Sadece seslendirme metninin üslubunu yönlendirmek içindir; uzun karakter promptunu buraya yığmak yerine Prompt Editor/Live instructions kullan."],
       ["Google Cloud credentials", "Google Cloud TTS service account JSON kimliğidir."],
       ["Google Cloud voice/language/gender", "Cloud TTS ses adı, dil kodu ve SSML gender seçimidir."]
+    ]
+  }
+});
+
+Object.assign(HELP_TEXTS, {
+  connections: {
+    title: "Connections",
+    body: [
+      "Robot, canli WebSocket, ses hatti ve Home Assistant koprusunun kisa baglanti ozetidir.",
+      "ESP HTTP status, ESP WS canli event/audio/mikrofon kanali, STT/LLM/TTS secimleri ve HA Bridge hazirlik durumu burada kompakt sekilde gorunur.",
+      "Sicaklik, reset sebebi ve bellek gibi sistem sagligi bilgileri hemen altindaki ESP Health panelinde ayrica izlenir."
+    ]
+  },
+  espHealth: {
+    title: "ESP Health",
+    body: [
+      "ESP tarafindan bildirilen hafif sistem sagligi ozetidir. Sicaklik, CPU, internal RAM, PSRAM ve son reset sebebini tek bakista gosterir.",
+      "Bu panel terminaldeki SYS_MON bilgisinin kisa web karsiligidir. Resetler, isiya bagli riskler veya bellek daralmasi gibi ipuclari icin kullanilir.",
+      "OK normal, WARM/HOT sicaklik uyarisi, CHECK ise watchdog/brownout/panic gibi dikkat isteyen son reset sebebi anlamina gelir."
     ]
   }
 });
@@ -1013,6 +1056,26 @@ function fmtClock(value, withMs = false) {
   if (!withMs) return date.toLocaleTimeString();
   const base = date.toLocaleTimeString();
   return `${base}.${String(date.getMilliseconds()).padStart(3, "0")}`;
+}
+
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatBytes(value) {
+  const bytes = finiteNumber(value);
+  if (bytes === null) return "n/a";
+  const units = ["B", "KB", "MB"];
+  let current = bytes;
+  let unitIndex = 0;
+  while (Math.abs(current) >= 1024 && unitIndex < units.length - 1) {
+    current /= 1024;
+    unitIndex += 1;
+  }
+  const fixed = unitIndex === 0 ? current.toFixed(0) : current < 10 ? current.toFixed(2) : current.toFixed(1);
+  return `${fixed} ${units[unitIndex]}`;
 }
 
 function tone(value) {
@@ -1514,6 +1577,7 @@ async function loadStatus() {
   text("heap-min", esp.heap_min ? `min ${esp.heap_min}` : "offline");
   text("server-uptime", fmtSeconds(health.uptime_sec));
   text("esp-uptime", `ESP ${fmtSeconds(esp.uptime_sec)}`);
+  renderEspHealth(esp.system || {});
   const liveMode = Boolean(realtime.enabled || realtime.active || realtime.connected);
   const liveProvider = `${realtime.provider || "openai"} realtime`;
   text("conn-esp", esp.online ? "online" : "offline");
@@ -1562,6 +1626,48 @@ async function loadStatus() {
   renderMicDebug(pipe.mic_debug || {});
   renderTurnTiming(realtime.latency || {}, pipe.timeline || []);
   if (!configDirty) fillConfig();
+}
+
+function renderEspHealth(system) {
+  const temp = finiteNumber(system.temperature_c);
+  const cpu = finiteNumber(system.cpu_percent);
+  const cpuMhz = finiteNumber(system.cpu_mhz);
+  const cores = Array.isArray(system.cpu_cores) ? system.cpu_cores.map(finiteNumber).filter((v) => v !== null) : [];
+  const ram = system.ram && typeof system.ram === "object" ? system.ram : {};
+  const psram = system.psram && typeof system.psram === "object" ? system.psram : {};
+  const resetReason = String(system.reset_reason || "").trim();
+  const resetRisk = String(system.reset_risk || "info").toLowerCase();
+  const monitorReady = Boolean(system.monitor_ready);
+
+  text("esp-temp", temp === null ? "n/a" : `${temp.toFixed(1)} C`);
+  text("esp-cpu", cpu === null ? "n/a" : `${Math.round(cpu)}%${cores.length ? ` (${cores.join("/")})` : ""}`);
+  text("esp-cpu-freq", cpuMhz === null ? "n/a" : `${Math.round(cpuMhz)} MHz`);
+  text("esp-ram", formatMemoryBrief(ram));
+  text("esp-psram", formatMemoryBrief(psram));
+  text("esp-reset", resetReason || "n/a");
+
+  let label = monitorReady ? "OK" : "N/A";
+  let pillTone = monitorReady ? "good" : "info";
+  if (temp !== null && temp >= 78) {
+    label = "HOT";
+    pillTone = "bad";
+  } else if (temp !== null && temp >= 70) {
+    label = "WARM";
+    pillTone = "warn";
+  } else if (resetRisk === "warn") {
+    label = "CHECK";
+    pillTone = "warn";
+  }
+  setPill("esp-health-pill", label, pillTone);
+}
+
+function formatMemoryBrief(memory) {
+  const free = finiteNumber(memory.free);
+  const total = finiteNumber(memory.total);
+  if (free === null && total === null) return "n/a";
+  if (free !== null && total !== null && total > 0) return `${formatBytes(free)}/${formatBytes(total)}`;
+  if (free !== null) return `free ${formatBytes(free)}`;
+  return formatBytes(total);
 }
 
 function formatMotionSensor(hw) {

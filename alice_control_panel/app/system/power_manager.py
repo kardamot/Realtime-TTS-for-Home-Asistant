@@ -22,6 +22,7 @@ class PowerManager:
         self._last_auto_mode = "active"
         self._last_desired_mode = "active"
         self._last_error = ""
+        self._last_radar_presence = False
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -56,6 +57,7 @@ class PowerManager:
             "last_auto_mode": self._last_auto_mode,
             "last_activity_age_sec": max(0, int(time.monotonic() - self._last_activity_mono)),
             "last_activity_reason": self._last_activity_reason,
+            "radar_presence": self._last_radar_presence,
             "last_error": self._last_error,
         }
 
@@ -86,7 +88,7 @@ class PowerManager:
             self._last_error = "esp offline"
             return
 
-        desired = self._desired_mode(power_cfg)
+        desired = self._desired_mode(power_cfg, esp_status)
         self._last_desired_mode = desired
         current = self._current_mode(esp_status)
 
@@ -94,7 +96,7 @@ class PowerManager:
             self._last_auto_mode = desired if desired != "active" else "active"
             return
 
-        if desired == "active" and self._last_auto_mode == "active":
+        if desired == "active" and current == "active" and self._last_auto_mode == "active":
             return
 
         command = {
@@ -137,15 +139,74 @@ class PowerManager:
             self.notify_activity("esp_mic_stream")
         elif "playing" in speaker:
             self.notify_activity("esp_speaker")
+        elif self._radar_sees_presence(esp_status):
+            self.notify_activity("radar_presence")
 
-    def _desired_mode(self, power_cfg: dict[str, Any]) -> str:
+    def _desired_mode(self, power_cfg: dict[str, Any], esp_status: dict[str, Any]) -> str:
         if bool(power_cfg.get("night_sleep_enabled")) and self._in_night_window(power_cfg):
             return "night_sleep"
+        if self._radar_sees_presence(esp_status):
+            return "active"
         if bool(power_cfg.get("soft_sleep_enabled")):
             idle_minutes = self._positive_float(power_cfg.get("soft_sleep_idle_minutes"), 30.0)
             if time.monotonic() - self._last_activity_mono >= idle_minutes * 60.0:
                 return "soft_sleep"
         return "active"
+
+    def _radar_sees_presence(self, esp_status: dict[str, Any]) -> bool:
+        radar = esp_status.get("radar") if isinstance(esp_status.get("radar"), dict) else {}
+        idle_tracking = esp_status.get("idle_tracking") if isinstance(esp_status.get("idle_tracking"), dict) else {}
+
+        present = self._radar_payload_has_presence(radar)
+        if not present:
+            present = bool(idle_tracking.get("active")) and self._positive_int(idle_tracking.get("last_seen_ms"), 0) <= 5000
+
+        self._last_radar_presence = present
+        return present
+
+    @classmethod
+    def _radar_payload_has_presence(cls, radar: dict[str, Any]) -> bool:
+        if not radar:
+            return False
+
+        state = str(radar.get("state") or "").lower()
+        if state in {"offline", "disabled", "unknown", "idle", "waiting", "empty", "sleep"}:
+            state_has_presence = False
+        else:
+            state_has_presence = state in {"tracking", "presence", "present", "target", "targets", "active"}
+
+        fresh = cls._truthy(radar.get("fresh"))
+        ready = cls._truthy(radar.get("ready"))
+        target_count = cls._positive_int(radar.get("target_count"), 0)
+        selected_target = cls._positive_int(radar.get("selected_target"), -1)
+        confidence = cls._positive_int(radar.get("confidence"), 0)
+        stable_frames = cls._positive_int(radar.get("stable_frames"), 0)
+        targets = radar.get("targets")
+        target_list_present = isinstance(targets, list) and len(targets) > 0
+
+        has_target = target_count > 0 or selected_target >= 0 or target_list_present or state_has_presence
+        if not has_target:
+            return False
+
+        # If firmware reports freshness, trust it so stale targets do not keep Alice awake.
+        if "fresh" in radar:
+            return fresh
+
+        # Older payloads may not have `fresh`; require a stronger signal.
+        return ready or confidence > 0 or stable_frames > 0 or target_list_present or state_has_presence
+
+    @staticmethod
+    def _truthy(value: Any) -> bool:
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on", "active", "ready", "tracking"}
+        return bool(value)
+
+    @staticmethod
+    def _positive_int(value: Any, fallback: int) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return fallback
 
     @staticmethod
     def _current_mode(esp_status: dict[str, Any]) -> str:

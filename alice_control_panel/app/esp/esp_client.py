@@ -27,6 +27,19 @@ DEFAULT_STATUS: dict[str, Any] = {
     "power_mode": "active",
     "heap_free": None,
     "heap_min": None,
+    "system": {
+        "monitor_ready": False,
+        "cpu_percent": None,
+        "cpu_mhz": None,
+        "cpu_cores": [],
+        "temperature_ready": False,
+        "temperature_c": None,
+        "ram": {"total": None, "free": None, "min_free": None, "largest_free": None},
+        "psram": {"total": None, "free": None, "largest_free": None},
+        "reset_reason": "",
+        "reset_reason_code": None,
+        "reset_risk": "info",
+    },
     "hardware": {
         "mic": "unknown",
         "speaker": "unknown",
@@ -192,6 +205,9 @@ class EspClient:
         self._active_mic_buffer = bytearray()
         self._mic_stream_handler: Callable[[dict[str, Any], bytes], Awaitable[dict[str, Any]]] | None = None
         self._tts_timing_handler: Callable[[dict[str, Any]], Awaitable[None]] | None = None
+        self._last_reset_reason_logged = ""
+        self._temperature_alert_level = "ok"
+        self._last_diag_log_at = 0.0
 
     def set_mic_stream_handler(
         self,
@@ -335,6 +351,7 @@ class EspClient:
                 if resp.status >= 400:
                     raise RuntimeError(f"ESP status HTTP {resp.status}: {doc}")
             self._status = self._normalize_status(doc, base_url)
+            await self._observe_system_diagnostics(self._status)
             await self._ws_hub.publish("esp_status", self._status)
         except Exception as exc:
             reconnects = self._record_reconnect_failure(esp_cfg)
@@ -502,6 +519,7 @@ class EspClient:
             status_payload = payload.get("status") if isinstance(payload.get("status"), dict) else payload
             self._status = self._normalize_status(status_payload, ws_url)
             self._set_ws_state(True, ws_url, "")
+            await self._observe_system_diagnostics(self._status)
             await self._ws_hub.publish("esp_status", await self.status())
             return
         if msg_type == "log":
@@ -745,6 +763,47 @@ class EspClient:
         status["max_auto_reconnects"] = int(self._status.get("max_auto_reconnects") or 40)
         status["auto_reconnect_paused"] = False
         return status
+
+    async def _observe_system_diagnostics(self, status: dict[str, Any]) -> None:
+        system = status.get("system") if isinstance(status.get("system"), dict) else {}
+        reason = str(system.get("reset_reason") or "")
+        risk = str(system.get("reset_risk") or "info").lower()
+        if reason and reason != self._last_reset_reason_logged:
+            self._last_reset_reason_logged = reason
+            await self._log_bus.emit(
+                "WARN" if risk == "warn" else "INFO",
+                "ESP",
+                f"ESP reset reason: {reason}",
+                {"system": system},
+            )
+
+        temperature = self._float_or_none(system.get("temperature_c"))
+        if temperature is None:
+            return
+        now = time.time()
+        next_level = "error" if temperature >= 78.0 else "warn" if temperature >= 70.0 else "ok"
+        if next_level in {"warn", "error"} and next_level != self._temperature_alert_level:
+            self._temperature_alert_level = next_level
+            self._last_diag_log_at = now
+            await self._log_bus.emit(
+                "ERROR" if next_level == "error" else "WARN",
+                "ESP",
+                "ESP temperature high",
+                {"temperature_c": temperature, "system": system},
+            )
+        elif next_level == "ok" and self._temperature_alert_level != "ok" and temperature <= 65.0:
+            if now - self._last_diag_log_at > 60:
+                self._temperature_alert_level = "ok"
+                self._last_diag_log_at = now
+                await self._log_bus.emit("INFO", "ESP", "ESP temperature recovered", {"temperature_c": temperature})
+
+    @staticmethod
+    def _float_or_none(value: Any) -> float | None:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if number == number else None
 
     async def _send_ws_json(self, payload: dict[str, Any]) -> None:
         async with self._ws_send_lock:

@@ -360,7 +360,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.172"
+    server_version = "AliceControlPanel/0.1.174"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -521,7 +521,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-                "version": "0.1.172",
+                "version": "0.1.174",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {
@@ -548,6 +548,19 @@ def esp_status() -> dict:
         "sleep_mode": False,
         "heap_free": None,
         "heap_min": None,
+        "system": {
+            "monitor_ready": False,
+            "cpu_percent": None,
+            "cpu_mhz": None,
+            "cpu_cores": [],
+            "temperature_ready": False,
+            "temperature_c": None,
+            "ram": {"total": None, "free": None, "min_free": None, "largest_free": None},
+            "psram": {"total": None, "free": None, "largest_free": None},
+            "reset_reason": "",
+            "reset_reason_code": None,
+            "reset_risk": "info",
+        },
         "hardware": {
             "mic": "unknown",
             "speaker": "unknown",
