@@ -33,6 +33,7 @@ DEFAULT_PCM_CHANNELS = 1
 PCM_PACE_INITIAL_BURST_MS = 700
 PCM_PACE_MAX_SLEEP = 0.05
 RELAY_CHUNK_BYTES = 4096
+RELAY_END_SILENCE_MS = 850
 API_KEY_QUERY_RE = re.compile(r"((?:api_key|key)=)[^&\s]+")
 PCM_OUTPUT_RE = re.compile(r"^pcm_(\d+)$")
 TtsTraceHandler = Callable[[dict[str, Any]], Awaitable[None]]
@@ -149,11 +150,18 @@ class WebSocketPcmOutput(PcmOutput):
         self._ws = ws
         self._trace: TtsTrace | None = None
         self._first_chunk_sent = False
+        self._sample_rate = DEFAULT_PCM_SAMPLE_RATE
+        self._channels = DEFAULT_PCM_CHANNELS
+        self._started = False
+        self._end_silence_sent = False
 
     def set_trace(self, trace: TtsTrace | None) -> None:
         self._trace = trace
 
     async def start(self, sample_rate: int, channels: int = DEFAULT_PCM_CHANNELS) -> None:
+        self._sample_rate = sample_rate
+        self._channels = channels
+        self._started = True
         try:
             await send_pcm_start(self._ws, sample_rate, channels)
         except Exception as exc:
@@ -175,6 +183,7 @@ class WebSocketPcmOutput(PcmOutput):
 
     async def done(self) -> None:
         try:
+            await self._send_end_silence()
             await send_done(self._ws)
         except Exception as exc:
             if is_websocket_closed_error(exc):
@@ -188,6 +197,28 @@ class WebSocketPcmOutput(PcmOutput):
             if is_websocket_closed_error(exc):
                 return
             raise
+
+    async def _send_end_silence(self) -> None:
+        if self._end_silence_sent or not self._started or RELAY_END_SILENCE_MS <= 0:
+            return
+        bytes_per_second = max(1, self._sample_rate) * max(1, self._channels) * 2
+        byte_count = int(bytes_per_second * RELAY_END_SILENCE_MS / 1000)
+        byte_count &= ~1
+        if byte_count <= 0:
+            return
+        self._end_silence_sent = True
+        silence = b"\x00" * byte_count
+        pacer = PcmPacer(self._sample_rate, self._channels, initial_burst_ms=0)
+        await send_pcm_bytes_to_output(self, silence, pacer)
+        if self._trace is not None:
+            await self._trace.mark(
+                "tts_relay_end_silence_sent",
+                silence_ms=RELAY_END_SILENCE_MS,
+                silence_bytes=byte_count,
+                sample_rate=self._sample_rate,
+                channels=self._channels,
+                note="speech tail guard before relay websocket close",
+            )
 
 
 class EspPcmOutput(PcmOutput):

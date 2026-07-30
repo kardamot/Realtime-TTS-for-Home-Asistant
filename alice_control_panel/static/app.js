@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.178";
+const UI_VERSION = "0.1.180";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -1590,9 +1590,6 @@ async function loadStatus() {
   text("cpu-status", health.cpu_percent == null ? "n/a" : `${health.cpu_percent}%`);
   text("ram-status", `RAM ${health.ram_used_mb || "n/a"} MB`);
   const espSystem = esp.system && typeof esp.system === "object" ? esp.system : {};
-  const espRam = espSystem.ram && typeof espSystem.ram === "object" ? espSystem.ram : {};
-  text("heap-status", formatMemoryBrief({ ...espRam, free: espRam.free ?? esp.heap_free }));
-  text("heap-min", formatMemoryFreeBrief({ ...espRam, min_free: espRam.min_free ?? esp.heap_min }));
   text("server-uptime", fmtSeconds(health.uptime_sec));
   text("esp-uptime", `ESP ${fmtSeconds(esp.uptime_sec)}`);
   renderEspHealth(espSystem);
@@ -2692,6 +2689,7 @@ function fallbackLatencyStages(events) {
     audio_resample_start: "Audio convert start",
     audio_resample_done: "Audio convert done",
     google_tts_stream_completed: "Google stream done",
+    tts_relay_end_silence_sent: "TTS tail guard",
     first_chunk_sent_to_esp: "First ESP chunk",
     esp_first_pcm_reported: "ESP first PCM",
     speaker_started: "Speaker started",
