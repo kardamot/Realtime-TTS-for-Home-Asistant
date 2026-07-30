@@ -13,7 +13,7 @@
   --red: #ff6961;
   --cyan: #39c5bb;
   --dash-gap: 12px;
-  --connections-panel-h: 306px;
+  --connections-panel-h: 282px;
   --radar-panel-h: 548px;
   --pipeline-panel-h: 460px;
   --latency-panel-h: 620px;
@@ -367,7 +367,7 @@ nav a:hover { background: #121a25; color: var(--text); }
   height: var(--connections-panel-h);
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(168px, 1fr) minmax(112px, auto);
+  grid-template-columns: repeat(2,minmax(0,1fr));
   gap: var(--dash-gap);
 }
 
@@ -392,7 +392,7 @@ nav a:hover { background: #121a25; color: var(--text); }
 
 .connections-panel .kv {
   display: grid;
-  grid-template-columns: repeat(2,minmax(0,1fr));
+  grid-template-columns: minmax(0,1fr);
   gap: 4px;
   flex: 0 0 auto;
 }
@@ -412,7 +412,7 @@ nav a:hover { background: #121a25; color: var(--text); }
 
 .health-grid {
   display: grid;
-  grid-template-columns: repeat(3,minmax(0,1fr));
+  grid-template-columns: repeat(2,minmax(0,1fr));
   gap: 4px;
   min-height: 0;
 }
