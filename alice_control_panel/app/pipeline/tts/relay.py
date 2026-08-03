@@ -34,6 +34,7 @@ PCM_PACE_INITIAL_BURST_MS = 700
 PCM_PACE_MAX_SLEEP = 0.05
 RELAY_CHUNK_BYTES = 4096
 RELAY_END_SILENCE_MS = 850
+RELAY_DONE_ACK_TIMEOUT_SECONDS = 2.0
 API_KEY_QUERY_RE = re.compile(r"((?:api_key|key)=)[^&\s]+")
 PCM_OUTPUT_RE = re.compile(r"^pcm_(\d+)$")
 TtsTraceHandler = Callable[[dict[str, Any]], Awaitable[None]]
@@ -207,6 +208,30 @@ class WebSocketPcmOutput(PcmOutput):
                 sample_rate=self._sample_rate,
                 channels=self._channels,
             )
+            try:
+                ack = await asyncio.wait_for(
+                    self._ws.receive_json(),
+                    timeout=RELAY_DONE_ACK_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                if self._trace is not None:
+                    await self._trace.mark(
+                        "tts_relay_done_ack_timeout",
+                        timeout_ms=int(RELAY_DONE_ACK_TIMEOUT_SECONDS * 1000),
+                    )
+            else:
+                if isinstance(ack, dict) and str(ack.get("type") or "").lower() == "done_ack":
+                    if self._trace is not None:
+                        await self._trace.mark(
+                            "tts_relay_done_ack_received",
+                            pcm_bytes_received=int(ack.get("pcm_bytes_received") or 0),
+                            pcm_bytes_buffered=int(ack.get("pcm_bytes_buffered") or 0),
+                        )
+                elif self._trace is not None:
+                    await self._trace.mark(
+                        "tts_relay_done_ack_invalid",
+                        received_type=str(ack.get("type") or "") if isinstance(ack, dict) else type(ack).__name__,
+                    )
         except Exception as exc:
             if is_websocket_closed_error(exc):
                 raise WebSocketDisconnect(code=1006) from exc
