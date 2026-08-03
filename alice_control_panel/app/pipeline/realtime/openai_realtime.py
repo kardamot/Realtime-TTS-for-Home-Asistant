@@ -39,6 +39,12 @@ ROBOT_BEHAVIOR_RUNTIME_HINT = (
     "<emotion: thinking>, <emotion: surprised>, <emotion: fear>, <emotion: focused>, <emotion: angry>, or <emotion: neutral>.\n"
     "- The tag is consumed by Alice's eyes/motion controller and is not spoken."
 )
+CURRENT_TURN_RUNTIME_GUARDRAIL = (
+    "Conversation focus:\n"
+    "- Answer the newest user utterance directly.\n"
+    "- Do not reopen a previous topic unless the newest utterance clearly refers to it.\n"
+    "- A Home Assistant result already present as an assistant message is complete; do not answer it again."
+)
 HOME_CONTROL_FRAGMENT_TERMS = {
     "hava",
     "derece",
@@ -809,6 +815,23 @@ class OpenAIRealtimeBridge:
             if realtime_ws is not None and not realtime_ws.closed:
                 await realtime_ws.send_str(json.dumps(payload, ensure_ascii=False))
 
+        async def remember_local_assistant_reply(text: str, source: str) -> None:
+            clean = str(text or "").strip()
+            if not clean:
+                return
+            await send_realtime_json(
+                {
+                    "type": "conversation.item.create",
+                    "event_id": f"alice-{source}-{uuid.uuid4().hex[:12]}",
+                    "item": {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": clean}],
+                    },
+                }
+            )
+            self._mark_latency("local_assistant_context_synced", source=source, chars=len(clean))
+
         async def request_response(force: bool = False) -> None:
             nonlocal response_requested
             if response_done or (response_requested and not force):
@@ -1002,6 +1025,15 @@ class OpenAIRealtimeBridge:
                         "action": result.get("action"),
                     },
                 )
+                try:
+                    await remember_local_assistant_reply(speech, "ha_route")
+                except Exception as exc:
+                    await self._log_bus.emit(
+                        "WARN",
+                        "PIPELINE",
+                        "HA reply could not be synced to Realtime context",
+                        {"session_id": session_id, "error": safe_exc_message(exc)},
+                    )
                 await finish_response(reason="ha_route")
                 return True
             except PermissionError as exc:
@@ -1152,7 +1184,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.183",
+                version="0.1.184",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -1397,7 +1429,7 @@ class OpenAIRealtimeBridge:
 
     def _with_runtime_guardrails(self, text: str) -> str:
         clean = str(text or "").strip()
-        blocks = [HOME_ASSISTANT_RUNTIME_GUARDRAILS, ROBOT_BEHAVIOR_RUNTIME_HINT]
+        blocks = [HOME_ASSISTANT_RUNTIME_GUARDRAILS, ROBOT_BEHAVIOR_RUNTIME_HINT, CURRENT_TURN_RUNTIME_GUARDRAIL]
         for block in blocks:
             if block in clean:
                 continue
