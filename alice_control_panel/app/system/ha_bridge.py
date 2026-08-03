@@ -485,7 +485,7 @@ _CONTROL_DOMAINS = {"light", "switch", "fan", "input_boolean", "media_player", "
 
 
 def _words(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9_.]+", _normalize_tr(text))
+    return [token.strip(".") for token in re.findall(r"[a-z0-9_.]+", _normalize_tr(text)) if token.strip(".")]
 
 
 def _compact_text(text: str) -> str:
@@ -1015,16 +1015,28 @@ class HomeAssistantBridge:
         cfg = await self._cfg()
         if not bool(cfg.get("route_home_control", True)):
             return False
-        normalized = _normalize_tr(text)
         intent = self.parse_intent(text)
-        if intent.action in {"set_color", "set_brightness", "set_temperature", "set_hvac", "set_media_volume"}:
+        words = _words(text)
+        weather_roots = {"hava", "derece", "sicaklik", "nem", "ruzgar", "yagmur"}
+        device_roots = {
+            "isik", "isig", "lamba", "avize", "led", "priz", "anahtar", "role",
+            "klima", "termostat", "perde", "panjur", "garaj", "isitici", "fan", "vantilator",
+            "sensor", "kamera", "ses", "muzik", "hoparlor", "televizyon", "tv", "kilit",
+        }
+
+        def has_root(roots: set[str]) -> bool:
+            return any(word == root or word.startswith(root) for word in words for root in roots)
+
+        has_weather = has_root(weather_roots)
+        has_device = has_root(device_roots)
+        has_area = any(word == area or word.startswith(area) for word in words for area in _ROOM_TERMS)
+        has_entity_id = any(re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", word) is not None for word in words)
+
+        # Parsed actions alone are not enough: words such as "son" in "son kelime"
+        # can resemble a brightness request. Require an explicit HA target or area.
+        if has_weather:
             return True
-        weather_terms = ["hava", "derece", "sicaklik", "nem", "ruzgar", "yagmur"]
-        device_terms = ["isik", "lamba", "led", "renk", "priz", "klima", "perde", "panjur", "isitici", "fan", "sensor", "kamera", "ses", "muzik", "tv"]
-        action_terms = ["ac", "kapat", "yak", "sondur", "calistir", "durdur", "ayarla", "durum", "kac", "yap", "kis", "artir", "azalt", "oku"]
-        return any(term in normalized for term in weather_terms) or (
-            bool(intent.action) and any(term in normalized for term in device_terms) and any(term in normalized for term in action_terms)
-        )
+        return bool(intent.action) and (has_device or has_area or has_entity_id)
 
     async def _select_entities_for_intent(
         self,

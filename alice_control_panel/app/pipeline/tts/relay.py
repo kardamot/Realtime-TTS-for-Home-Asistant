@@ -154,6 +154,9 @@ class WebSocketPcmOutput(PcmOutput):
         self._channels = DEFAULT_PCM_CHANNELS
         self._started = False
         self._end_silence_sent = False
+        self._sending_end_silence = False
+        self._pcm_bytes_sent = 0
+        self._speech_pcm_bytes_sent = 0
 
     def set_trace(self, trace: TtsTrace | None) -> None:
         self._trace = trace
@@ -170,21 +173,40 @@ class WebSocketPcmOutput(PcmOutput):
             raise
 
     async def write(self, pcm: bytes) -> None:
-        if pcm and not self._first_chunk_sent:
-            self._first_chunk_sent = True
-            if self._trace is not None:
-                await self._trace.mark("first_chunk_sent_to_esp", chunk_bytes=len(pcm), output="tts_relay_ws")
+        if not pcm:
+            return
         try:
             await self._ws.send_bytes(pcm)
         except Exception as exc:
             if is_websocket_closed_error(exc):
                 raise WebSocketDisconnect(code=1006) from exc
             raise
+        self._pcm_bytes_sent += len(pcm)
+        if not self._sending_end_silence:
+            self._speech_pcm_bytes_sent += len(pcm)
+        if not self._first_chunk_sent:
+            self._first_chunk_sent = True
+            if self._trace is not None:
+                await self._trace.mark("first_chunk_sent_to_esp", chunk_bytes=len(pcm), output="tts_relay_ws")
 
     async def done(self) -> None:
         try:
             await self._send_end_silence()
-            await send_done(self._ws)
+            if self._trace is not None:
+                await self._trace.mark(
+                    "tts_relay_pcm_complete",
+                    pcm_bytes=self._pcm_bytes_sent,
+                    speech_pcm_bytes=self._speech_pcm_bytes_sent,
+                    sample_rate=self._sample_rate,
+                    channels=self._channels,
+                )
+            await send_done(
+                self._ws,
+                pcm_bytes=self._pcm_bytes_sent,
+                speech_pcm_bytes=self._speech_pcm_bytes_sent,
+                sample_rate=self._sample_rate,
+                channels=self._channels,
+            )
         except Exception as exc:
             if is_websocket_closed_error(exc):
                 raise WebSocketDisconnect(code=1006) from exc
@@ -209,7 +231,11 @@ class WebSocketPcmOutput(PcmOutput):
         self._end_silence_sent = True
         silence = b"\x00" * byte_count
         pacer = PcmPacer(self._sample_rate, self._channels, initial_burst_ms=0)
-        await send_pcm_bytes_to_output(self, silence, pacer)
+        self._sending_end_silence = True
+        try:
+            await send_pcm_bytes_to_output(self, silence, pacer)
+        finally:
+            self._sending_end_silence = False
         if self._trace is not None:
             await self._trace.mark(
                 "tts_relay_end_silence_sent",
@@ -435,12 +461,14 @@ def extract_interaction_audio(doc: dict[str, Any], provider: str) -> bytes:
     raise RuntimeError(f"{provider} did not return interaction audio data.")
 
 
-def extract_interaction_audio_delta(doc: dict[str, Any], provider: str) -> bytes | None:
+def extract_interaction_audio_deltas(doc: dict[str, Any], provider: str) -> list[bytes]:
     error = doc.get("error")
     if error:
         raise RuntimeError(f"{provider} returned stream error: {json.dumps(error, ensure_ascii=False)[:500]}")
 
-    def walk(value: Any) -> str:
+    encoded_chunks: list[str] = []
+
+    def walk(value: Any, parent_key: str = "") -> None:
         if isinstance(value, dict):
             data = value.get("data")
             value_type = str(
@@ -452,29 +480,23 @@ def extract_interaction_audio_delta(doc: dict[str, Any], provider: str) -> bytes
                 or value.get("mediaType")
                 or ""
             ).lower()
-            if isinstance(data, str) and ("audio" in value_type or value.get("audio") is not None):
-                return data
-            output_audio = value.get("output_audio") or value.get("outputAudio")
-            if isinstance(output_audio, dict) and isinstance(output_audio.get("data"), str):
-                return str(output_audio["data"])
-            delta = value.get("delta")
-            if isinstance(delta, dict) and str(delta.get("type") or "").lower() == "audio" and isinstance(delta.get("data"), str):
-                return str(delta["data"])
-            for child in value.values():
-                found = walk(child)
-                if found:
-                    return found
+            audio_parent = parent_key in {"audio", "output_audio", "outputAudio", "inline_data", "inlineData"}
+            if isinstance(data, str) and ("audio" in value_type or value.get("audio") is not None or audio_parent):
+                encoded_chunks.append(data)
+                return
+            for key, child in value.items():
+                walk(child, str(key))
         elif isinstance(value, list):
             for child in value:
-                found = walk(child)
-                if found:
-                    return found
-        return ""
+                walk(child, parent_key)
 
-    audio_b64 = walk(doc)
-    if not audio_b64:
-        return None
-    return decode_audio_b64(audio_b64, provider)
+    walk(doc)
+    return [decode_audio_b64(chunk, provider) for chunk in encoded_chunks]
+
+
+def extract_interaction_audio_delta(doc: dict[str, Any], provider: str) -> bytes | None:
+    chunks = extract_interaction_audio_deltas(doc, provider)
+    return b"".join(chunks) if chunks else None
 
 
 def parse_google_stream_event_line(raw_line: bytes) -> dict[str, Any] | None:
@@ -567,8 +589,23 @@ async def send_pcm_start(
     )
 
 
-async def send_done(ws: WebSocket) -> None:
-    await ws.send_json({"type": "done"})
+async def send_done(
+    ws: WebSocket,
+    *,
+    pcm_bytes: int = 0,
+    speech_pcm_bytes: int = 0,
+    sample_rate: int = 0,
+    channels: int = 0,
+) -> None:
+    await ws.send_json(
+        {
+            "type": "done",
+            "pcm_bytes": max(0, int(pcm_bytes)),
+            "speech_pcm_bytes": max(0, int(speech_pcm_bytes)),
+            "sample_rate": max(0, int(sample_rate)),
+            "channels": max(0, int(channels)),
+        }
+    )
 
 
 async def send_pcm_bytes(ws: WebSocket, pcm: bytes, pacer: PcmPacer | None = None) -> None:
@@ -1212,40 +1249,41 @@ class TtsRelay:
 
         async def handle_event(doc: dict[str, Any], *, buffered_event: bool = False) -> None:
             nonlocal audio_chunk_count, total_audio_bytes, output_started, pacer, pending
-            audio = extract_interaction_audio_delta(doc, "Google AI")
-            if not audio:
+            audio_deltas = extract_interaction_audio_deltas(doc, "Google AI")
+            if not audio_deltas:
                 return
-            audio_chunk_count += 1
-            total_audio_bytes += len(audio)
-            if audio_chunk_count == 1:
-                await trace.mark(
-                    "google_tts_first_audio_chunk_received",
-                    audio_bytes=len(audio),
-                    audio_chunk_count=audio_chunk_count,
-                    response_buffered=buffered_event,
-                    streaming_response=not buffered_event,
-                    sample_rate=GOOGLE_AI_PCM_SAMPLE_RATE,
-                    channels=DEFAULT_PCM_CHANNELS,
-                )
-                await trace.mark("google_tts_first_audio_chunk_decoded", decoded_audio_bytes=len(audio))
-                await trace.mark("audio_resample_start", operation="raw_pcm_stream", input_audio_bytes=len(audio))
-                await trace.mark(
-                    "audio_resample_done",
-                    resample=False,
-                    audio_format="raw_pcm_stream",
-                    sample_rate=GOOGLE_AI_PCM_SAMPLE_RATE,
-                    channels=DEFAULT_PCM_CHANNELS,
-                    pcm_bytes=len(audio),
-                    total_audio_bytes=len(audio),
-                )
-                await output.start(GOOGLE_AI_PCM_SAMPLE_RATE, DEFAULT_PCM_CHANNELS)
-                pacer = PcmPacer(GOOGLE_AI_PCM_SAMPLE_RATE, DEFAULT_PCM_CHANNELS) if output.pace_pcm else None
-                output_started = True
-            pcm = pending + audio
-            even_len = len(pcm) & ~1
-            if even_len:
-                await send_pcm_bytes_to_output(output, pcm[:even_len], pacer)
-            pending = pcm[even_len:]
+            for audio in audio_deltas:
+                audio_chunk_count += 1
+                total_audio_bytes += len(audio)
+                if audio_chunk_count == 1:
+                    await trace.mark(
+                        "google_tts_first_audio_chunk_received",
+                        audio_bytes=len(audio),
+                        audio_chunk_count=audio_chunk_count,
+                        response_buffered=buffered_event,
+                        streaming_response=not buffered_event,
+                        sample_rate=GOOGLE_AI_PCM_SAMPLE_RATE,
+                        channels=DEFAULT_PCM_CHANNELS,
+                    )
+                    await trace.mark("google_tts_first_audio_chunk_decoded", decoded_audio_bytes=len(audio))
+                    await trace.mark("audio_resample_start", operation="raw_pcm_stream", input_audio_bytes=len(audio))
+                    await trace.mark(
+                        "audio_resample_done",
+                        resample=False,
+                        audio_format="raw_pcm_stream",
+                        sample_rate=GOOGLE_AI_PCM_SAMPLE_RATE,
+                        channels=DEFAULT_PCM_CHANNELS,
+                        pcm_bytes=len(audio),
+                        total_audio_bytes=len(audio),
+                    )
+                    await output.start(GOOGLE_AI_PCM_SAMPLE_RATE, DEFAULT_PCM_CHANNELS)
+                    pacer = PcmPacer(GOOGLE_AI_PCM_SAMPLE_RATE, DEFAULT_PCM_CHANNELS) if output.pace_pcm else None
+                    output_started = True
+                pcm = pending + audio
+                even_len = len(pcm) & ~1
+                if even_len:
+                    await send_pcm_bytes_to_output(output, pcm[:even_len], pacer)
+                pending = pcm[even_len:]
 
         try:
             await trace.mark("google_tts_request_send_start")
