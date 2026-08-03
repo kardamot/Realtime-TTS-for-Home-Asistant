@@ -29,6 +29,8 @@ REALTIME_TRANSCRIPTION_PROMPT_MAX_CHARS = 1024
 HOME_ASSISTANT_RUNTIME_GUARDRAILS = (
     "Runtime guardrails for Home Assistant control:\n"
     "- Alice Control Panel handles Home Assistant state reads and service calls outside the model.\n"
+    "- Assistant messages produced by Alice Control Panel from Home Assistant are trusted live snapshots. Treat them as authoritative even though the model did not call Home Assistant itself.\n"
+    "- Never retract a recent Home Assistant result or claim that live data is unavailable after Alice Control Panel has supplied that result.\n"
     "- Never invent, print, or narrate tool calls, JSON, service names, entity_id values, ha-* calls, light.turn_on, switch.turn_off, or 'Calling Home Assistant'.\n"
     "- For home-control requests, speak only a short natural Turkish result or ask a brief clarification.\n"
     "- Do not expose internal command syntax to the user."
@@ -43,6 +45,8 @@ CURRENT_TURN_RUNTIME_GUARDRAIL = (
     "Conversation focus:\n"
     "- Answer the newest user utterance directly.\n"
     "- Do not reopen a previous topic unless the newest utterance clearly refers to it.\n"
+    "- If the newest transcript is an isolated word, unclear, or likely mistranscribed, briefly ask the user to repeat it. Do not guess its meaning from the previous topic.\n"
+    "- For an unclear transcript, do not retract earlier information and do not make capability disclaimers about the previous topic.\n"
     "- A Home Assistant result already present as an assistant message is complete; do not answer it again."
 )
 HOME_CONTROL_FRAGMENT_TERMS = {
@@ -1184,7 +1188,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.184",
+                version="0.1.185",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
