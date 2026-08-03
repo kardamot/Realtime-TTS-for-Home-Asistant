@@ -11,6 +11,8 @@ from app.esp.esp_client import EspClient
 
 
 class PowerManager:
+    WAKE_HOLD_SECONDS = 120.0
+
     def __init__(self, config_store: ConfigStore, esp_client: EspClient, log_bus: LogBus) -> None:
         self._config_store = config_store
         self._esp_client = esp_client
@@ -23,6 +25,8 @@ class PowerManager:
         self._last_desired_mode = "active"
         self._last_error = ""
         self._last_radar_presence = False
+        self._last_observed_mode: str | None = None
+        self._wake_hold_until_mono = 0.0
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -43,8 +47,18 @@ class PowerManager:
         self._task = None
 
     def notify_activity(self, reason: str = "activity") -> None:
-        self._last_activity_mono = time.monotonic()
+        now = time.monotonic()
+        self._last_activity_mono = now
         self._last_activity_reason = reason
+        if reason in {"command:sleep_mode_off", "command:eyes_sleep_off"}:
+            self._wake_hold_until_mono = now + self.WAKE_HOLD_SECONDS
+        elif reason in {
+            "command:sleep_mode_on",
+            "command:eyes_sleep_on",
+            "command:soft_sleep_on",
+            "command:night_sleep_on",
+        }:
+            self._wake_hold_until_mono = 0.0
 
     async def status(self) -> dict[str, Any]:
         cfg = await self._config_store.get(include_secrets=False)
@@ -57,6 +71,7 @@ class PowerManager:
             "last_auto_mode": self._last_auto_mode,
             "last_activity_age_sec": max(0, int(time.monotonic() - self._last_activity_mono)),
             "last_activity_reason": self._last_activity_reason,
+            "wake_hold_remaining_sec": max(0, int(self._wake_hold_until_mono - time.monotonic())),
             "radar_presence": self._last_radar_presence,
             "last_error": self._last_error,
         }
@@ -83,14 +98,14 @@ class PowerManager:
             return
 
         esp_status = await self._esp_client.status()
-        self._observe_esp_activity(esp_status)
+        current = self._current_mode(esp_status)
+        self._observe_esp_activity(esp_status, current)
         if not esp_status.get("online"):
             self._last_error = "esp offline"
             return
 
         desired = self._desired_mode(power_cfg, esp_status)
         self._last_desired_mode = desired
-        current = self._current_mode(esp_status)
 
         if desired == current:
             self._last_auto_mode = desired if desired != "active" else "active"
@@ -126,9 +141,17 @@ class PowerManager:
                 {"mode": desired, "command": command, "result": result},
             )
 
-    def _observe_esp_activity(self, esp_status: dict[str, Any]) -> None:
+    def _observe_esp_activity(self, esp_status: dict[str, Any], current_mode: str) -> None:
         if not esp_status.get("online"):
             return
+        previous_mode = self._last_observed_mode
+        self._last_observed_mode = current_mode
+        if previous_mode in {"soft_sleep", "night_sleep"} and current_mode == "active":
+            now = time.monotonic()
+            self._wake_hold_until_mono = now + self.WAKE_HOLD_SECONDS
+            self._last_activity_mono = now
+            self._last_activity_reason = "esp_woke"
+
         state = str(esp_status.get("state") or "").upper()
         hardware = esp_status.get("hardware") if isinstance(esp_status.get("hardware"), dict) else {}
         mic = str(hardware.get("mic") or "").lower()
@@ -143,6 +166,8 @@ class PowerManager:
             self.notify_activity("radar_presence")
 
     def _desired_mode(self, power_cfg: dict[str, Any], esp_status: dict[str, Any]) -> str:
+        if time.monotonic() < self._wake_hold_until_mono:
+            return "active"
         if bool(power_cfg.get("night_sleep_enabled")) and self._in_night_window(power_cfg):
             return "night_sleep"
         if self._radar_sees_presence(esp_status):
