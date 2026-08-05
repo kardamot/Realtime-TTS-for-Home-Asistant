@@ -12,6 +12,7 @@ import aiohttp
 
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
+from app.system.ha_response import HaResponseComposer
 
 
 def _scope_items(value: str) -> list[str]:
@@ -100,6 +101,8 @@ _ENTITY_SUFFIXES = (
     "sini",
     "sunu",
     "sine",
+    "lari",
+    "leri",
     "lara",
     "lere",
     "lar",
@@ -137,6 +140,8 @@ _DOMAIN_HINTS = {
     "hoparlor": "media_player",
     "televizyon": "media_player",
     "tv": "media_player",
+    "nemlendirici": "humidifier",
+    "nemlendir": "humidifier",
     "sensor": "sensor",
     "sicaklik": "sensor",
     "sicak": "sensor",
@@ -145,7 +150,24 @@ _DOMAIN_HINTS = {
     "hava": "weather",
     "kilit": "lock",
 }
-_TARGETABLE_DOMAIN_TERMS = {"avize", "led", "priz", "role", "fan", "vantilator", "perde", "panjur", "klima", "termostat", "tv"}
+_TARGETABLE_DOMAIN_TERMS = {
+    "avize",
+    "led",
+    "priz",
+    "role",
+    "fan",
+    "vantilator",
+    "perde",
+    "panjur",
+    "klima",
+    "termostat",
+    "tv",
+    "nemlendirici",
+    "nemlendir",
+    "sicaklik",
+    "derece",
+    "nem",
+}
 _IGNORED_MATCH_TERMS = (
     _TURN_ON_TERMS
     | _TURN_OFF_TERMS
@@ -207,6 +229,35 @@ _ROOM_TERMS = {
     "balkon",
     "bahce",
     "garaj",
+}
+_WEATHER_ROUTE_ROOTS = {"hava", "derece", "sicaklik", "nem", "ruzgar", "yagmur"}
+_DEVICE_ROUTE_ROOTS = {
+    "isik",
+    "isig",
+    "lamba",
+    "avize",
+    "led",
+    "priz",
+    "anahtar",
+    "role",
+    "klima",
+    "termostat",
+    "perde",
+    "panjur",
+    "garaj",
+    "isitici",
+    "fan",
+    "vantilator",
+    "sensor",
+    "kamera",
+    "ses",
+    "muzik",
+    "hoparlor",
+    "televizyon",
+    "tv",
+    "kilit",
+    "nemlendirici",
+    "nemlendir",
 }
 _COLOR_RGB: dict[str, tuple[str, tuple[int, int, int]]] = {
     "kirmizi": ("kirmizi", (255, 0, 0)),
@@ -624,6 +675,7 @@ class HomeAssistantBridge:
     def __init__(self, config_store: ConfigStore, log_bus: LogBus) -> None:
         self._config_store = config_store
         self._log_bus = log_bus
+        self._responses = HaResponseComposer()
 
     def parse_intent(self, text: str) -> HaIntent:
         text_norm = _normalize_tr(text)
@@ -671,11 +723,17 @@ class HomeAssistantBridge:
 
         intent.target_terms, intent.area_terms = _split_target_terms(text)
         specific_terms = [term for term in intent.target_terms if term not in intent.area_terms]
+        has_singular_light_noun = any(
+            word.startswith(("isik", "isig", "lamba", "lamb"))
+            and not word.startswith(("isiklar", "isiklari", "lambalar", "lambalari"))
+            for word in words
+        )
         intent.room_group_requested = bool(
             intent.domain_hint == "light"
             and intent.area_terms
             and not specific_terms
             and not intent.only_requested
+            and not has_singular_light_noun
         )
         return intent
 
@@ -735,7 +793,23 @@ class HomeAssistantBridge:
     def _all_requested(self, words: list[str]) -> bool:
         if any(word in _ALL_TERMS for word in words):
             return True
-        return any(word.startswith(("isiklar", "isiklari", "lambalar", "lambalari")) for word in words)
+        return any(
+            word.startswith(
+                (
+                    "isiklar",
+                    "isiklari",
+                    "lambalar",
+                    "lambalari",
+                    "ledler",
+                    "ledleri",
+                    "prizler",
+                    "prizleri",
+                    "fanlar",
+                    "fanlari",
+                )
+            )
+            for word in words
+        )
 
     async def status(self) -> dict[str, Any]:
         cfg = await self._cfg()
@@ -912,6 +986,20 @@ class HomeAssistantBridge:
             return {"handled": True, "ok": False, "speech": "Home Assistant API hazir degil."}
 
         entities, alternatives, clarification = await self._select_entities_for_intent(text, intent, cfg)
+        await self._log_bus.emit(
+            "INFO",
+            "HA",
+            "HA intent resolved",
+            {
+                "action": intent.action,
+                "domain_hint": intent.domain_hint,
+                "target_terms": intent.target_terms,
+                "area_terms": intent.area_terms,
+                "selected_entity_ids": [str(item.get("entity_id") or "") for item in entities],
+                "alternative_entity_ids": [str(item.get("entity_id") or "") for item in alternatives[:3]],
+                "requires_clarification": bool(clarification),
+            },
+        )
         if clarification:
             return {
                 "handled": True,
@@ -920,10 +1008,12 @@ class HomeAssistantBridge:
                 "requires_clarification": True,
             }
         if not entities:
-            if intent.domain_hint:
-                suffix = f" Adaylar: {_display_list(alternatives)}." if alternatives else ""
-                return {"handled": True, "ok": False, "speech": f"Allowlist icinde uygun cihaz bulamadim.{suffix}"}
-            return {"handled": False, "ok": False, "reason": "no_matching_entity"}
+            return {
+                "handled": True,
+                "ok": False,
+                "speech": self._no_match_speech(intent, alternatives, cfg),
+                "reason": "no_matching_entity",
+            }
 
         domains = {str(item.get("entity_id") or "").split(".", 1)[0] for item in entities if "." in str(item.get("entity_id") or "")}
         if len(domains) != 1:
@@ -980,6 +1070,28 @@ class HomeAssistantBridge:
                 "narration_kind": "weather" if entity_id.startswith("weather.") else "",
             }
 
+        desired_state = "on" if intent.action == "turn_on" else "off" if intent.action == "turn_off" else ""
+        if desired_state and all(str(item.get("state") or "").lower() == desired_state for item in entities):
+            await self._log_bus.emit(
+                "INFO",
+                "HA",
+                "Allowlisted HA command already satisfied",
+                {"entity_ids": entity_ids, "domain": domain, "action": intent.action},
+            )
+            return {
+                "handled": True,
+                "ok": True,
+                "action": intent.action,
+                "entity_id": entity_ids[0] if len(entity_ids) == 1 else "",
+                "entity_ids": entity_ids,
+                "domain": domain,
+                "friendly_name": friendly,
+                "spoken_name": friendly,
+                "speech": self._responses.already(friendly, desired_state),
+                "narration_kind": "home_control",
+                "already_satisfied": True,
+            }
+
         service, data = self._service_for_intent(domain, intent, entity_ids)
         if not service:
             return {
@@ -1011,32 +1123,79 @@ class HomeAssistantBridge:
             "result": result,
         }
 
-    async def should_route_home_control(self, text: str) -> bool:
+    async def is_home_control_candidate(self, text: str, *, partial: bool = False) -> bool:
         cfg = await self._cfg()
+        return self._is_home_control_candidate(text, cfg, partial=partial)
+
+    def _is_home_control_candidate(self, text: str, cfg: dict[str, Any], *, partial: bool = False) -> bool:
         if not bool(cfg.get("route_home_control", True)):
             return False
-        intent = self.parse_intent(text)
-        words = _words(text)
-        weather_roots = {"hava", "derece", "sicaklik", "nem", "ruzgar", "yagmur"}
-        device_roots = {
-            "isik", "isig", "lamba", "avize", "led", "priz", "anahtar", "role",
-            "klima", "termostat", "perde", "panjur", "garaj", "isitici", "fan", "vantilator",
-            "sensor", "kamera", "ses", "muzik", "hoparlor", "televizyon", "tv", "kilit",
-        }
+        clean = str(text or "").strip()
+        if not clean:
+            return False
+
+        intent = self.parse_intent(clean)
+        words = _words(clean)
 
         def has_root(roots: set[str]) -> bool:
             return any(word == root or word.startswith(root) for word in words for root in roots)
 
-        has_weather = has_root(weather_roots)
-        has_device = has_root(device_roots)
+        has_weather = any(
+            not word.startswith("nemlendir") and (word == root or word.startswith(root))
+            for word in words
+            for root in _WEATHER_ROUTE_ROOTS
+        )
+        has_device = has_root(_DEVICE_ROUTE_ROOTS)
         has_area = any(word == area or word.startswith(area) for word in words for area in _ROOM_TERMS)
         has_entity_id = any(re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", word) is not None for word in words)
+        has_configured_target = self._matches_configured_target(clean, cfg, partial=partial)
+
+        if partial:
+            return bool(
+                has_configured_target
+                or has_weather
+                or has_device
+                or (intent.action and has_area)
+                or has_entity_id
+            )
 
         # Parsed actions alone are not enough: words such as "son" in "son kelime"
         # can resemble a brightness request. Require an explicit HA target or area.
         if has_weather:
             return True
-        return bool(intent.action) and (has_device or has_area or has_entity_id)
+        return bool(intent.action) and (has_configured_target or has_device or has_area or has_entity_id)
+
+    def _matches_configured_target(self, text: str, cfg: dict[str, Any], *, partial: bool) -> bool:
+        text_norm = _normalize_tr(text)
+        text_compact = _compact_text(text_norm)
+        partial_target_compact = _compact_text(" ".join(_entity_match_terms(text))) if partial else ""
+        if len(text_compact) < 3:
+            return False
+
+        aliases = _alias_map(cfg)
+        for entity_id in _explicit_entity_ids(cfg):
+            if not self.is_entity_allowed(entity_id, cfg):
+                continue
+            object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+            phrases = [object_id.replace("_", " "), *aliases.get(entity_id, [])]
+            for phrase in phrases:
+                phrase_compact = _compact_text(phrase)
+                if len(phrase_compact) < 3:
+                    continue
+                if phrase_compact in text_compact:
+                    return True
+                if partial and len(text_compact) >= 4 and phrase_compact.startswith(text_compact):
+                    return True
+                if partial and len(partial_target_compact) >= 4 and phrase_compact.startswith(partial_target_compact):
+                    return True
+        return False
+
+    async def should_route_home_control(self, text: str) -> bool:
+        cfg = await self._cfg()
+        return self._is_home_control_candidate(text, cfg, partial=False)
+
+    def route_error_speech(self, kind: str = "connection") -> str:
+        return self._responses.route_error(kind)
 
     async def _select_entities_for_intent(
         self,
@@ -1046,7 +1205,14 @@ class HomeAssistantBridge:
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
         domain_hint = intent.domain_hint
         states = await self.list_states(domain=domain_hint, limit=256) if domain_hint else await self.list_states(limit=256)
-        if domain_hint and (not states or self._should_try_cross_domain_match(text, intent, states, cfg)):
+        should_cross_domain = bool(
+            domain_hint
+            and (
+                (states and self._should_try_cross_domain_match(text, intent, states, cfg))
+                or (not states and self._matches_configured_target(text, cfg, partial=False))
+            )
+        )
+        if should_cross_domain:
             all_states = await self.list_states(limit=256)
             if all_states:
                 states = all_states
@@ -1065,33 +1231,33 @@ class HomeAssistantBridge:
             if intent.target_terms or intent.area_terms:
                 selected = [entry.item for entry in scored if entry.score >= 8]
                 if not selected:
-                    return [], alternatives, self._no_match_speech(intent, alternatives)
+                    return [], alternatives, self._no_match_speech(intent, alternatives, cfg)
                 return selected, alternatives, ""
             return states, alternatives, ""
 
         if intent.room_group_requested:
             selected = [entry.item for entry in scored if entry.score >= 8]
             if not selected:
-                return [], alternatives, self._no_match_speech(intent, alternatives)
+                return [], alternatives, self._no_match_speech(intent, alternatives, cfg)
             return selected, alternatives, ""
 
         if not scored:
             if domain_hint and len(states) == 1:
                 return [states[0]], [], ""
-            return [], alternatives, self._clarify_speech(alternatives) if domain_hint and len(states) > 1 else ""
+            return [], alternatives, self._clarify_speech(alternatives, cfg) if domain_hint and len(states) > 1 else ""
 
         top = scored[0]
         if top.score < 8:
             if domain_hint and len(states) == 1:
                 return [states[0]], [], ""
-            return [], alternatives, self._clarify_speech(alternatives)
+            return [], alternatives, self._clarify_speech(alternatives, cfg)
 
         if len(scored) > 1:
             second = scored[1]
             close_scores = second.score >= max(8, top.score - 5)
             weak_top = top.score < 35
             if close_scores and weak_top:
-                return [], [entry.item for entry in scored[:5]], self._clarify_speech([entry.item for entry in scored[:5]])
+                return [], [entry.item for entry in scored[:5]], self._clarify_speech([entry.item for entry in scored[:5]], cfg)
 
         return [top.item], [entry.item for entry in scored[1:6]], ""
 
@@ -1105,6 +1271,8 @@ class HomeAssistantBridge:
         if intent.domain_hint == "weather" and intent.action == "read":
             return False
         if intent.all_requested or intent.room_group_requested:
+            return False
+        if intent.domain_hint and len(states) == 1:
             return False
         hinted_scores = self._score_entities(text, intent, states, cfg)
         hinted_top = hinted_scores[0].score if hinted_scores else 0
@@ -1160,25 +1328,18 @@ class HomeAssistantBridge:
         scored.sort(key=lambda entry: (-entry.score, str(entry.item.get("entity_id") or "")))
         return scored
 
-    def _clarify_speech(self, alternatives: list[dict[str, Any]]) -> str:
-        unique_names: list[str] = []
-        for item in alternatives[:3]:
-            name = _friendly_name(item)
-            if name and name not in unique_names:
-                unique_names.append(name)
-        names = ", ".join(unique_names)
-        if not names:
-            return "Hangi cihazi kastettigini biraz daha net soyler misin?"
-        if len(unique_names) == 1:
-            return f"{names} mi demek istiyorsun?"
-        return f"Birden fazla aday buldum: {names}. Hangisini istiyorsun?"
+    def _clarify_speech(self, alternatives: list[dict[str, Any]], cfg: dict[str, Any]) -> str:
+        names = [self._spoken_entity_name(item, cfg) for item in alternatives[:3]]
+        return self._responses.clarification(names)
 
-    def _no_match_speech(self, intent: HaIntent, alternatives: list[dict[str, Any]]) -> str:
-        names = _display_list(alternatives)
-        suffix = f" Adaylar: {names}." if names else ""
-        if intent.area_terms:
-            return f"Bu oda veya hedef icin allowlist icinde uygun cihaz bulamadim.{suffix}"
-        return f"Allowlist icinde uygun cihaz bulamadim.{suffix}"
+    def _no_match_speech(
+        self,
+        intent: HaIntent,
+        alternatives: list[dict[str, Any]],
+        cfg: dict[str, Any],
+    ) -> str:
+        names = [self._spoken_entity_name(item, cfg) for item in alternatives[:3]]
+        return self._responses.no_match(has_area=bool(intent.area_terms), names=names)
 
     def _detect_action(self, text: str) -> str:
         words = _words(text)
@@ -1265,13 +1426,7 @@ class HomeAssistantBridge:
         return True
 
     def _domain_mismatch_speech(self, friendly_name: str, domain: str, intent: HaIntent) -> str:
-        if intent.action in {"set_color", "set_brightness"}:
-            return f"Bunu yapamam; {friendly_name} bir isik degil."
-        if intent.action in {"set_temperature", "set_hvac"}:
-            return f"Bunu yapamam; {friendly_name} klima veya termostat degil."
-        if intent.action == "set_media_volume":
-            return f"Bunu yapamam; {friendly_name} medya oynatici degil."
-        return f"{friendly_name} icin bu komut uygun degil."
+        return self._responses.domain_mismatch(friendly_name, intent.action)
 
     def _spoken_entity_name(self, entity: dict[str, Any], cfg: dict[str, Any]) -> str:
         entity_id = str(entity.get("entity_id") or "").lower()
@@ -1284,8 +1439,24 @@ class HomeAssistantBridge:
         if len(entities) == 1:
             return self._spoken_entity_name(entities[0], cfg)
         if intent.area_terms:
-            area = "oturma odasi" if "oturma" in intent.area_terms and "oda" in intent.area_terms else " ".join(intent.area_terms)
-            return _sentence_name(f"{area} isiklari")
+            area_names = {
+                "oturma": "oturma odası",
+                "yatak": "yatak odası",
+                "calisma": "çalışma odası",
+                "cocuk": "çocuk odası",
+                "misafir": "misafir odası",
+                "salon": "salon",
+                "mutfak": "mutfak",
+                "banyo": "banyo",
+                "koridor": "koridor",
+                "hol": "hol",
+                "teras": "teras",
+                "balkon": "balkon",
+                "bahce": "bahçe",
+                "garaj": "garaj",
+            }
+            area = next((area_names[term] for term in intent.area_terms if term in area_names), "oda")
+            return _sentence_name(f"{area} ışıkları")
         domain = str(entities[0].get("entity_id") or "").split(".", 1)[0]
         return _sentence_name(f"{len(entities)} {self._domain_label(domain)}")
 
@@ -1298,46 +1469,23 @@ class HomeAssistantBridge:
             "media_player": "medya oynatici",
             "weather": "hava durumu",
             "sensor": "sensor",
+            "humidifier": "nemlendirici",
             "cover": "perde/panjur",
             "lock": "kilit",
         }.get(domain, domain or "cihaz")
 
     def _service_speech(self, friendly_name: str, intent: HaIntent, domain: str, count: int = 1) -> str:
-        target = friendly_name
-        if intent.action == "turn_on":
-            if domain == "light":
-                return _RNG.choice((f"{target} açıldı.", f"{target} tamam, açtım.", f"{target} şimdi açık."))
-            if domain == "switch":
-                return _RNG.choice((f"{target} açıldı.", f"{target} devrede.", f"{target} tamam, açtım."))
-            return _RNG.choice((f"{target} açıldı.", f"{target} tamam, çalışıyor."))
-        if intent.action == "turn_off":
-            return _RNG.choice((f"{target} kapatıldı.", f"{target} tamam, kapattım.", f"{target} artık kapalı."))
-        if intent.action == "toggle":
-            return _RNG.choice((f"{target} değiştirildi.", f"{target} durumunu çevirdim."))
-        if intent.action == "set_color":
-            color = intent.color_name or "istenen renge"
-            return _RNG.choice((f"{target} {color} rengine alındı.", f"{target} için {color} tonu hazır.", f"{target} rengini {color} yaptım."))
-        if intent.action == "set_brightness":
-            if intent.brightness_pct is not None:
-                return _RNG.choice(
-                    (
-                        f"{target} parlaklığı yüzde {intent.brightness_pct} oldu.",
-                        f"{target} ışığını yüzde {intent.brightness_pct} yaptım.",
-                        f"{target} yüzde {intent.brightness_pct} seviyesinde.",
-                    )
-                )
-            if intent.brightness_step_pct is not None and intent.brightness_step_pct < 0:
-                return _RNG.choice((f"{target} biraz kısıldı.", f"{target} daha loş oldu.", f"{target} ışığını biraz azalttım."))
-            if intent.brightness_step_pct is not None:
-                return _RNG.choice((f"{target} biraz açıldı.", f"{target} ışığını biraz yükselttim.", f"{target} daha parlak oldu."))
-        if intent.action == "set_temperature" and intent.temperature is not None:
-            value = int(intent.temperature) if intent.temperature.is_integer() else intent.temperature
-            return _RNG.choice((f"{target} {value} dereceye ayarlandı.", f"{target} için {value} dereceyi seçtim."))
-        if intent.action == "set_hvac":
-            return _RNG.choice((f"{target} modu ayarlandı.", f"{target} modunu değiştirdim."))
-        if intent.action == "set_media_volume" and intent.brightness_pct is not None:
-            return _RNG.choice((f"{target} sesi yüzde {intent.brightness_pct} oldu.", f"{target} sesini yüzde {intent.brightness_pct} yaptım."))
-        return _RNG.choice((f"{target} için komut uygulandı.", f"{target} tamam."))
+        return self._responses.control(
+            friendly_name,
+            intent.action,
+            domain,
+            count=count,
+            color_name=intent.color_name,
+            brightness_pct=intent.brightness_pct,
+            brightness_step_pct=intent.brightness_step_pct,
+            temperature=intent.temperature,
+            hvac_mode=intent.hvac_mode,
+        )
 
     async def _multi_state_speech(self, entities: list[dict[str, Any]], user_text: str) -> str:
         pieces: list[str] = []
@@ -1395,9 +1543,7 @@ class HomeAssistantBridge:
                 sentence += " " + advice[0] + "."
             return sentence
         domain = entity_id.split(".", 1)[0] if "." in entity_id else ""
-        if domain in {"light", "switch", "fan", "input_boolean"} and value in {"on", "off"}:
-            return f"{friendly_name} {'acik' if value == 'on' else 'kapali'}."
-        return f"{friendly_name}: {value}{(' ' + unit) if unit else ''}."
+        return self._responses.state(friendly_name, value, domain, unit)
 
     def has_entity_scope(self, cfg: dict[str, Any]) -> bool:
         return bool(_allowed_entity_patterns(cfg))

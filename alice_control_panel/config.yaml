@@ -1,5 +1,5 @@
 name: "Alice Control Panel"
-version: "0.1.185"
+version: "0.1.186"
 slug: "alice_control_panel"
 description: "Direct web control panel and server for Alice ESP robot, voice pipeline, prompts, config, and logs"
 startup: "application"
@@ -97,6 +97,7 @@ options:
     transcription_model: "gpt-4o-mini-transcribe"
     transcription_prompt: ""
     transcript_wait_ms: 800
+    home_control_transcript_wait_ms: 1600
     response_timeout_ms: 12000
     ha_tools_enabled: false
     suppress_empty_transcript_response: true
@@ -247,6 +248,7 @@ schema:
     transcription_model: str
     transcription_prompt: str
     transcript_wait_ms: int
+    home_control_transcript_wait_ms: int
     response_timeout_ms: int
     ha_tools_enabled: bool
     suppress_empty_transcript_response: bool

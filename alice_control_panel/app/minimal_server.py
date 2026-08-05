@@ -66,6 +66,7 @@ DEFAULT_CONFIG = {
         "transcription_model": "gpt-4o-mini-transcribe",
         "transcription_prompt": "",
         "transcript_wait_ms": 800,
+        "home_control_transcript_wait_ms": 1600,
         "response_timeout_ms": 12000,
         "ha_tools_enabled": False,
         "suppress_empty_transcript_response": True,
@@ -360,7 +361,7 @@ def list_prompts(config: dict) -> dict:
 
 
 class Handler(SimpleHTTPRequestHandler):
-    server_version = "AliceControlPanel/0.1.185"
+    server_version = "AliceControlPanel/0.1.186"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -521,7 +522,7 @@ def health() -> dict:
     return {
         "ok": True,
         "service": "alice_control_panel",
-        "version": "0.1.185",
+        "version": "0.1.186",
         "safe_mode": bool(cfg.get("safe_mode")),
         "debug_logs": bool(cfg.get("debug_logs")),
         "system": {

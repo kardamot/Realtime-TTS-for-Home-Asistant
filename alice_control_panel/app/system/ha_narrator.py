@@ -59,32 +59,6 @@ def _compact_weather_state(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _natural_action_label(action: str) -> str:
-    return {
-        "turn_on": "açıldı",
-        "turn_off": "kapatıldı",
-        "toggle": "durumu değiştirildi",
-        "set_color": "renk ayarlandı",
-        "set_brightness": "parlaklık ayarlandı",
-        "set_temperature": "sıcaklık ayarlandı",
-        "set_hvac": "mod ayarlandı",
-        "set_media_volume": "ses seviyesi ayarlandı",
-        "read": "durum okundu",
-    }.get(action, "komut uygulandı")
-
-
-def _compact_control_result(result: dict[str, Any]) -> dict[str, Any]:
-    entity_ids = result.get("entity_ids") if isinstance(result.get("entity_ids"), list) else []
-    return {
-        "ok": bool(result.get("ok")),
-        "action": _natural_action_label(str(result.get("action") or "")),
-        "domain": str(result.get("domain") or ""),
-        "spoken_name": str(result.get("spoken_name") or result.get("friendly_name") or "").strip(),
-        "entity_count": len(entity_ids) or (1 if result.get("entity_id") else 0),
-        "fallback_speech": result.get("speech"),
-    }
-
-
 class HaNarrator:
     def __init__(self, config_store: ConfigStore, prompt_store: PromptStore, log_bus: LogBus) -> None:
         self._config_store = config_store
@@ -93,7 +67,9 @@ class HaNarrator:
 
     async def narrate(self, user_text: str, result: dict[str, Any], fallback: str) -> str:
         kind = str(result.get("narration_kind") or "").strip().lower()
-        if kind not in {"weather", "home_control"}:
+        # Routine controls use the local response composer so execution feedback
+        # stays immediate and cannot be changed or contradicted by another model.
+        if kind != "weather":
             return fallback
 
         config = await self._config_store.get(include_secrets=True)
@@ -107,30 +83,18 @@ class HaNarrator:
             return fallback
 
         persona = str(cfg.get("system_prompt") or "").strip() or await self._prompt_store.active_prompt_text()
-        if kind == "weather":
-            system_prompt = (
-                f"{persona}\n\n"
-                "Home Assistant weather verisini Alice karakteriyle doğal Türkçeye çevir. "
-                "Kısa konuş, ham state/entity/json okuma. "
-                "Türkçe karakterleri doğru kullan: güneşli, rüzgar, yağmur, sıcaklık. "
-                "Sıcaklık, yağış, rüzgar, nem ve hissedilen sıcaklık bilgisi varsa birlikte yorumla. "
-                "Ondalıklı sayıları TTS dostu yaz: 26,3 derece yerine 26 derece civarı de; 10,8 km/h yerine 11 kilometre/saat civarı de. "
-                "Rüzgar yüksekse, yağış/fırtına/kar varsa veya sıcaklık rahatsız ediciyse pratik tavsiye ekle. "
-                "Bilgi yoksa uydurma; sadece eldeki veriye göre konuş. Aynı kalıba takılma. En fazla 2 cümle yaz."
-            )
-            payload_data = _compact_weather_state(result)
-            data_label = "Home Assistant weather verisi"
-        else:
-            system_prompt = (
-                f"{persona}\n\n"
-                "Home Assistant kontrol sonucu için Alice'in söyleyeceği tek cümlelik doğal Türkçe cevap yaz. "
-                "Kontrol kararı ve servis çağrısı zaten güvenli backend tarafından yapıldı; yeni hedef, yeni işlem veya ek bilgi uydurma. "
-                "Servis adı, entity_id, JSON, domain, Home Assistant ya da teknik araç adı söyleme. "
-                "Fallback cümlesiyle aynı anlamı koru ama daha canlı, kısa ve TTS dostu söyle. "
-                "En fazla 14 kelime yaz."
-            )
-            payload_data = _compact_control_result(result)
-            data_label = "Güvenli kontrol özeti"
+        system_prompt = (
+            f"{persona}\n\n"
+            "Home Assistant weather verisini Alice karakteriyle doğal Türkçeye çevir. "
+            "Kısa konuş, ham state/entity/json okuma. "
+            "Türkçe karakterleri doğru kullan: güneşli, rüzgar, yağmur, sıcaklık. "
+            "Sıcaklık, yağış, rüzgar, nem ve hissedilen sıcaklık bilgisi varsa birlikte yorumla. "
+            "Ondalıklı sayıları TTS dostu yaz: 26,3 derece yerine 26 derece civarı de; 10,8 km/h yerine 11 kilometre/saat civarı de. "
+            "Rüzgar yüksekse, yağış/fırtına/kar varsa veya sıcaklık rahatsız ediciyse pratik tavsiye ekle. "
+            "Bilgi yoksa uydurma; sadece eldeki veriye göre konuş. Aynı kalıba takılma. En fazla 2 cümle yaz."
+        )
+        payload_data = _compact_weather_state(result)
+        data_label = "Home Assistant weather verisi"
         user_prompt = (
             "Kullanıcı sözü:\n"
             f"{user_text}\n\n"

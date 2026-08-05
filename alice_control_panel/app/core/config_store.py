@@ -89,6 +89,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "transcription_model": "gpt-4o-mini-transcribe",
         "transcription_prompt": "",
         "transcript_wait_ms": 800,
+        "home_control_transcript_wait_ms": 1600,
         "response_timeout_ms": 12000,
         "ha_tools_enabled": False,
         "suppress_empty_transcript_response": True,

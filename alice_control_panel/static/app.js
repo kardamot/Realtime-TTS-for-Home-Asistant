@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.185";
+const UI_VERSION = "0.1.186";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -698,6 +698,7 @@ Object.assign(HELP_DETAIL_TEXTS, {
       ["Input rate", "ESP mikrofon PCM sample rate değeridir. ESP ile uyumlu olmalıdır."],
       ["Response timeout ms", "Realtime cevap beklerken üst zaman sınırıdır."],
       ["Transcript wait ms", "STT transkripti geç gelirse kısa süre daha beklemek için kullanılır."],
+      ["HA transcript grace ms", "Yalnızca allowlist veya cihaz sözüne benzeyen ev komutlarında final STT için verilen ek süredir; normal sohbeti bekletmez."],
       ["Turn detection", "Konuşma bitiş kararını server_vad veya semantic_vad ile belirler."],
       ["Semantic eagerness", "semantic_vad seçiliyken modelin turn kapatmaya ne kadar istekli olduğunu ayarlar."],
       ["VAD threshold", "server_vad hassasiyetidir. Düşük değer daha kolay tetikler, yüksek değer daha seçicidir."],

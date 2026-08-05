@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.185" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.185" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.186" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.186" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <div class="sidebar-logo"><img src="/logo.png?v=0.1.185" alt="Alice" /></div>
+        <div class="sidebar-logo"><img src="/logo.png?v=0.1.186" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -25,7 +25,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.185" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.186" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -414,6 +414,7 @@
                   <label><span>Input rate</span><input data-path="realtime.input_sample_rate" type="number" /></label>
                   <label><span>Response timeout ms</span><input data-path="realtime.response_timeout_ms" type="number" /></label>
                   <label><span>Transcript wait ms</span><input data-path="realtime.transcript_wait_ms" type="number" /></label>
+                  <label><span>HA transcript grace ms</span><input data-path="realtime.home_control_transcript_wait_ms" type="number" min="0" step="100" /></label>
                   <label><span>Turn detection</span><select data-path="realtime.turn_detection"><option>server_vad</option><option>semantic_vad</option></select></label>
                   <label><span>Semantic eagerness</span><select data-path="realtime.semantic_eagerness"><option>low</option><option>medium</option><option>high</option><option>auto</option></select></label>
                   <label><span>VAD threshold</span><input data-path="realtime.vad_threshold" type="number" step="0.01" /></label>
@@ -598,6 +599,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.185"></script>
+  <script src="/app.js?v=0.1.186"></script>
   </body>
 </html>

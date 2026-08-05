@@ -18,6 +18,7 @@ from app.core.prompt_store import PromptStore
 from app.core.ws_hub import WsHub
 from app.pipeline.llm.openai_compatible import active_llm_config
 from app.system.ha_narrator import HaNarrator
+from app.system.ha_safety import sanitize_assistant_output
 
 
 OPENAI_REALTIME_WS_URL = "wss://api.openai.com/v1/realtime"
@@ -71,6 +72,8 @@ HOME_CONTROL_FRAGMENT_TERMS = {
     "ses",
     "muzik",
     "tv",
+    "nemlendirici",
+    "nemlendir",
 }
 _TR_TRANSLATION_TABLE = str.maketrans(
     {
@@ -783,6 +786,7 @@ class OpenAIRealtimeBridge:
         stt_message_sent = False
         assistant_message_sent = False
         llm_started_sent = False
+        technical_output_blocked = False
         speech_started = False
         audio_ms = 0
         buffered_audio_ms = 0
@@ -875,7 +879,17 @@ class OpenAIRealtimeBridge:
             await send_event("llm_started", model=self._model, provider="openai_realtime")
 
         async def send_tts_chunk(text: str, final: bool) -> None:
-            nonlocal first_tts_chunk_marked, tts_chunk_started
+            nonlocal first_tts_chunk_marked, technical_output_blocked, tts_chunk_started
+            safe_text = sanitize_assistant_output(text)
+            if safe_text != str(text or "").strip():
+                text = "" if technical_output_blocked else safe_text
+                technical_output_blocked = True
+                await self._log_bus.emit(
+                    "WARN",
+                    "HA",
+                    "Technical Home Assistant-shaped assistant output blocked",
+                    {"session_id": session_id},
+                )
             if text.strip():
                 tts_chunk_started = True
                 self._last_tts_text = append_display_text(self._last_tts_text, text)
@@ -895,6 +909,7 @@ class OpenAIRealtimeBridge:
             await send_event("emotion", name=clean_emotions[0])
 
         async def request_response_after_transcript_wait(reason: str = "realtime_committed") -> None:
+            nonlocal assistant_text, response_requested, text_chunker
             if response_requested or response_done:
                 return
             wait_ms = max(0, int(realtime.get("transcript_wait_ms") or 800))
@@ -904,12 +919,25 @@ class OpenAIRealtimeBridge:
                 except asyncio.TimeoutError:
                     self._mark_latency("transcript_wait_timeout", wait_ms=wait_ms)
                     pass
-            if (
-                self._ha_bridge is not None
-                and transcript.strip()
-                and not transcript_event.is_set()
-                and looks_like_home_control_fragment(transcript)
-            ):
+
+            home_control_candidate = False
+            if self._ha_bridge is not None and transcript.strip():
+                try:
+                    home_control_candidate = await self._ha_bridge.is_home_control_candidate(
+                        transcript,
+                        partial=not transcript_event.is_set(),
+                    )
+                except Exception as exc:
+                    await self._log_bus.emit(
+                        "WARN",
+                        "HA",
+                        "Realtime HA candidate check failed",
+                        {"session_id": session_id, "error": safe_exc_message(exc)},
+                    )
+                    home_control_candidate = looks_like_home_control_fragment(transcript)
+
+            if home_control_candidate and not transcript_event.is_set():
+                self._mark_latency("home_control_candidate", transcript_chars=len(transcript))
                 extra_wait_ms = max(0, int(realtime.get("home_control_transcript_wait_ms") or 1600))
                 if extra_wait_ms:
                     try:
@@ -926,10 +954,14 @@ class OpenAIRealtimeBridge:
             await send_stt_result_once(reason)
             if await try_home_assistant_route(reason):
                 return
+            if home_control_candidate and not transcript_event.is_set():
+                speech = self._ha_bridge.route_error_speech("transcript")
+                await finish_local_response(speech, "home_control_transcript_timeout", sync_context=True)
+                return
             await request_response()
 
         async def finish_response(doc: dict[str, Any] | None = None, reason: str = "openai_realtime_done") -> None:
-            nonlocal response_done, assistant_text, text_chunker, tts_chunk_started, assistant_message_sent
+            nonlocal response_done, assistant_text, text_chunker, tts_chunk_started, assistant_message_sent, technical_output_blocked
             if response_done:
                 return
             response_done = True
@@ -941,6 +973,13 @@ class OpenAIRealtimeBridge:
                 text_chunker = RealtimeTextChunker()
                 ready_emotions, ready_chunks = text_chunker.push(final_text)
             elif assistant_text.strip() and not text_chunker.all_text:
+                text_chunker = RealtimeTextChunker()
+                ready_emotions, ready_chunks = text_chunker.push(assistant_text)
+
+            safe_assistant_text = sanitize_assistant_output(assistant_text)
+            if safe_assistant_text != assistant_text.strip():
+                technical_output_blocked = True
+                assistant_text = safe_assistant_text
                 text_chunker = RealtimeTextChunker()
                 ready_emotions, ready_chunks = text_chunker.push(assistant_text)
 
@@ -993,8 +1032,29 @@ class OpenAIRealtimeBridge:
             # the TTS relay itself. Starting a second direct ESP audio stream here
             # races the firmware player and can trigger tts_still_active.
 
-        async def try_home_assistant_route(reason: str) -> bool:
+        async def finish_local_response(speech: str, reason: str, *, sync_context: bool) -> bool:
             nonlocal assistant_text, response_requested, text_chunker
+            clean = str(speech or "").strip()
+            if not clean or response_done:
+                return False
+            response_requested = True
+            assistant_text = clean
+            text_chunker = RealtimeTextChunker()
+            await send_llm_started_once()
+            if sync_context:
+                try:
+                    await remember_local_assistant_reply(clean, reason)
+                except Exception as exc:
+                    await self._log_bus.emit(
+                        "WARN",
+                        "PIPELINE",
+                        "Local reply could not be synced to Realtime context",
+                        {"session_id": session_id, "reason": reason, "error": safe_exc_message(exc)},
+                    )
+            await finish_response(reason=reason)
+            return True
+
+        async def try_home_assistant_route(reason: str) -> bool:
             if self._ha_bridge is None or response_done or response_requested:
                 return False
             user_text = transcript.strip()
@@ -1011,10 +1071,6 @@ class OpenAIRealtimeBridge:
                     speech = (await self._ha_narrator.narrate(user_text, result, speech)).strip()
                 if not speech:
                     return False
-                response_requested = True
-                assistant_text = speech
-                text_chunker = RealtimeTextChunker()
-                await send_llm_started_once()
                 self._last_event = "ha_route"
                 self._mark_latency("ha_route_completed")
                 await self._log_bus.emit(
@@ -1029,26 +1085,24 @@ class OpenAIRealtimeBridge:
                         "action": result.get("action"),
                     },
                 )
-                try:
-                    await remember_local_assistant_reply(speech, "ha_route")
-                except Exception as exc:
-                    await self._log_bus.emit(
-                        "WARN",
-                        "PIPELINE",
-                        "HA reply could not be synced to Realtime context",
-                        {"session_id": session_id, "error": safe_exc_message(exc)},
-                    )
-                await finish_response(reason="ha_route")
-                return True
+                return await finish_local_response(speech, "ha_route", sync_context=True)
             except PermissionError as exc:
                 await self._log_bus.emit("WARN", "HA", "Realtime HA route denied", {"session_id": session_id, "error": str(exc)})
-                return False
+                return await finish_local_response(
+                    self._ha_bridge.route_error_speech("permission"),
+                    "ha_route_denied",
+                    sync_context=True,
+                )
             except Exception as exc:
                 await self._log_bus.emit("ERROR", "HA", "Realtime HA route failed", {"session_id": session_id, "error": safe_exc_message(exc)})
-                return False
+                return await finish_local_response(
+                    self._ha_bridge.route_error_speech("connection"),
+                    "ha_route_failed",
+                    sync_context=True,
+                )
 
         async def handle_realtime_event(doc: dict[str, Any]) -> None:
-            nonlocal first_llm_delta_marked, first_transcript_delta_marked, input_committed, response_requested, response_done, response_wait_task, speech_started, text_chunker, transcript, assistant_text, stt_message_sent
+            nonlocal first_llm_delta_marked, first_transcript_delta_marked, input_committed, response_requested, response_done, response_wait_task, speech_started, technical_output_blocked, text_chunker, transcript, assistant_text, stt_message_sent
             event_type = str(doc.get("type") or "")
             if not event_type:
                 return
@@ -1113,10 +1167,25 @@ class OpenAIRealtimeBridge:
                 await send_llm_started_once()
                 delta = extract_realtime_text_delta(doc)
                 if delta:
+                    if technical_output_blocked:
+                        return
                     if not first_llm_delta_marked:
                         first_llm_delta_marked = True
                         self._mark_latency("first_llm_delta", chars=len(delta))
                     assistant_text += delta
+                    safe_assistant_text = sanitize_assistant_output(assistant_text)
+                    if safe_assistant_text != assistant_text.strip():
+                        technical_output_blocked = True
+                        assistant_text = safe_assistant_text
+                        text_chunker = RealtimeTextChunker()
+                        await self._log_bus.emit(
+                            "WARN",
+                            "HA",
+                            "Technical Home Assistant-shaped Realtime output blocked",
+                            {"session_id": session_id},
+                        )
+                        await send_event("llm_delta", text=assistant_text)
+                        return
                     emotions, chunks = text_chunker.push(delta)
                     display_delta = text_chunker.display_delta
                     if display_delta:
@@ -1188,7 +1257,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.185",
+                version="0.1.186",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -1218,6 +1287,7 @@ class OpenAIRealtimeBridge:
                         stt_message_sent = False
                         assistant_message_sent = False
                         llm_started_sent = False
+                        technical_output_blocked = False
                         speech_started = False
                         audio_ms = 0
                         buffered_audio_ms = 0
@@ -1294,6 +1364,7 @@ class OpenAIRealtimeBridge:
                         stt_message_sent = False
                         assistant_message_sent = False
                         llm_started_sent = False
+                        technical_output_blocked = False
                         speech_started = False
                         audio_ms = 0
                         buffered_audio_ms = 0

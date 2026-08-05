@@ -262,7 +262,7 @@ class VoicePipeline:
             {
                 "type": "hello",
                 "service": "alice_control_panel",
-                "version": "0.1.185",
+                "version": "0.1.186",
                 "session_id": session_id,
                 "endpointing_enabled": True,
                 "endpointing_provider": str(pipeline_cfg.get("live_vad_provider") or "silero"),
@@ -675,10 +675,10 @@ class VoicePipeline:
             return speech
         except PermissionError as exc:
             await self._log_bus.emit("WARN", "PIPELINE", "Home Assistant route skipped", {"error": str(exc)})
-            return None
+            return self._ha_bridge.route_error_speech("permission")
         except Exception as exc:
             await self._log_bus.emit("ERROR", "PIPELINE", "Home Assistant route failed", {"error": str(exc)})
-            return None
+            return self._ha_bridge.route_error_speech("connection")
 
     async def _handle_ha_ws_message(self, websocket: WebSocket, doc: dict[str, Any]) -> bool:
         msg_type = str(doc.get("type") or "").strip().lower()

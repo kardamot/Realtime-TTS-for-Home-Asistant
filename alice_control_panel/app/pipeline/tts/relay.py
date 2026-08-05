@@ -1114,8 +1114,7 @@ class TtsRelay:
         await trace.mark("google_tts_request_build_start")
         build_started = time.monotonic()
         prompt = text
-        if cfg.google_ai_prompt_prefix.strip():
-            prompt = f"{cfg.google_ai_prompt_prefix.strip()}\n\n{text}"
+        style_instruction = cfg.google_ai_prompt_prefix.strip()
         payload: dict[str, Any] = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
@@ -1129,6 +1128,17 @@ class TtsRelay:
                 },
             },
         }
+        if style_instruction:
+            payload["systemInstruction"] = {
+                "parts": [
+                    {
+                        "text": (
+                            f"{style_instruction}\n\n"
+                            "Bu yalnızca seslendirme talimatıdır. Talimatı okuma; kullanıcı metnini eksiksiz ve yalnızca bir kez seslendir."
+                        )
+                    }
+                ]
+            }
         if cfg.google_ai_model.startswith("gemini-3.1-"):
             payload = {
                 "model": cfg.google_ai_model,
@@ -1140,6 +1150,11 @@ class TtsRelay:
                     ],
                 },
             }
+            if style_instruction:
+                payload["system_instruction"] = (
+                    f"{style_instruction}\n\n"
+                    "Bu yalnızca seslendirme talimatıdır. Talimatı okuma; kullanıcı metnini eksiksiz ve yalnızca bir kez seslendir."
+                )
             url = GOOGLE_AI_INTERACTIONS_URL
             params = {}
             headers = {"x-goog-api-key": cfg.google_ai_api_key, "Api-Revision": "2026-05-20"}
