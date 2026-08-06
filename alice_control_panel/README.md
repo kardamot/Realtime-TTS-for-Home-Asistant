@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.187` preserves Google AI TTS character guidance by placing it in the supported Gemini 3.1 speech prompt instead of a rejected developer instruction.
 - Version `0.1.115` adds firmware soft sleep mode, deep-sleep eyes, and Sleep/Wake panel control.
 - Version `0.1.98` ends empty-room radar calibration even when no radar frames arrive and tightens the mobile radar header controls.
 - Version `0.1.97` moves ESP panel API JSON buffers off the HTTP task stack to prevent command-triggered stack overflows.

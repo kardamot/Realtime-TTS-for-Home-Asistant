@@ -18,6 +18,7 @@ from google.oauth2 import service_account
 
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
+from app.pipeline.tts.google_ai_request import build_google_ai_interactions_payload
 
 
 OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech"
@@ -1140,25 +1141,15 @@ class TtsRelay:
                 ]
             }
         if cfg.google_ai_model.startswith("gemini-3.1-"):
-            payload = {
-                "model": cfg.google_ai_model,
-                "input": prompt,
-                "response_format": {"type": "audio"},
-                "generation_config": {
-                    "speech_config": [
-                        {"voice": cfg.google_ai_voice_name or "Kore"},
-                    ],
-                },
-            }
-            if style_instruction:
-                payload["system_instruction"] = (
-                    f"{style_instruction}\n\n"
-                    "Bu yalnızca seslendirme talimatıdır. Talimatı okuma; kullanıcı metnini eksiksiz ve yalnızca bir kez seslendir."
-                )
+            payload = build_google_ai_interactions_payload(
+                model=cfg.google_ai_model,
+                voice_name=cfg.google_ai_voice_name,
+                text=prompt,
+                style_instruction=style_instruction,
+            )
             url = GOOGLE_AI_INTERACTIONS_URL
             params = {}
             headers = {"x-goog-api-key": cfg.google_ai_api_key, "Api-Revision": "2026-05-20"}
-            payload["stream"] = True
             audio_extractor = extract_interaction_audio
         else:
             url = GOOGLE_AI_MODEL_URL.format(model=cfg.google_ai_model)
