@@ -16,7 +16,7 @@ from app.api import commands, config, esp, ha, logs, mic, pipeline, prompts, sta
 from app.core.auth import require_websocket_auth
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
-from app.core.paths import FRONTEND_DIST_DIR, STATIC_DIR
+from app.core.paths import CRITICAL_LOGS_DIR, FRONTEND_DIST_DIR, STATIC_DIR
 from app.core.prompt_store import PromptStore
 from app.core.ws_hub import WsHub
 from app.esp.esp_client import EspClient
@@ -49,9 +49,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Alice Control Panel", version="0.1.186", lifespan=lifespan)
+    app = FastAPI(title="Alice Control Panel", version="0.1.188", lifespan=lifespan)
     config_store = ConfigStore()
-    log_bus = LogBus(maxlen=1000)
+    log_bus = LogBus(maxlen=1000, critical_dir=CRITICAL_LOGS_DIR)
     ws_hub = WsHub()
     prompt_store = PromptStore(config_store)
     esp_client = EspClient(config_store, log_bus, ws_hub)

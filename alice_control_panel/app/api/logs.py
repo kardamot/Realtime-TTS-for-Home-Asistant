@@ -22,7 +22,7 @@ async def get_logs(
     _: None = Depends(require_request_auth),
 ) -> dict[str, Any]:
     entries = await request.app.state.log_bus.list(level=level, category=category, search=search, limit=limit)
-    return {"entries": entries}
+    return {"entries": entries, "critical_archive": request.app.state.log_bus.archive_status()}
 
 
 @router.delete("/api/logs")
@@ -69,4 +69,3 @@ async def logs_ws(websocket: WebSocket) -> None:
             await websocket.send_json({"type": "entries", "entries": batch})
     finally:
         await bus.unsubscribe(queue)
-

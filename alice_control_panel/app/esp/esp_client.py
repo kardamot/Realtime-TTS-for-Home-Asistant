@@ -104,6 +104,12 @@ DEFAULT_STATUS: dict[str, Any] = {
     "ws_connected": False,
     "ws_url": "",
     "last_ws_error": "",
+    "last_ws_connected_at": None,
+    "last_ws_disconnected_at": None,
+    "last_ws_message_at": None,
+    "ws_connection_started_at": None,
+    "last_ws_connection_duration_sec": 0,
+    "ws_disconnect_streak": 0,
     "reconnects": 0,
     "max_auto_reconnects": 40,
     "auto_reconnect_paused": False,
@@ -182,6 +188,23 @@ SAFE_MODE_ALLOWED_COMMANDS = {
     "eyes_sleep_off",
 }
 MIC_CAPTURE_MAX_BYTES = 768 * 1024
+WS_HEARTBEAT_SECONDS = 20.0
+WS_STABLE_CONNECTION_SECONDS = 60.0
+WS_FLAP_LOG_INTERVAL_SECONDS = 5 * 60.0
+WS_RUNTIME_STATUS_FIELDS = (
+    "ws_connected",
+    "ws_url",
+    "last_ws_error",
+    "last_ws_connected_at",
+    "last_ws_disconnected_at",
+    "last_ws_message_at",
+    "ws_connection_started_at",
+    "last_ws_connection_duration_sec",
+    "ws_disconnect_streak",
+    "reconnects",
+    "max_auto_reconnects",
+    "auto_reconnect_paused",
+)
 
 
 class EspClient:
@@ -198,6 +221,13 @@ class EspClient:
         self._stop = asyncio.Event()
         self._last_poll_log_at = 0.0
         self._last_ws_log_at = 0.0
+        self._poll_failure_streak = 0
+        self._unreported_poll_failures = 0
+        self._ws_connected_monotonic = 0.0
+        self._ws_connection_stable = False
+        self._ws_ever_connected = False
+        self._ws_disconnect_streak = 0
+        self._unreported_ws_disconnects = 0
         self._pause_log_emitted = False
         self._audio_ack_waiters: dict[str, asyncio.Future[dict[str, Any]]] = {}
         self._active_audio_stream_id = ""
@@ -351,15 +381,36 @@ class EspClient:
                 if resp.status >= 400:
                     raise RuntimeError(f"ESP status HTTP {resp.status}: {doc}")
             self._status = self._normalize_status(doc, base_url)
+            if self._poll_failure_streak:
+                await self._log_bus.emit(
+                    "INFO",
+                    "ESP",
+                    "ESP status polling recovered",
+                    {"failed_polls": self._poll_failure_streak},
+                )
+                self._poll_failure_streak = 0
+                self._unreported_poll_failures = 0
             await self._observe_system_diagnostics(self._status)
             await self._ws_hub.publish("esp_status", self._status)
         except Exception as exc:
             reconnects = self._record_reconnect_failure(esp_cfg)
             self._status = self._offline_status(str(exc), reconnects=reconnects)
+            self._poll_failure_streak += 1
+            self._unreported_poll_failures += 1
             now = time.time()
-            if now - self._last_poll_log_at > 15:
+            if self._poll_failure_streak == 1 or now - self._last_poll_log_at >= WS_FLAP_LOG_INTERVAL_SECONDS:
                 self._last_poll_log_at = now
-                await self._log_bus.emit("WARN", "ESP", "ESP status poll failed", {"error": str(exc)})
+                await self._log_bus.emit(
+                    "WARN",
+                    "ESP",
+                    "ESP status poll failed" if self._poll_failure_streak == 1 else "ESP status polling repeatedly failing",
+                    {
+                        "error": str(exc),
+                        "failures_since_last_log": self._unreported_poll_failures,
+                        "failure_streak": self._poll_failure_streak,
+                    },
+                )
+                self._unreported_poll_failures = 0
         return await self.status()
 
     async def send_command(self, command: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -468,31 +519,38 @@ class EspClient:
             self._session = session
             active_ws: aiohttp.ClientWebSocketResponse | None = None
             try:
-                async with session.ws_connect(ws_url, heartbeat=20, receive_timeout=120) as ws:
+                async with session.ws_connect(
+                    ws_url,
+                    heartbeat=WS_HEARTBEAT_SECONDS,
+                    receive_timeout=120,
+                ) as ws:
                     active_ws = ws
                     self._ws = ws
-                    self._set_ws_state(True, ws_url, "")
-                    await self._log_bus.emit("INFO", "ESP", "ESP WebSocket connected", {"url": ws_url})
+                    first_connection = not self._ws_ever_connected
+                    self._begin_ws_connection(ws_url)
+                    if first_connection:
+                        await self._log_bus.emit("INFO", "ESP", "ESP WebSocket connected", {"url": ws_url})
                     await self._ws_hub.publish("esp_status", await self.status())
                     async for msg in ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
+                            await self._note_ws_activity(ws_url)
                             await self._handle_ws_text(msg.data, ws_url)
                             continue
                         if msg.type == aiohttp.WSMsgType.BINARY:
+                            await self._note_ws_activity(ws_url)
                             await self._handle_ws_binary(msg.data)
                             continue
                         if msg.type == aiohttp.WSMsgType.ERROR:
                             raise RuntimeError(f"ESP websocket error: {ws.exception()}")
-                    self._set_ws_state(False, ws_url, "ESP websocket closed")
+                    if not self._stop.is_set():
+                        raise RuntimeError("ESP websocket closed")
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                connected_seconds = self._finish_ws_connection()
                 self._status["reconnects"] = self._record_reconnect_failure(esp_cfg)
                 self._set_ws_state(False, ws_url, str(exc))
-                now = time.time()
-                if now - self._last_ws_log_at > 15:
-                    self._last_ws_log_at = now
-                    await self._log_bus.emit("WARN", "ESP", "ESP WebSocket disconnected", {"url": ws_url, "error": str(exc)})
+                await self._record_ws_disconnect(ws_url, str(exc), connected_seconds)
             finally:
                 if self._ws is active_ws:
                     self._ws = None
@@ -728,9 +786,6 @@ class EspClient:
             self._status["online"] = True
             self._status["mock_mode"] = False
             self._status["last_seen"] = time.time()
-            self._status["reconnects"] = 0
-            self._status["auto_reconnect_paused"] = False
-            self._pause_log_emitted = False
             self._status["ip"] = self._status.get("ip") or self._host_from_url(ws_url)
             if str(self._status.get("state") or "").upper() == "OFFLINE":
                 self._status["state"] = "IDLE"
@@ -739,12 +794,8 @@ class EspClient:
         status = copy.deepcopy(DEFAULT_STATUS)
         status["mock_mode"] = True
         status["last_error"] = error
-        status["ws_connected"] = bool(self._status.get("ws_connected"))
-        status["ws_url"] = str(self._status.get("ws_url") or "")
-        status["last_ws_error"] = str(self._status.get("last_ws_error") or "")
+        self._copy_ws_runtime_status(status)
         status["reconnects"] = int(reconnects if reconnects is not None else self._status.get("reconnects") or 0)
-        status["max_auto_reconnects"] = int(self._status.get("max_auto_reconnects") or 0)
-        status["auto_reconnect_paused"] = bool(self._status.get("auto_reconnect_paused"))
         return status
 
     def _normalize_status(self, doc: dict[str, Any], base_url: str) -> dict[str, Any]:
@@ -756,13 +807,90 @@ class EspClient:
         status["state"] = str(status.get("state") or "IDLE").upper()
         status["last_seen"] = time.time()
         status["last_error"] = ""
-        status["ws_connected"] = bool(self._status.get("ws_connected"))
-        status["ws_url"] = str(self._status.get("ws_url") or "")
-        status["last_ws_error"] = str(self._status.get("last_ws_error") or "")
-        status["reconnects"] = 0
-        status["max_auto_reconnects"] = int(self._status.get("max_auto_reconnects") or 40)
-        status["auto_reconnect_paused"] = False
+        self._copy_ws_runtime_status(status)
         return status
+
+    def _copy_ws_runtime_status(self, target: dict[str, Any]) -> None:
+        for key in WS_RUNTIME_STATUS_FIELDS:
+            target[key] = copy.deepcopy(self._status.get(key, DEFAULT_STATUS.get(key)))
+
+    def _begin_ws_connection(self, ws_url: str) -> None:
+        now = time.time()
+        self._ws_ever_connected = True
+        self._ws_connected_monotonic = time.monotonic()
+        self._ws_connection_stable = False
+        self._status["last_ws_connected_at"] = now
+        self._status["ws_connection_started_at"] = now
+        self._set_ws_state(True, ws_url, "")
+
+    async def _note_ws_activity(self, ws_url: str) -> None:
+        self._status["last_ws_message_at"] = time.time()
+        if self._ws_connection_stable or not self._ws_connected_monotonic:
+            return
+        connected_seconds = time.monotonic() - self._ws_connected_monotonic
+        if connected_seconds < WS_STABLE_CONNECTION_SECONDS:
+            return
+        self._ws_connection_stable = True
+        interruptions = self._ws_disconnect_streak
+        unreported = self._unreported_ws_disconnects
+        self._reset_reconnect_budget()
+        self._ws_disconnect_streak = 0
+        self._unreported_ws_disconnects = 0
+        self._status["ws_disconnect_streak"] = 0
+        if interruptions:
+            await self._log_bus.emit(
+                "INFO",
+                "ESP",
+                "ESP WebSocket connection recovered",
+                {
+                    "url": ws_url,
+                    "interruptions": interruptions,
+                    "unreported_interruptions": unreported,
+                    "stable_seconds": int(connected_seconds),
+                },
+            )
+
+    def _finish_ws_connection(self) -> float:
+        if not self._ws_connected_monotonic:
+            return 0.0
+        connected_seconds = max(0.0, time.monotonic() - self._ws_connected_monotonic)
+        self._ws_connected_monotonic = 0.0
+        self._status["last_ws_connection_duration_sec"] = round(connected_seconds, 1)
+        self._status["last_ws_disconnected_at"] = time.time()
+        self._status["ws_connection_started_at"] = None
+        return connected_seconds
+
+    async def _record_ws_disconnect(self, ws_url: str, error: str, connected_seconds: float) -> None:
+        self._ws_disconnect_streak += 1
+        self._unreported_ws_disconnects += 1
+        self._status["ws_disconnect_streak"] = self._ws_disconnect_streak
+        now = time.time()
+        max_attempts = int(self._status.get("max_auto_reconnects") or 0)
+        reconnects = int(self._status.get("reconnects") or 0)
+        should_log = (
+            self._ws_disconnect_streak == 1
+            or now - self._last_ws_log_at >= WS_FLAP_LOG_INTERVAL_SECONDS
+            or bool(max_attempts and reconnects >= max_attempts)
+        )
+        if not should_log:
+            return
+        self._last_ws_log_at = now
+        pending = self._unreported_ws_disconnects
+        self._unreported_ws_disconnects = 0
+        await self._log_bus.emit(
+            "WARN",
+            "ESP",
+            "ESP WebSocket disconnected" if self._ws_disconnect_streak == 1 else "ESP WebSocket repeatedly disconnecting",
+            {
+                "url": ws_url,
+                "error": error,
+                "connected_seconds": round(connected_seconds, 1),
+                "disconnects_since_last_log": pending,
+                "disconnect_streak": self._ws_disconnect_streak,
+                "reconnects": reconnects,
+                "max_auto_reconnects": max_attempts,
+            },
+        )
 
     async def _observe_system_diagnostics(self, status: dict[str, Any]) -> None:
         system = status.get("system") if isinstance(status.get("system"), dict) else {}

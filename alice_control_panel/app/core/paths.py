@@ -13,6 +13,7 @@ CONFIG_PATH = Path(os.getenv("ALICE_CONFIG_PATH", str(DATA_DIR / "alice_config.j
 PROMPTS_DIR = Path(os.getenv("ALICE_PROMPTS_DIR", str(DATA_DIR / "prompts")))
 MODELS_DIR = Path(os.getenv("ALICE_MODELS_DIR", str(DATA_DIR / "models")))
 MIC_CAPTURES_DIR = Path(os.getenv("ALICE_MIC_CAPTURES_DIR", str(DATA_DIR / "mic_captures")))
+CRITICAL_LOGS_DIR = Path(os.getenv("ALICE_CRITICAL_LOGS_DIR", str(DATA_DIR / "critical_logs")))
 STATIC_DIR = Path(os.getenv("ALICE_STATIC_DIR", str(ADDON_ROOT / "static")))
 FRONTEND_DIST_DIR = ADDON_ROOT / "frontend" / "dist"
 
@@ -22,3 +23,4 @@ def ensure_data_dirs() -> None:
     PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     MIC_CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
+    CRITICAL_LOGS_DIR.mkdir(parents=True, exist_ok=True)

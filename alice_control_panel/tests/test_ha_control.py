@@ -12,18 +12,26 @@ ADDON_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ADDON_ROOT))
 
 # The host-side parser tests do not make HTTP requests. Keep imports independent
-# from add-on-only packages so they can run with a plain Python installation.
-sys.modules.setdefault("aiohttp", types.ModuleType("aiohttp"))
+# from add-on-only packages without leaking stubs into later test modules.
+stub_names = ("aiohttp", "app.core.config_store", "app.core.log_bus")
+previous_modules = {name: sys.modules.get(name) for name in stub_names}
+sys.modules["aiohttp"] = types.ModuleType("aiohttp")
 config_store_module = types.ModuleType("app.core.config_store")
 log_bus_module = types.ModuleType("app.core.log_bus")
 config_store_module.ConfigStore = object
 log_bus_module.LogBus = object
-sys.modules.setdefault("app.core.config_store", config_store_module)
-sys.modules.setdefault("app.core.log_bus", log_bus_module)
+sys.modules["app.core.config_store"] = config_store_module
+sys.modules["app.core.log_bus"] = log_bus_module
 
 from app.system.ha_bridge import HomeAssistantBridge  # noqa: E402
 from app.system.ha_response import HaResponseComposer  # noqa: E402
 from app.system.ha_safety import sanitize_assistant_output  # noqa: E402
+
+for name, previous in previous_modules.items():
+    if previous is None:
+        sys.modules.pop(name, None)
+    else:
+        sys.modules[name] = previous
 
 
 HA_CONFIG = {
