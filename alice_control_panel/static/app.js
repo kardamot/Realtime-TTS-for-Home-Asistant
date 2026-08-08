@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.189";
+const UI_VERSION = "0.1.190";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -1464,6 +1464,7 @@ async function boot() {
   $("pipeline-send").onclick = () => guard("Pipeline failed", runPipeline);
   $("pipeline-tts-send").onclick = () => guard("TTS test failed", runTtsTest);
   $("pipeline-tts-benchmark").onclick = () => guard("TTS latency test failed", runTtsLatencyBenchmark);
+  $("pipeline-tts-download").onclick = () => guard("TTS audio download failed", downloadLatestTts);
   $("pipeline-messages-download").onclick = () => guard("Pipeline message download failed", downloadPipelineMessages);
   $("pipeline-messages-clear").onclick = () => guard("Clear pipeline messages failed", clearPipelineMessages);
   $("session-start").onclick = () => guard("Session start failed", startVoiceSession);
@@ -1599,6 +1600,7 @@ async function loadStatus() {
   text("conn-stt", liveMode ? `${liveProvider} / ${realtime.transcription_model || "stt n/a"}` : data.stt?.provider || "faster_whisper");
   text("conn-llm", liveMode ? `${liveProvider} / ${realtime.model || "model n/a"}` : `${data.llm?.provider || "openai"} / ${data.llm?.model || "n/a"}`);
   text("conn-tts", `${data.tts?.provider || "openai"} / ${data.tts?.pcm_sample_rate || "n/a"}`);
+  renderLatestTtsCapture(data.tts?.latest_capture || {});
   text("conn-reconnects", formatReconnects(esp));
   text("conn-esp-ws", esp.ws_connected ? "connected" : "offline");
   text("hw-mic", esp.hardware?.mic || "unknown");
@@ -3136,6 +3138,30 @@ async function runTtsLatencyBenchmark() {
   await api("/api/pipeline/tts/benchmark", { method: "POST", body: JSON.stringify({}) });
   notice("TTS latency test queued");
   await loadStatus();
+}
+
+function renderLatestTtsCapture(capture) {
+  const button = $("pipeline-tts-download");
+  if (!button) return;
+  const available = Boolean(capture?.available && capture?.url);
+  button.disabled = !available;
+  button.title = available
+    ? `Download last TTS audio (${formatBytes(capture.file_bytes || capture.pcm_bytes || 0)})`
+    : "No completed TTS audio yet";
+}
+
+async function downloadLatestTts() {
+  const capture = latestStatus.tts?.latest_capture || {};
+  if (!capture.available || !capture.url) {
+    notice("No completed TTS audio yet");
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = cacheBustedPath(capture.url);
+  a.download = capture.filename || "alice_tts_latest.wav";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 async function startVoiceSession() {

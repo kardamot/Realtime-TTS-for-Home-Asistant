@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, WebSocket
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
+from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.core.auth import require_request_auth, require_websocket_auth
 
@@ -102,6 +102,21 @@ async def llm_status(request: Request, _: None = Depends(require_request_auth)) 
 @router.get("/tts")
 async def tts_status(request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
     return await request.app.state.tts_relay.status()
+
+
+@router.get("/tts/latest.wav")
+async def latest_tts_capture(request: Request, _: None = Depends(require_request_auth)) -> FileResponse:
+    relay = request.app.state.tts_relay
+    path = relay.latest_capture_path()
+    capture = relay.latest_capture_status()
+    if path is None:
+        raise HTTPException(status_code=404, detail="TTS capture not found")
+    return FileResponse(
+        path,
+        media_type="audio/wav",
+        filename=str(capture.get("filename") or "alice_tts_latest.wav"),
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @router.websocket("/tts/ws")

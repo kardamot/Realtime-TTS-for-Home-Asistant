@@ -245,6 +245,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
 - Panel logs are kept in the backend memory buffer, not persisted to a log file; an add-on restart/update or explicit Clear resets the visible buffer.
+- `0.1.190` adds a bounded last-successful TTS WAV capture and download action to Voice Pipeline.
 - `0.1.189` prevents unknown room names from falling back to other allowlisted room lights during bulk commands.
 - `0.1.188` fixes ESP WebSocket PING/PONG handling, summarizes reconnect storms, and retains WARN/ERROR logs for 31 days within a 32 MB archive cap.
 - `0.1.187` keeps Google AI TTS character guidance in the supported Interactions input prompt instead of the unsupported developer-instruction field.

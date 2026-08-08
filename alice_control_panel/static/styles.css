@@ -909,6 +909,26 @@ nav a:hover { background: #121a25; color: var(--text); }
   gap: 8px;
   flex-wrap: wrap;
 }
+.pipeline-download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  width: 30px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid rgba(100,169,255,.3);
+  background: rgba(100,169,255,.08);
+  color: #cfe4ff;
+  font-size: 18px;
+  line-height: 1;
+}
+.pipeline-download-button:not(:disabled):hover,
+.pipeline-download-button:not(:disabled):focus {
+  border-color: rgba(57,197,187,.58);
+  background: rgba(57,197,187,.16);
+  color: #d7fffb;
+}
 .pipeline-tabs {
   display: inline-grid;
   grid-auto-flow: column;

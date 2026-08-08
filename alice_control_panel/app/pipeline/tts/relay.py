@@ -8,6 +8,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Awaitable, Callable
 from urllib.parse import urlencode
 
@@ -18,6 +19,8 @@ from google.oauth2 import service_account
 
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
+from app.core.paths import TTS_CAPTURES_DIR
+from app.pipeline.tts.capture import CapturingPcmOutput, TtsCaptureStore
 from app.pipeline.tts.google_ai_request import build_google_ai_interactions_payload
 
 
@@ -804,6 +807,7 @@ class TtsRelay:
         self._config_store = config_store
         self._log_bus = log_bus
         self._trace_handler: TtsTraceHandler | None = None
+        self._capture_store = TtsCaptureStore(TTS_CAPTURES_DIR)
 
     def set_trace_handler(self, handler: TtsTraceHandler | None) -> None:
         self._trace_handler = handler
@@ -869,7 +873,23 @@ class TtsRelay:
             "elevenlabs_voice_configured": bool(cfg.elevenlabs_voice_id),
             "google_ai_api_key_configured": bool(cfg.google_ai_api_key),
             "google_cloud_credentials_configured": bool(cfg.google_cloud_credentials_json),
+            "latest_capture": self._capture_store.status(),
         }
+
+    def latest_capture_path(self) -> Path | None:
+        capture = self._capture_store.status()
+        return self._capture_store.latest_path if capture.get("available") else None
+
+    def latest_capture_status(self) -> dict[str, Any]:
+        return self._capture_store.status()
+
+    def _capturing_output(
+        self,
+        output: PcmOutput,
+        cfg: TtsRelayConfig,
+        transport: str,
+    ) -> CapturingPcmOutput:
+        return CapturingPcmOutput(output, self._capture_store, cfg.provider, transport)
 
     async def websocket_session(self, ws: WebSocket) -> None:
         await ws.accept()
@@ -877,12 +897,13 @@ class TtsRelay:
         try:
             first_cmd = await receive_stream_command(ws, expect_start=True)
             cfg = relay_config_from_panel(await self._config_store.get(include_secrets=True), first_cmd.provider)
-            output = WebSocketPcmOutput(ws)
+            raw_output = WebSocketPcmOutput(ws)
             await self._log_bus.emit("INFO", "TTS", "TTS relay websocket started", {"provider": cfg.provider})
             if first_cmd.final and not first_cmd.text.strip():
                 await self._log_bus.emit("INFO", "TTS", "Empty TTS relay request ignored")
-                await output.done()
+                await raw_output.done()
                 return
+            output = self._capturing_output(raw_output, cfg, "relay_ws")
             async with aiohttp.ClientSession() as session:
                 if cfg.provider == "cartesia":
                     await self._relay_cartesia_continuation(session, output, cfg, first_cmd, ws)
@@ -928,12 +949,16 @@ class TtsRelay:
         if not await esp_client.audio_stream_ready():
             return {"ok": False, "status": "esp_ws_offline", "message": "ESP WebSocket is not connected."}
 
-        output = EspPcmOutput(
-            esp_client,
-            self._log_bus,
-            cfg.esp_initial_buffer_ms,
-            cfg.esp_silence_prefix_ms,
-            cancel_event,
+        output = self._capturing_output(
+            EspPcmOutput(
+                esp_client,
+                self._log_bus,
+                cfg.esp_initial_buffer_ms,
+                cfg.esp_silence_prefix_ms,
+                cancel_event,
+            ),
+            cfg,
+            "direct_esp",
         )
         await self._log_bus.emit("INFO", "TTS", "ESP TTS stream starting", {"provider": cfg.provider})
         try:
