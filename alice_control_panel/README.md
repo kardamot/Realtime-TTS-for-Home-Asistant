@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.189` prevents unknown room names from falling back to other allowlisted room lights during bulk commands.
 - Version `0.1.188` fixes ESP WebSocket PING/PONG handling, summarizes reconnect storms, and retains WARN/ERROR logs for 31 days within a 32 MB archive cap.
 - Version `0.1.187` preserves Google AI TTS character guidance by placing it in the supported Gemini 3.1 speech prompt instead of a rejected developer instruction.
 - Version `0.1.115` adds firmware soft sleep mode, deep-sleep eyes, and Sleep/Wake panel control.

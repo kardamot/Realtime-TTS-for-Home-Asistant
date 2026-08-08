@@ -644,10 +644,39 @@ def _display_list(items: list[dict[str, Any]], limit: int = 3) -> str:
     return ", ".join(names)
 
 
+def _same_term_family(left: str, right: str) -> bool:
+    return left == right or (min(len(left), len(right)) >= 3 and (left.startswith(right) or right.startswith(left)))
+
+
+def _specific_target_terms(target_terms: list[str], area_terms: list[str]) -> list[str]:
+    return [
+        term
+        for term in target_terms
+        if not any(_same_term_family(term, area) for area in area_terms)
+    ]
+
+
 def _split_target_terms(text: str) -> tuple[list[str], list[str]]:
     target_terms = _entity_match_terms(text)
     filtered: list[str] = []
     area_terms: list[str] = []
+    words = _words(text)
+    for index, word in enumerate(words):
+        if index == 0 or not word.startswith("oda"):
+            continue
+        candidate = words[index - 1]
+        if (
+            len(candidate) <= 1
+            or _is_ignored_entity_term(candidate)
+            or candidate in _ALL_TERMS
+            or candidate in _ONLY_TERMS
+            or candidate in _COLOR_WORDS
+            or candidate in _BRIGHTNESS_WORDS
+            or candidate.startswith(("isik", "isig", "lamba", "lamb"))
+        ):
+            continue
+        if candidate not in area_terms:
+            area_terms.append(candidate)
     for term in target_terms:
         if term.isdigit():
             continue
@@ -722,7 +751,7 @@ class HomeAssistantBridge:
             intent.action = self._detect_action(text)
 
         intent.target_terms, intent.area_terms = _split_target_terms(text)
-        specific_terms = [term for term in intent.target_terms if term not in intent.area_terms]
+        specific_terms = _specific_target_terms(intent.target_terms, intent.area_terms)
         has_singular_light_noun = any(
             word.startswith(("isik", "isig", "lamba", "lamb"))
             and not word.startswith(("isiklar", "isiklari", "lambalar", "lambalari"))
@@ -1229,14 +1258,22 @@ class HomeAssistantBridge:
 
         if intent.all_requested:
             if intent.target_terms or intent.area_terms:
-                selected = [entry.item for entry in scored if entry.score >= 8]
+                selected = [
+                    entry.item
+                    for entry in scored
+                    if entry.score >= 8 and self._bulk_entry_matches_intent(entry, intent)
+                ]
                 if not selected:
                     return [], alternatives, self._no_match_speech(intent, alternatives, cfg)
                 return selected, alternatives, ""
             return states, alternatives, ""
 
         if intent.room_group_requested:
-            selected = [entry.item for entry in scored if entry.score >= 8]
+            selected = [
+                entry.item
+                for entry in scored
+                if entry.score >= 8 and self._bulk_entry_matches_intent(entry, intent)
+            ]
             if not selected:
                 return [], alternatives, self._no_match_speech(intent, alternatives, cfg)
             return selected, alternatives, ""
@@ -1260,6 +1297,25 @@ class HomeAssistantBridge:
                 return [], [entry.item for entry in scored[:5]], self._clarify_speech([entry.item for entry in scored[:5]], cfg)
 
         return [top.item], [entry.item for entry in scored[1:6]], ""
+
+    def _bulk_entry_matches_intent(self, entry: EntityScore, intent: HaIntent) -> bool:
+        specific_targets = _specific_target_terms(intent.target_terms, intent.area_terms)
+        specific_areas = [term for term in intent.area_terms if term != "oda"]
+
+        if intent.area_terms and not specific_targets and not specific_areas:
+            return False
+
+        if specific_targets and not any(
+            reason in entry.reasons
+            for term in specific_targets
+            for reason in (f"word:{term}", f"compact:{term}", f"contains:{term}")
+        ):
+            return False
+
+        if specific_areas and not any(f"area:{term}" in entry.reasons for term in specific_areas):
+            return False
+
+        return True
 
     def _should_try_cross_domain_match(
         self,

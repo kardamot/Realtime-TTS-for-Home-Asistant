@@ -45,6 +45,7 @@ HA_CONFIG = {
             "light.gece_lambasi",
             "light.oturma_odasi_lamba",
             "light.oturma_odasi_led",
+            "light.yatak_odasi_tavan_lambasi",
             "sensor.oturma_odasi_nem",
             "sensor.oturma_odasi_sicaklik",
             "switch.kahve_makinesi",
@@ -58,6 +59,7 @@ HA_CONFIG = {
             "light.gece_lambasi: gece lambası, başucu lambası",
             "light.oturma_odasi_lamba: oturma odası lambası, oturma odası tavan lambası, salon tavan lambası",
             "light.oturma_odasi_led: oturma odası ledi, salon ledi",
+            "light.yatak_odasi_tavan_lambasi: yatak odası lambası, yatak odası tavan lambası",
             "sensor.oturma_odasi_nem: oturma odası nemi, salon nemi",
             "sensor.oturma_odasi_sicaklik: oturma odası derecesi, oturma odası sıcaklığı, salon sıcaklığı",
             "switch.kahve_makinesi: kahve makinesi",
@@ -97,6 +99,12 @@ HA_STATES = [
         "state": "on",
         "friendly_name": "Oturma Odası Led",
         "attributes": {"friendly_name": "Oturma Odası Led"},
+    },
+    {
+        "entity_id": "light.yatak_odasi_tavan_lambasi",
+        "state": "off",
+        "friendly_name": "Yatak Odası Tavan Lambası",
+        "attributes": {"friendly_name": "Yatak Odası Tavan Lambası"},
     },
     {
         "entity_id": "sensor.oturma_odasi_nem",
@@ -251,6 +259,42 @@ class HomeAssistantBridgeTests(unittest.IsolatedAsyncioTestCase):
         _, service, data = self.bridge.service_calls[-1]
         self.assertEqual("turn_off", service)
         self.assertEqual(result["entity_ids"], data["entity_id"])
+
+    async def test_unknown_room_never_falls_back_to_other_room_lights(self) -> None:
+        for text in (
+            "Hobi odasının ışıklarını yakar mısın?",
+            "Hobi odasındaki ledleri mavi yap.",
+        ):
+            with self.subTest(text=text):
+                result = await self.bridge.handle_text_command(text)
+                self.assertTrue(result["handled"])
+                self.assertFalse(result["ok"])
+                self.assertTrue(result["requires_clarification"])
+        self.assertEqual([], self.bridge.service_calls)
+
+    async def test_allowlisted_hobi_room_targets_only_its_light(self) -> None:
+        entity_id = "light.hobi_odasi_isigi"
+        original_entities = HA_CONFIG["exposed_entities"]
+        original_aliases = HA_CONFIG["aliases"]
+        HA_CONFIG["exposed_entities"] += f"\n{entity_id}"
+        HA_CONFIG["aliases"] += f"\n{entity_id}: hobi odası ışığı, hobi odası lambası"
+        HA_STATES.append(
+            {
+                "entity_id": entity_id,
+                "state": "off",
+                "friendly_name": "Hobi Odası Işığı",
+                "attributes": {"friendly_name": "Hobi Odası Işığı"},
+            }
+        )
+        try:
+            result = await self.bridge.handle_text_command("Hobi odasının ışıklarını yakar mısın?")
+            self.assertTrue(result["ok"])
+            self.assertEqual([entity_id], result["entity_ids"])
+            self.assertEqual(entity_id, self.bridge.service_calls[-1][2]["entity_id"])
+        finally:
+            HA_STATES.pop()
+            HA_CONFIG["aliases"] = original_aliases
+            HA_CONFIG["exposed_entities"] = original_entities
 
     async def test_singular_room_lamp_does_not_control_other_room_lights(self) -> None:
         result = await self.bridge.handle_text_command("Oturma odası lambasını kapat.")
