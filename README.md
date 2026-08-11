@@ -26,9 +26,9 @@ add-on'u yeniden baslatman yeterlidir.
 `Alice Control Panel`, tek parca panel/server add-on'udur. Varsayilan portu `8099`'dur ve
 Home Assistant ingress kullanmadan `http://HOME_ASSISTANT_IP:8099` adresinden acilir.
 
-`Alice Realtime TTS` ve `Alice Realtime Voice` klasorleri artik aktif hedef degil; referans/arsiv
-olarak tutulur. Yeni kurulum, panel, TTS, STT, LLM, ESP ve Home Assistant kontrol akisi
-`alice_control_panel` icinden ilerler.
+Eski `Alice Realtime TTS` ve `Alice Realtime Voice` arşiv add-on'ları kaldırıldı. Yeni kurulum,
+panel, TTS, STT, LLM, ESP ve Home Assistant kontrol akışı yalnızca `alice_control_panel`
+içinden ilerler.
 
 Not: Home Assistant add-on ayarlari provider'a gore kosullu alan gizleme yapmaz; bunun yerine
 ayarlar saglayici bazli gruplar halinde toplanmistir.

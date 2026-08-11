@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from app.core.auth import require_request_auth
+from app.core.barge_in import sync_barge_in_to_esp
 
 
 router = APIRouter(prefix="/api/config", tags=["config"])
@@ -20,9 +21,14 @@ async def get_config(request: Request, _: None = Depends(require_request_auth)) 
 async def update_config(payload: dict[str, Any], request: Request, _: None = Depends(require_request_auth)) -> dict[str, Any]:
     await request.app.state.config_store.update(payload)
     updated = await request.app.state.config_store.get(include_secrets=False)
+    esp_sync = await sync_barge_in_to_esp(
+        request.app.state.esp_client,
+        request.app.state.log_bus,
+        updated,
+    )
     await request.app.state.log_bus.emit("INFO", "UI/API", "Configuration updated")
     await request.app.state.ws_hub.publish("config_updated", {"config": updated})
-    return {"ok": True, "config": updated}
+    return {"ok": True, "config": updated, "esp_sync": esp_sync}
 
 
 @router.post("/import")
@@ -32,8 +38,13 @@ async def import_config(payload: dict[str, Any], request: Request, _: None = Dep
         return {"ok": False, "message": "config payload must be an object"}
     await request.app.state.config_store.replace(imported)
     updated = await request.app.state.config_store.get(include_secrets=False)
+    esp_sync = await sync_barge_in_to_esp(
+        request.app.state.esp_client,
+        request.app.state.log_bus,
+        updated,
+    )
     await request.app.state.log_bus.emit("INFO", "UI/API", "Configuration imported")
-    return {"ok": True, "config": updated}
+    return {"ok": True, "config": updated, "esp_sync": esp_sync}
 
 
 @router.get("/export")

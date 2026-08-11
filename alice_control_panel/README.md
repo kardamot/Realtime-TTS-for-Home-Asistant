@@ -25,6 +25,8 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.192` replaces packet-local linear mic resampling with a stateful polyphase FIR path and records per-turn RMS/peak/clipping diagnostics.
+- Version `0.1.191` makes the conversation-interrupt switch authoritative for OpenAI Realtime and synchronizes it to compatible ESP firmware.
 - Version `0.1.190` adds a bounded last-successful TTS WAV capture and download action to Voice Pipeline.
 - Version `0.1.189` prevents unknown room names from falling back to other allowlisted room lights during bulk commands.
 - Version `0.1.188` fixes ESP WebSocket PING/PONG handling, summarizes reconnect storms, and retains WARN/ERROR logs for 31 days within a 32 MB archive cap.

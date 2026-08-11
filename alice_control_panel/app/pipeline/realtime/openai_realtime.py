@@ -9,13 +9,14 @@ import uuid
 from typing import Any
 
 import aiohttp
-import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
+from app.core.barge_in import realtime_turn_detection
 from app.core.config_store import ConfigStore
 from app.core.log_bus import LogBus
 from app.core.prompt_store import PromptStore
 from app.core.ws_hub import WsHub
+from app.pipeline.audio_processing import Pcm16LevelMeter, StreamingPcm16Resampler
 from app.pipeline.llm.openai_compatible import active_llm_config
 from app.system.ha_narrator import HaNarrator
 from app.system.ha_safety import sanitize_assistant_output
@@ -225,19 +226,6 @@ def active_realtime_config(config: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
-def pcm16le_resample_linear(chunk: bytes, src_rate: int, dst_rate: int) -> bytes:
-    if not chunk or src_rate <= 0 or dst_rate <= 0 or src_rate == dst_rate:
-        return chunk
-    samples = np.frombuffer(chunk, dtype="<i2")
-    if samples.size <= 1:
-        return chunk
-    out_len = max(1, int(round(samples.size * dst_rate / src_rate)))
-    src_x = np.arange(samples.size, dtype=np.float32)
-    dst_x = np.linspace(0, samples.size - 1, out_len, dtype=np.float32)
-    out = np.interp(dst_x, src_x, samples.astype(np.float32))
-    return np.clip(out, -32768, 32767).astype("<i2").tobytes()
-
-
 def extract_realtime_text_delta(doc: dict[str, Any]) -> str:
     for key in ("delta", "text", "transcript"):
         value = doc.get(key)
@@ -396,6 +384,7 @@ class OpenAIRealtimeBridge:
         self._last_transcript = ""
         self._last_assistant_text = ""
         self._last_tts_text = ""
+        self._last_input_audio: dict[str, Any] = {}
         self._message_history: list[dict[str, Any]] = []
         self._message_seq = 0
         self._started_at: float | None = None
@@ -432,6 +421,7 @@ class OpenAIRealtimeBridge:
             "last_transcript": self._last_transcript,
             "last_assistant_text": self._last_assistant_text,
             "last_tts_text": self._last_tts_text,
+            "last_input_audio": dict(self._last_input_audio),
             "messages": [dict(item) for item in self._message_history[-120:]],
             "uptime_sec": int(time.time() - self._started_at) if self._started_at else 0,
             "latency": self._latency_snapshot(),
@@ -770,9 +760,14 @@ class OpenAIRealtimeBridge:
         await websocket.accept()
         config = await self._config_store.get(include_secrets=True)
         realtime = self._realtime_cfg(config)
+        pipeline = config.get("pipeline") if isinstance(config.get("pipeline"), dict) else {}
+        barge_in_enabled = bool(pipeline.get("barge_in_enabled", True))
         api_key = self._api_key(config, realtime)
         source_sample_rate = 16000
         target_sample_rate = max(8000, int(realtime.get("input_sample_rate") or 24000))
+        resampler = StreamingPcm16Resampler(source_sample_rate, target_sample_rate)
+        input_level_meter = Pcm16LevelMeter()
+        input_audio_metadata: dict[str, Any] = {}
         language = str(config.get("stt", {}).get("language") or "tr") if isinstance(config.get("stt"), dict) else "tr"
         session_id = f"rt-{uuid.uuid4().hex[:10]}"
         transcript = ""
@@ -822,6 +817,16 @@ class OpenAIRealtimeBridge:
         async def send_realtime_json(payload: dict[str, Any]) -> None:
             if realtime_ws is not None and not realtime_ws.closed:
                 await realtime_ws.send_str(json.dumps(payload, ensure_ascii=False))
+
+        def input_audio_snapshot() -> dict[str, Any]:
+            return {
+                **input_level_meter.summary(),
+                "source_rate": source_sample_rate,
+                "target_rate": target_sample_rate,
+                "resampler": resampler.method,
+                "resampler_delay_ms": round(resampler.delay_ms, 3),
+                **input_audio_metadata,
+            }
 
         async def remember_local_assistant_reply(text: str, source: str) -> None:
             clean = str(text or "").strip()
@@ -1008,12 +1013,14 @@ class OpenAIRealtimeBridge:
                 await send_event("llm_result", text=assistant_text)
             self._mark_latency("session_completed", reason=reason, audio_ms=audio_ms)
             self._remember_latency_turn(reason, transcript, assistant_text, audio_ms)
+            self._last_input_audio = input_audio_snapshot()
             await send_event(
                 "session_completed",
                 reason=reason,
                 audio_ms=audio_ms,
                 assistant_text=assistant_text,
                 transcript=transcript,
+                input_audio=self._last_input_audio,
             )
             self._last_event = "completed"
             latency = self._latency_snapshot()
@@ -1025,6 +1032,7 @@ class OpenAIRealtimeBridge:
                     "session_id": session_id,
                     "transcript_chars": len(transcript),
                     "assistant_chars": len(assistant_text),
+                    "input_audio": self._last_input_audio,
                     "latency": latency.get("summary", {}),
                 },
             )
@@ -1121,8 +1129,9 @@ class OpenAIRealtimeBridge:
             if event_type == "input_audio_buffer.speech_started":
                 speech_started = True
                 self._mark_latency("speech_started", audio_ts=doc.get("audio_start_ms"))
-                await self._cancel_playback("realtime_barge_in")
-                self._mark_latency("barge_in_cancel_sent")
+                if barge_in_enabled:
+                    await self._cancel_playback("realtime_barge_in")
+                    self._mark_latency("barge_in_cancel_sent")
                 await send_event("vad_start", vad_provider="openai_realtime", audio_ts=doc.get("audio_start_ms"))
                 return
             if event_type == "input_audio_buffer.speech_stopped":
@@ -1257,7 +1266,7 @@ class OpenAIRealtimeBridge:
             await send_event(
                 "hello",
                 service="alice_control_panel",
-                version="0.1.190",
+                version="0.1.192",
                 session_id=session_id,
                 endpointing_enabled=True,
                 endpointing_provider="openai_realtime",
@@ -1276,6 +1285,11 @@ class OpenAIRealtimeBridge:
                     doc = json.loads(str(message["text"]))
                     msg_type = str(doc.get("type") or "").strip().lower()
                     if msg_type == "start":
+                        config = await self._config_store.get(include_secrets=True)
+                        realtime = self._realtime_cfg(config)
+                        pipeline = config.get("pipeline") if isinstance(config.get("pipeline"), dict) else {}
+                        barge_in_enabled = bool(pipeline.get("barge_in_enabled", True))
+                        target_sample_rate = max(8000, int(realtime.get("input_sample_rate") or 24000))
                         transcript = ""
                         assistant_text = ""
                         self._last_tts_text = ""
@@ -1301,6 +1315,16 @@ class OpenAIRealtimeBridge:
                             response_wait_task.cancel()
                         response_wait_task = None
                         source_sample_rate = int(doc.get("sample_rate") or source_sample_rate)
+                        resampler = StreamingPcm16Resampler(source_sample_rate, target_sample_rate)
+                        input_level_meter.reset()
+                        input_audio_metadata = {
+                            "mic_shift_bits": doc.get("mic_shift_bits"),
+                            "device_local_dsp": bool(doc.get("mic_local_dsp", False)),
+                            "device_aec_enabled": bool(doc.get("mic_aec_enabled", False)),
+                            "mic_channel": str(doc.get("mic_channel") or ""),
+                            "device_pre_roll_ms": max(0, int(doc.get("mic_pre_roll_ms") or 0)),
+                            "mic_shift_source": str(doc.get("mic_shift_source") or ""),
+                        }
                         language = str(doc.get("language") or language).strip() or "tr"
                         session_id = str(doc.get("session_id") or session_id).strip() or session_id
                         self._session_id = session_id
@@ -1311,15 +1335,40 @@ class OpenAIRealtimeBridge:
                             target_rate=target_sample_rate,
                         )
                         self._mark_latency("start_received")
+                        realtime_was_open = realtime_ws is not None and not realtime_ws.closed
                         if await open_realtime():
+                            if realtime_was_open:
+                                await send_realtime_json(
+                                    await self._session_update_payload(
+                                        config,
+                                        realtime,
+                                        target_sample_rate,
+                                        language,
+                                    )
+                                )
                             await send_event(
                                 "session_started",
                                 session_id=session_id,
                                 sample_rate=source_sample_rate,
+                                target_sample_rate=target_sample_rate,
+                                resampler=resampler.method,
+                                resampler_delay_ms=round(resampler.delay_ms, 3),
                                 realtime_enabled=True,
                                 realtime_model=self._model,
                                 endpointing_provider="openai_realtime",
                             )
+                            server_noise_reduction = str(realtime.get("noise_reduction") or "near_field").strip().lower()
+                            await self._log_bus.emit(
+                                "WARN" if input_audio_metadata["device_local_dsp"] and server_noise_reduction not in {"none", "off", "disabled", "kapali"} else "INFO",
+                                "STT",
+                                "Realtime input audio configured",
+                                {
+                                    "session_id": session_id,
+                                    **input_audio_snapshot(),
+                                    "server_noise_reduction": server_noise_reduction,
+                                },
+                            )
+                            self._last_input_audio = input_audio_snapshot()
                         continue
                     if msg_type in {"end", "eos"}:
                         if not realtime_ws:
@@ -1373,6 +1422,9 @@ class OpenAIRealtimeBridge:
                         first_transcript_delta_marked = False
                         first_llm_delta_marked = False
                         first_tts_chunk_marked = False
+                        resampler = StreamingPcm16Resampler(source_sample_rate, target_sample_rate)
+                        input_level_meter.reset()
+                        input_audio_metadata = {}
                         transcript_event = asyncio.Event()
                         if response_wait_task is not None and not response_wait_task.done():
                             response_wait_task.cancel()
@@ -1400,17 +1452,21 @@ class OpenAIRealtimeBridge:
                         )
                 if not raw:
                     continue
+                input_level_meter.add(raw)
                 if not first_audio_marked:
                     first_audio_marked = True
                     self._mark_latency(
                         "first_audio_chunk",
                         source_rate=source_sample_rate,
                         target_rate=target_sample_rate,
+                        resampler=resampler.method,
                     )
                 chunk_ms = int((len(raw) / 2) / max(1, source_sample_rate) * 1000)
                 audio_ms += chunk_ms
                 buffered_audio_ms += chunk_ms
-                target = pcm16le_resample_linear(raw, source_sample_rate, target_sample_rate)
+                target = resampler.process(raw)
+                if not target:
+                    continue
                 await send_realtime_json({"type": "input_audio_buffer.append", "audio": base64.b64encode(target).decode("ascii")})
         except WebSocketDisconnect:
             await self._log_bus.emit("INFO", "PIPELINE", "OpenAI Realtime client disconnected", {"session_id": session_id})
@@ -1455,9 +1511,11 @@ class OpenAIRealtimeBridge:
             pass
 
     async def _session_update_payload(self, config: dict[str, Any], realtime: dict[str, Any], sample_rate: int, language: str) -> dict[str, Any]:
+        pipeline = config.get("pipeline") if isinstance(config.get("pipeline"), dict) else {}
+        barge_in_enabled = bool(pipeline.get("barge_in_enabled", True))
         audio_input: dict[str, Any] = {
             "format": {"type": "audio/pcm", "rate": sample_rate},
-            "turn_detection": self._turn_detection(realtime),
+            "turn_detection": self._turn_detection(realtime, barge_in_enabled=barge_in_enabled),
         }
         noise = str(realtime.get("noise_reduction") or "near_field").strip().lower()
         if noise in {"near_field", "far_field"}:
@@ -1511,21 +1569,8 @@ class OpenAIRealtimeBridge:
             clean = block if not clean else f"{clean}\n\n{block}"
         return clean
 
-    def _turn_detection(self, realtime: dict[str, Any]) -> dict[str, Any]:
-        mode = str(realtime.get("turn_detection") or "server_vad").strip().lower()
-        if mode == "semantic_vad":
-            eagerness = str(realtime.get("semantic_eagerness") or "high").strip().lower()
-            if eagerness not in {"low", "medium", "high", "auto"}:
-                eagerness = "high"
-            return {"type": "semantic_vad", "eagerness": eagerness, "create_response": False, "interrupt_response": True}
-        return {
-            "type": "server_vad",
-            "threshold": max(0.0, min(1.0, float(realtime.get("vad_threshold") or 0.5))),
-            "prefix_padding_ms": max(0, int(realtime.get("prefix_padding_ms") or 300)),
-            "silence_duration_ms": max(120, int(realtime.get("silence_duration_ms") or 420)),
-            "create_response": False,
-            "interrupt_response": True,
-        }
+    def _turn_detection(self, realtime: dict[str, Any], barge_in_enabled: bool = True) -> dict[str, Any]:
+        return realtime_turn_detection(realtime, barge_in_enabled=barge_in_enabled)
 
     @staticmethod
     def _realtime_cfg(config: dict[str, Any]) -> dict[str, Any]:
