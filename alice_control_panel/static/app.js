@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.192";
+const UI_VERSION = "0.1.193";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -214,7 +214,7 @@ const HELP_TEXTS = {
     body: [
       "TTS bölümü yazıyı sese çeviren sağlayıcıyı seçer. OpenAI, Cartesia, ElevenLabs, Google AI ve Google Cloud bilgileri ayrı kartlarda saklanır; geçiş yaptığında önceki sağlayıcının ayarları kaybolmaz.",
       "PCM rate genel ESP audio hedefidir; bazı sağlayıcılar kendi sabit sample rate'iyle gelebilir ve backend bunu uygun metadata ile iletir. ESP start buffer ve silence prefix ilk ses takılmalarını azaltmak için kullanılır.",
-      "Mic response, mikrofon testlerinden sonra ne yapılacağını seçer: sadece asistan cevabı, duyulan metni tekrar etme veya önce tekrar edip sonra cevaplama. Konuşurken söz kesme açıksa yeni giriş eski cevabı kesebilir."
+      "Mic response, mikrofon testlerinden sonra ne yapılacağını seçer: sadece asistan cevabı, duyulan metni tekrar etme veya önce tekrar edip sonra cevaplama. Canlı Realtime oturumunda yeni konuşma; yerel ESP TTS oynatımında Alice veya Stop algısı mevcut cevabı kesebilir."
     ]
   }
 };
@@ -340,7 +340,7 @@ const HELP_DETAIL_TEXTS = {
       ["Mic response", "Mikrofon testinden sonra sadece cevap, sadece duydugunu tekrar veya once tekrar sonra cevap davranisini secer."],
       ["TTS enabled", "Kapaliysa metin uretilebilir ama sese donusturme atlanir."],
       ["Stream TTS to ESP", "Aciksa ses ESP'ye WebSocket/audio protokoluyle gider. Kapaliysa backend TTS uretse bile robota okutmaz."],
-      ["Konuşurken söz kesme", "Kullanıcı konuşurken mevcut cevabı kesmeye izin verir ve kaydedildiğinde ESP firmware ayarına da aktarılır."],
+      ["Söz kesme (Alice/Stop)", "Canlı Realtime oturumunda yeni konuşmayı, yerel ESP TTS oynatımında Alice veya Stop algısını kesme olarak kabul eder. Ayar kaydedildiğinde ESP firmware'e de aktarılır."],
       ["OpenAI TTS", "OpenAI API key, model, voice ve instructions alanlarini kullanir. Instructions ses tarzini yonlendirebilir."],
       ["Cartesia", "Cartesia API key, model ID, voice ID, language ve version ayarlaridir. Kredi/limit hatalari bu provider'dan gelebilir."],
       ["ElevenLabs", "API key, model, voice, output format ve latency mode ayarlaridir. Dusuk latency modlari kalite/gecikme dengesi kurar."],
@@ -783,7 +783,7 @@ Object.assign(HELP_DETAIL_TEXTS, {
       ["Mic response", "Mic capture sonrası asistan cevabı, echo veya echo + assistant davranışını seçer."],
       ["TTS enabled", "Kapalıysa metin üretilebilir ama seslendirme atlanır."],
       ["Stream TTS to ESP", "Sesin ESP'ye WebSocket üzerinden gönderilip gönderilmeyeceğini belirler."],
-      ["Konuşurken söz kesme", "Açıkken yeni konuşma veya konuşma sırasında wake algısı mevcut cevabı keser. Config kaydedilince ayar ESP firmware'e de gönderilir."],
+      ["Söz kesme (Alice/Stop)", "Canlı Realtime oturumunda yeni konuşma, yerel ESP TTS oynatımında Alice veya Stop algısı mevcut cevabı keser. Serbest yerel ses VAD'i yankı kalibrasyonu olmadan kullanılmaz."],
       ["OpenAI API/model/voice", "OpenAI TTS profilidir. Instructions seslendirme tarzını yönlendirebilir."],
       ["Cartesia API/model/voice", "Cartesia profilidir; kredi/limit hataları bu provider'dan gelebilir."],
       ["ElevenLabs API/model/voice", "ElevenLabs profilidir. Output format ve latency mode ses biçimi/gecikme dengesini ayarlar."],
