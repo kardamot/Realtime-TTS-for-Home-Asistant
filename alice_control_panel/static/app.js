@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.194";
+const UI_VERSION = "0.1.195";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -1639,10 +1639,11 @@ function formatAecStatus(hardware) {
   if (hardware.barge_in_enabled === false || hardware.barge_in_aec_enabled === false) return "off";
   if (!hardware.barge_in_aec_ready) return "waiting";
   const channels = Number(hardware.barge_in_aec_mic_channels || 0);
+  if (channels < 2) return "mic unavailable";
   const delay = Number(hardware.barge_in_aec_delay_ms);
   const delayLabel = Number.isFinite(delay) ? `${delay}ms` : "delay?";
   const calibration = hardware.barge_in_aec_delay_calibrated ? "auto" : "learning";
-  return `${channels || 2} mic / ${delayLabel} / ${calibration}`;
+  return `${channels} mic / ${delayLabel} / ${calibration}`;
 }
 
 function renderEspHealth(system) {
