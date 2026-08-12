@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.193";
+const UI_VERSION = "0.1.194";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -340,7 +340,7 @@ const HELP_DETAIL_TEXTS = {
       ["Mic response", "Mikrofon testinden sonra sadece cevap, sadece duydugunu tekrar veya once tekrar sonra cevap davranisini secer."],
       ["TTS enabled", "Kapaliysa metin uretilebilir ama sese donusturme atlanir."],
       ["Stream TTS to ESP", "Aciksa ses ESP'ye WebSocket/audio protokoluyle gider. Kapaliysa backend TTS uretse bile robota okutmaz."],
-      ["Söz kesme (Alice/Stop)", "Canlı Realtime oturumunda yeni konuşmayı, yerel ESP TTS oynatımında Alice veya Stop algısını kesme olarak kabul eder. Ayar kaydedildiğinde ESP firmware'e de aktarılır."],
+      ["Doğal söz kesme (FD AEC)", "Açıkken ESP, TTS sırasında iki mikrofon ve hoparlör referansını ESP-SR full-duplex AEC/SE/VAD hattında işler. Doğrulanmış kullanıcı konuşması, Alice ve Stop algısı mevcut cevabı kesebilir; ayar firmware'e de aktarılır."],
       ["OpenAI TTS", "OpenAI API key, model, voice ve instructions alanlarini kullanir. Instructions ses tarzini yonlendirebilir."],
       ["Cartesia", "Cartesia API key, model ID, voice ID, language ve version ayarlaridir. Kredi/limit hatalari bu provider'dan gelebilir."],
       ["ElevenLabs", "API key, model, voice, output format ve latency mode ayarlaridir. Dusuk latency modlari kalite/gecikme dengesi kurar."],
@@ -783,7 +783,7 @@ Object.assign(HELP_DETAIL_TEXTS, {
       ["Mic response", "Mic capture sonrası asistan cevabı, echo veya echo + assistant davranışını seçer."],
       ["TTS enabled", "Kapalıysa metin üretilebilir ama seslendirme atlanır."],
       ["Stream TTS to ESP", "Sesin ESP'ye WebSocket üzerinden gönderilip gönderilmeyeceğini belirler."],
-      ["Söz kesme (Alice/Stop)", "Canlı Realtime oturumunda yeni konuşma, yerel ESP TTS oynatımında Alice veya Stop algısı mevcut cevabı keser. Serbest yerel ses VAD'i yankı kalibrasyonu olmadan kullanılmaz."],
+      ["Doğal söz kesme (FD AEC)", "Canlı Realtime konuşması veya ESP tarafında iki mikrofonlu full-duplex AEC sonrası doğrulanan yakın konuşma mevcut cevabı keser. Otomatik referans gecikmesi ve yankı kalıntı tabanı yanlış kesmeleri süzer; Alice/Stop yolu da korunur."],
       ["OpenAI API/model/voice", "OpenAI TTS profilidir. Instructions seslendirme tarzını yönlendirebilir."],
       ["Cartesia API/model/voice", "Cartesia profilidir; kredi/limit hataları bu provider'dan gelebilir."],
       ["ElevenLabs API/model/voice", "ElevenLabs profilidir. Output format ve latency mode ses biçimi/gecikme dengesini ayarlar."],
@@ -1623,6 +1623,7 @@ async function loadStatus() {
   text("hw-servo", esp.hardware?.servo_position || "center");
   text("hw-amp", esp.hardware?.amp_muted == null ? "unknown" : esp.hardware.amp_muted ? "muted" : "active");
   text("hw-wake", esp.hardware?.wake_enabled == null ? "unknown" : esp.hardware.wake_enabled ? "on" : "off");
+  text("hw-aec", formatAecStatus(esp.hardware || {}));
   text("hw-state", formatPowerMode(esp));
   syncDailyBehaviorButtons(esp, pipe);
   renderPipelineTrace(pipe, realtime, data);
@@ -1632,6 +1633,16 @@ async function loadStatus() {
   renderMicDebug(pipe.mic_debug || {});
   renderTurnTiming(realtime.latency || {}, pipe.timeline || []);
   if (!configDirty) fillConfig();
+}
+
+function formatAecStatus(hardware) {
+  if (hardware.barge_in_enabled === false || hardware.barge_in_aec_enabled === false) return "off";
+  if (!hardware.barge_in_aec_ready) return "waiting";
+  const channels = Number(hardware.barge_in_aec_mic_channels || 0);
+  const delay = Number(hardware.barge_in_aec_delay_ms);
+  const delayLabel = Number.isFinite(delay) ? `${delay}ms` : "delay?";
+  const calibration = hardware.barge_in_aec_delay_calibrated ? "auto" : "learning";
+  return `${channels || 2} mic / ${delayLabel} / ${calibration}`;
 }
 
 function renderEspHealth(system) {

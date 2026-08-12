@@ -245,7 +245,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
 - Panel logs are kept in the backend memory buffer, not persisted to a log file; an add-on restart/update or explicit Clear resets the visible buffer.
-- `0.1.193` clarifies that local ESP TTS interruption uses Alice/Stop; experimental free-speech device VAD remains disabled after confirmed speaker-echo false triggers.
+- `0.1.194` enables natural local interruption with ESP-SR 2.4.7 full-duplex AEC: two microphones and the speaker reference are processed with AEC/SE/VAD, automatic delay calibration and residual-echo gating; Alice/Stop remains available as fallback.
 - `0.1.192` replaces packet-local linear mic resampling with a stateful polyphase FIR path and records per-turn RMS/peak/clipping diagnostics.
 - `0.1.191` makes the conversation-interrupt switch authoritative for OpenAI Realtime and synchronizes it to compatible ESP firmware.
 - `0.1.190` adds a bounded last-successful TTS WAV capture and download action to Voice Pipeline.
