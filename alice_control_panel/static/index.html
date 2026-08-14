@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.201" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.201" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.202" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.202" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-          <div class="sidebar-logo"><img src="/logo.png?v=0.1.201" alt="Alice" /></div>
+          <div class="sidebar-logo"><img src="/logo.png?v=0.1.202" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -26,7 +26,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.201" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.202" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -381,6 +381,10 @@
                 <div><span>Taban</span><strong id="barge-metric-floor">-</strong></div>
                 <div><span>Mic / ref</span><strong id="barge-metric-input">-</strong></div>
                 <div><span>Korelasyon</span><strong id="barge-metric-corr">-</strong></div>
+                <div><span>Mic-0 / Mic-1</span><strong id="barge-metric-mics">-</strong></div>
+                <div><span>Corr-0 / Corr-1</span><strong id="barge-metric-mic-corr">-</strong></div>
+                <div><span>Ref yaş / kesinti / son</span><strong id="barge-metric-ref-flow">-</strong></div>
+                <div><span>Underrun / I2S son-max</span><strong id="barge-metric-tts-flow">-</strong></div>
                 <div><span>Aday kare</span><strong id="barge-metric-candidate">-</strong></div>
                 <div><span>Ses / delay</span><strong id="barge-metric-volume">-</strong></div>
                 <div><span>Karar</span><strong id="barge-metric-decision">-</strong></div>
@@ -409,7 +413,7 @@
               <section class="barge-lab-results">
                 <header><div><h3>Etiketli veri ve hesaplayıcı</h3><p id="barge-lab-summary" class="muted">Henüz test yok.</p></div><div class="row"><button id="barge-lab-optimize" type="button">En iyi profili hesapla</button><button id="barge-lab-apply-best" type="button" disabled>En iyiyi uygula</button><button id="barge-lab-download-json" type="button">JSON</button><button id="barge-lab-download-csv" type="button">CSV</button><button id="barge-lab-clear" type="button">Veriyi temizle</button></div></header>
                 <div id="barge-lab-best" class="barge-lab-best muted">Hesaplama için en az bir Alice-only ve bir kullanıcı oturumu gerekiyor.</div>
-                <div class="barge-lab-table-wrap"><table><thead><tr><th>Oturum</th><th>Etiket</th><th>Ses</th><th>Örnek</th><th>Mevcut profil</th></tr></thead><tbody id="barge-lab-session-rows"></tbody></table></div>
+                <div class="barge-lab-table-wrap"><table><thead><tr><th>Oturum</th><th>Etiket</th><th>Ses</th><th>Örnek</th><th>Mevcut profil</th><th>TTS/AEC akışı</th></tr></thead><tbody id="barge-lab-session-rows"></tbody></table></div>
               </section>
             </div>
           </section>
@@ -685,6 +689,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.201"></script>
+  <script src="/app.js?v=0.1.202"></script>
   </body>
 </html>

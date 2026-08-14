@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.201";
+const UI_VERSION = "0.1.202";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -29,13 +29,16 @@ const BARGE_LAB_WIRE_FIELDS = [
   "seq", "esp_millis", "tts_elapsed_ms", "raw", "clean", "ref", "corr_q15", "floor", "needed",
   "prominent_needed", "clip_permille", "delay_ms", "candidate_frames", "speaker_volume_percent", "vad",
   "synchronized", "delay_calibrated", "decision_ready", "low_corr_candidate", "weak_ref_candidate",
-  "frame_candidate", "would_cut", "live_cut",
+  "frame_candidate", "would_cut", "live_cut", "mic0", "mic1", "mic0_corr_q15", "mic1_corr_q15",
+  "ref_age_ms", "ref_gap_count", "ref_last_gap_ms", "tts_underrun_count", "i2s_block_ms", "i2s_block_max_ms",
 ];
 const BARGE_LAB_SAMPLE_FIELDS = [
   "seq", "esp_millis", "tts_elapsed_ms", "raw", "clean", "ref", "corr_q15", "floor", "needed",
   "prominent_needed", "clip_permille", "delay_ms", "candidate_frames", "speaker_volume_percent", "vad",
   "synchronized", "delay_calibrated", "decision_ready", "low_corr_candidate", "weak_ref_candidate",
   "frame_candidate", "would_cut", "live_cut", "mode", "session_id", "label", "received_at", "in_speech_window",
+  "mic0", "mic1", "mic0_corr_q15", "mic1_corr_q15", "ref_age_ms", "ref_gap_count", "ref_last_gap_ms",
+  "tts_underrun_count", "i2s_block_ms", "i2s_block_max_ms",
 ];
 const BARGE_LAB_BOOLEAN_FIELDS = new Set([
   "vad", "synchronized", "delay_calibrated", "decision_ready", "low_corr_candidate", "weak_ref_candidate",
@@ -1517,7 +1520,7 @@ function saveBargeLabData() {
   bargeLabData.samples = bargeLabData.samples.slice(-BARGE_LAB_MAX_SAMPLES);
   bargeLabData.sessions = bargeLabData.sessions.slice(-120);
   localStorage.setItem(BARGE_LAB_STORAGE_KEY, JSON.stringify({
-    schema_version: 3,
+    schema_version: 4,
     sessions: bargeLabData.sessions,
     samples: bargeLabData.samples.map(packBargeLabSample),
   }));
@@ -1717,6 +1720,8 @@ async function startBargeLabSession(label) {
     id, label, started_at: Date.now(), ended_at: null, speaker_volume_percent: volume,
     sample_count: 0, window_sample_count: 0, ready_window_sample_count: 0,
     dropped_frame_count: 0, frame_telemetry: true, would_cut: false,
+    flow_telemetry: false, ref_gap_count: 0, tts_underrun_count: 0,
+    max_ref_age_ms: 0, max_i2s_block_ms: 0, flow_issue_in_window: false,
     pre_window_would_cut: false, window_would_cut: false, post_window_would_cut: false,
     speech_window_start_at: null, speech_window_end_at: null, valid: false,
     profile: bargeLabProfile(),
@@ -1795,6 +1800,22 @@ function handleBargeLabSample(payload, receivedAt = Date.now(), deferRender = fa
         }
       }
       session.speaker_volume_percent = Number(payload.speaker_volume_percent ?? session.speaker_volume_percent ?? 0);
+      const flowTelemetry = Object.prototype.hasOwnProperty.call(payload, "ref_gap_count") &&
+        Object.prototype.hasOwnProperty.call(payload, "tts_underrun_count");
+      if (flowTelemetry) {
+        const previousRefGaps = Number(session.ref_gap_count || 0);
+        const previousUnderruns = Number(session.tts_underrun_count || 0);
+        const refGaps = Number(payload.ref_gap_count || 0);
+        const underruns = Number(payload.tts_underrun_count || 0);
+        session.flow_telemetry = true;
+        session.ref_gap_count = Math.max(previousRefGaps, refGaps);
+        session.tts_underrun_count = Math.max(previousUnderruns, underruns);
+        session.max_ref_age_ms = Math.max(Number(session.max_ref_age_ms || 0), Number(payload.ref_age_ms || 0));
+        session.max_i2s_block_ms = Math.max(Number(session.max_i2s_block_ms || 0), Number(payload.i2s_block_max_ms || 0));
+        if (inSpeechWindow && (refGaps > previousRefGaps || underruns > previousUnderruns)) {
+          session.flow_issue_in_window = true;
+        }
+      }
       if (bargeLabData.samples.length % 64 === 0 || payload.would_cut) saveBargeLabData();
     }
   }
@@ -1835,6 +1856,10 @@ function renderBargeLabMetrics(sample = bargeLabLatestSample) {
   text("barge-metric-floor", String(sample.floor ?? 0));
   text("barge-metric-input", `${sample.raw ?? 0} / ${sample.ref ?? 0}`);
   text("barge-metric-corr", `${sample.corr_q15 ?? 0} (${((Number(sample.corr_q15 || 0) / 32767) * 100).toFixed(0)}%)`);
+  text("barge-metric-mics", `${sample.mic0 ?? "-"} / ${sample.mic1 ?? "-"}`);
+  text("barge-metric-mic-corr", `${sample.mic0_corr_q15 ?? "-"} / ${sample.mic1_corr_q15 ?? "-"}`);
+  text("barge-metric-ref-flow", `${sample.ref_age_ms ?? "-"}ms / ${sample.ref_gap_count ?? "-"}× / ${sample.ref_last_gap_ms ?? "-"}ms`);
+  text("barge-metric-tts-flow", `${sample.tts_underrun_count ?? "-"}× / ${sample.i2s_block_ms ?? "-"}-${sample.i2s_block_max_ms ?? "-"}ms`);
   text("barge-metric-candidate", `${sample.candidate_frames ?? 0}${sample.frame_candidate ? " +" : ""}`);
   text("barge-metric-volume", `%${sample.speaker_volume_percent ?? 0} / ${sample.delay_ms ?? 0}ms`);
   text("barge-metric-decision", sample.live_cut ? "KESİLDİ" : sample.would_cut ? "KESERDİ" : sample.frame_candidate ? "aday" : "bekle");
@@ -1891,7 +1916,9 @@ function renderBargeLab() {
     const decision = bargeLabSessionKarari(item);
     return decision.pre || decision.post;
   }).length;
-  text("barge-lab-summary", `${alice.length} geçerli Alice-only (${falseCuts} yanlış aday), ${user.length} zamanlı kullanıcı (${detected} güvenilir tespit, ${suspicious} pencere dışı aday), ${invalid} geçersiz, ${bargeLabData.samples.length} örnek.`);
+  const flowWarnings = completed.filter((item) => item.flow_telemetry &&
+    (Number(item.ref_gap_count || 0) > 0 || Number(item.tts_underrun_count || 0) > 0)).length;
+  text("barge-lab-summary", `${alice.length} geçerli Alice-only (${falseCuts} yanlış aday), ${user.length} zamanlı kullanıcı (${detected} güvenilir tespit, ${suspicious} pencere dışı aday), ${invalid} geçersiz, ${flowWarnings} akış uyarısı, ${bargeLabData.samples.length} örnek.`);
   const rows = $("barge-lab-session-rows");
   if (rows) {
     rows.innerHTML = bargeLabData.sessions.slice(-20).reverse().map((session) => {
@@ -1910,8 +1937,16 @@ function renderBargeLab() {
       } else if (session.ended_at) {
         result = "kaçırdı";
       }
-      return `<tr><td>${new Date(session.started_at).toLocaleTimeString()}</td><td>${session.label === "alice_only" ? "Alice" : "Kullanıcı"}</td><td>%${session.speaker_volume_percent ?? 0}</td><td>${session.sample_count || 0}</td><td>${result}</td></tr>`;
-    }).join("") || '<tr><td colspan="5" class="muted">Henüz oturum yok.</td></tr>';
+      let flow = "eski protokol";
+      if (session.flow_telemetry) {
+        const refGaps = Number(session.ref_gap_count || 0);
+        const underruns = Number(session.tts_underrun_count || 0);
+        flow = refGaps || underruns
+          ? `${session.flow_issue_in_window ? "PENCEREDE " : ""}ref ${refGaps}× / underrun ${underruns}×`
+          : `sağlıklı / I2S max ${Number(session.max_i2s_block_ms || 0)}ms`;
+      }
+      return `<tr><td>${new Date(session.started_at).toLocaleTimeString()}</td><td>${session.label === "alice_only" ? "Alice" : "Kullanıcı"}</td><td>%${session.speaker_volume_percent ?? 0}</td><td>${session.sample_count || 0}</td><td>${result}</td><td>${flow}</td></tr>`;
+    }).join("") || '<tr><td colspan="6" class="muted">Henüz oturum yok.</td></tr>';
   }
   const applyBest = $("barge-lab-apply-best");
   if (applyBest) applyBest.disabled = !bargeLabBest?.ready_to_apply;
@@ -2060,12 +2095,12 @@ async function applyBestBargeLab() {
 }
 
 function downloadBargeLab(format) {
-  const payload = { schema_version: 3, exported_at: new Date().toISOString(), profile: bargeLabProfile(), best: bargeLabBest, ...bargeLabData };
+  const payload = { schema_version: 4, exported_at: new Date().toISOString(), profile: bargeLabProfile(), best: bargeLabBest, ...bargeLabData };
   let body;
   let type;
   let name;
   if (format === "csv") {
-    const fields = ["session_id","label","received_at","in_speech_window","seq","tts_elapsed_ms","speaker_volume_percent","vad","synchronized","delay_calibrated","decision_ready","raw","clean","ref","corr_q15","floor","clip_permille","candidate_frames","would_cut","live_cut"];
+    const fields = ["session_id","label","received_at","in_speech_window","seq","tts_elapsed_ms","speaker_volume_percent","vad","synchronized","delay_calibrated","decision_ready","raw","clean","ref","corr_q15","mic0","mic1","mic0_corr_q15","mic1_corr_q15","floor","clip_permille","candidate_frames","ref_age_ms","ref_gap_count","ref_last_gap_ms","tts_underrun_count","i2s_block_ms","i2s_block_max_ms","would_cut","live_cut"];
     body = [fields.join(","), ...bargeLabData.samples.map((sample) => fields.map((key) => JSON.stringify(sample[key] ?? "")).join(","))].join("\n");
     type = "text/csv;charset=utf-8";
     name = "alice_barge_lab.csv";
