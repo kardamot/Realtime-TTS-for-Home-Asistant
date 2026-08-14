@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import struct
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -128,6 +129,8 @@ ESP_COMMANDS = {
     "capture_mic",
     "capture_mic_left",
     "capture_mic_right",
+    "barge_lab_capture_arm",
+    "barge_lab_capture_clear",
     "speaker_volume_set",
     "listen_start",
     "listen_stop",
@@ -175,6 +178,34 @@ ESP_COMMANDS = {
     "reconnect",
     "reboot",
 }
+
+
+def validate_barge_capture_wav(data: bytes) -> dict[str, int]:
+    if len(data) < 44 or data[0:4] != b"RIFF" or data[8:12] != b"WAVE":
+        raise ValueError("ESP diagnostic capture is not a RIFF/WAVE file")
+    if data[12:16] != b"fmt " or data[36:40] != b"data":
+        raise ValueError("ESP diagnostic capture has an unsupported WAV layout")
+    audio_format, channels, sample_rate, byte_rate, block_align, bits = struct.unpack_from("<HHIIHH", data, 20)
+    declared_data_bytes = struct.unpack_from("<I", data, 40)[0]
+    if audio_format != 1 or channels != 4 or sample_rate != 16000 or bits != 16:
+        raise ValueError(
+            f"Unexpected ESP diagnostic WAV format: format={audio_format} channels={channels} "
+            f"rate={sample_rate} bits={bits}"
+        )
+    expected_block_align = channels * (bits // 8)
+    if block_align != expected_block_align or byte_rate != sample_rate * expected_block_align:
+        raise ValueError("ESP diagnostic WAV byte alignment is invalid")
+    if declared_data_bytes <= 0 or declared_data_bytes != len(data) - 44:
+        raise ValueError("ESP diagnostic WAV payload is incomplete")
+    return {
+        "channels": channels,
+        "sample_rate": sample_rate,
+        "bits": bits,
+        "frames": declared_data_bytes // block_align,
+        "data_bytes": declared_data_bytes,
+    }
+
+
 SAFE_MODE_ALLOWED_COMMANDS = {
     "reconnect",
     "speaker_volume_set",
@@ -479,6 +510,38 @@ class EspClient:
         except Exception as exc:
             await self._log_bus.emit("ERROR", "ESP", "ESP command failed", {"command": command, "error": str(exc)})
             return {"ok": False, "implemented": False, "message": str(exc), "command": command}
+
+    async def fetch_barge_lab_capture(self) -> dict[str, Any]:
+        config = await self._config_store.get(include_secrets=True)
+        esp_cfg = config.get("esp", {})
+        base_url = str(esp_cfg.get("base_url") or "").strip().rstrip("/")
+        if not base_url:
+            raise RuntimeError("ESP base_url is empty")
+        timeout_sec = max(30.0, float(esp_cfg.get("command_timeout_sec") or 4))
+        session = self._session or aiohttp.ClientSession()
+        self._session = session
+        try:
+            async with session.get(f"{base_url}/api/barge-lab-capture.wav", timeout=timeout_sec) as resp:
+                data = await resp.read()
+                if resp.status >= 400:
+                    message = data.decode("utf-8", errors="replace")[:300]
+                    raise RuntimeError(f"ESP diagnostic capture HTTP {resp.status}: {message}")
+            metadata = validate_barge_capture_wav(data)
+            await self._log_bus.emit(
+                "INFO",
+                "BARGE_IN",
+                "ESP four-channel diagnostic WAV received",
+                metadata,
+            )
+            return {"data": data, "metadata": metadata}
+        except Exception as exc:
+            await self._log_bus.emit(
+                "ERROR",
+                "BARGE_IN",
+                "ESP diagnostic WAV download failed",
+                {"error": str(exc)},
+            )
+            raise
 
     async def get_config(self) -> dict[str, Any]:
         config = await self._config_store.get(include_secrets=True)

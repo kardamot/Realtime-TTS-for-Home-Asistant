@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import io
 import pathlib
 import sys
 import time
 import types
 import unittest
+import wave
 
 
 ADDON_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -12,7 +14,12 @@ sys.path.insert(0, str(ADDON_ROOT))
 
 previous_aiohttp = sys.modules.get("aiohttp")
 sys.modules["aiohttp"] = types.ModuleType("aiohttp")
-from app.esp.esp_client import EspClient, WS_FLAP_LOG_INTERVAL_SECONDS, WS_STABLE_CONNECTION_SECONDS  # noqa: E402
+from app.esp.esp_client import (  # noqa: E402
+    EspClient,
+    WS_FLAP_LOG_INTERVAL_SECONDS,
+    WS_STABLE_CONNECTION_SECONDS,
+    validate_barge_capture_wav,
+)
 if previous_aiohttp is None:
     sys.modules.pop("aiohttp", None)
 else:
@@ -86,6 +93,30 @@ class EspConnectionPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(warnings), 2)
         self.assertEqual(warnings[-1]["details"]["disconnects_since_last_log"], 2)
         self.assertEqual(warnings[-1]["details"]["disconnect_streak"], 3)
+
+    def test_four_channel_barge_capture_wav_is_validated(self) -> None:
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as wav_file:
+            wav_file.setnchannels(4)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(16000)
+            wav_file.writeframes(b"\x00" * (20 * 4 * 2))
+
+        metadata = validate_barge_capture_wav(buffer.getvalue())
+
+        self.assertEqual(metadata["channels"], 4)
+        self.assertEqual(metadata["sample_rate"], 16000)
+        self.assertEqual(metadata["frames"], 20)
+
+    def test_incomplete_barge_capture_wav_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            validate_barge_capture_wav(
+                b"RIFF" + (76).to_bytes(4, "little") + b"WAVEfmt " +
+                (16).to_bytes(4, "little") + (1).to_bytes(2, "little") +
+                (4).to_bytes(2, "little") + (16000).to_bytes(4, "little") +
+                (128000).to_bytes(4, "little") + (8).to_bytes(2, "little") +
+                (16).to_bytes(2, "little") + b"data" + (40).to_bytes(4, "little")
+            )
 
 
 if __name__ == "__main__":

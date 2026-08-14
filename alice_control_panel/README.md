@@ -25,6 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
+- Version `0.1.203` arms a bounded PSRAM capture only for explicit barge-in trials and exposes the latest six seconds as a four-channel 16 kHz WAV (Mic-0, Mic-1, delayed render reference, AEC clean output). The panel validates the WAV, downloads it through the add-on, and releases the ESP capture buffer afterward.
 - Version `0.1.198` makes user-interruption labels trustworthy: a timed green speech cue separates Alice echo from the user's ground-truth window, short or undersampled trials are rejected, and the optimizer penalizes detections outside that window. The local lab dataset uses a new schema so ambiguous older trials are not reused.
 - Version `0.1.199` replaces sparse 5 Hz barge-in snapshots with batched 32 ms AFE frames. User trials now wait for the actual decision-ready state, reject missing/unsettled telemetry, and optimize real consecutive frames without increasing the WebSocket message rate.
 - Version `0.1.200` validates the timed user window by covered duration instead of assuming a fixed AFE decision rate. Candidate profiles remain non-applicable until at least five valid sessions of each class achieve zero false cuts and at least 80% user detection.

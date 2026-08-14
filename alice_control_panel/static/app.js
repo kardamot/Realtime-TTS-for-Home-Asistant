@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.202";
+const UI_VERSION = "0.1.203";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -1714,6 +1714,13 @@ function stopBargeLabSession(reason = "manual") {
 async function startBargeLabSession(label) {
   stopBargeLabSession("next_session");
   await applyBargeLabProfile(bargeLabProfile(), true);
+  const captureResult = await api("/api/command", {
+    method: "POST",
+    body: JSON.stringify({ command: "barge_lab_capture_arm", payload: {} }),
+  });
+  if (!captureResult?.ok || captureResult?.response?.ok !== true) {
+    throw new Error(captureResult?.response?.message || captureResult?.message || "ESP dört kanallı tanı tamponunu hazırlayamadı.");
+  }
   const id = `lab-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
   const volume = Number(latestStatus.esp?.hardware?.speaker_volume_percent ?? 0);
   bargeLabData.sessions.push({
@@ -1756,9 +1763,49 @@ async function runBargeLabTrial(label) {
   try {
     await playBargeLabTts(value);
     stopBargeLabSession("tts_finished");
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    await loadStatus();
   } catch (error) {
     stopBargeLabSession("tts_failed");
+    try {
+      await api("/api/command", {
+        method: "POST",
+        body: JSON.stringify({ command: "barge_lab_capture_clear", payload: {} }),
+      });
+    } catch (_) {
+      // TTS kapanisi halen suruyorsa tampon durum satirinda gorunur ve sonraki
+      // test kurulumu ayni alani guvenli bicimde yeniden kullanir.
+    }
     throw error;
+  }
+}
+
+async function downloadBargeLabPcm() {
+  const headers = new Headers();
+  if (token) headers.set("X-Alice-Token", token);
+  const response = await fetch("/api/esp/barge-lab-capture.wav", { headers, cache: "no-store" });
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${await response.text()}`);
+  const blob = await response.blob();
+  if (blob.size <= 44) throw new Error("Tanı WAV dosyası boş geldi.");
+  const lastSession = bargeLabData.sessions[bargeLabData.sessions.length - 1];
+  const label = lastSession?.label === "user_interrupt" ? "kullanici" : "alice_only";
+  const stamp = new Date(lastSession?.started_at || Date.now()).toISOString().replaceAll(":", "-");
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `alice_barge_${label}_${stamp}_4ch.wav`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  notice("Dört kanallı WAV indirildi: Mic-0, Mic-1, hoparlör referansı, AEC temiz çıkışı.");
+  try {
+    await api("/api/command", {
+      method: "POST",
+      body: JSON.stringify({ command: "barge_lab_capture_clear", payload: {} }),
+    });
+  } finally {
+    await loadStatus();
   }
 }
 
@@ -1950,6 +1997,18 @@ function renderBargeLab() {
   }
   const applyBest = $("barge-lab-apply-best");
   if (applyBest) applyBest.disabled = !bargeLabBest?.ready_to_apply;
+  const pcmButton = $("barge-lab-download-pcm");
+  if (pcmButton) pcmButton.disabled = !Boolean(espLab.pcm_capture_ready) || Boolean(espLab.pcm_capture_active);
+  const pcmDuration = Number(espLab.pcm_capture_duration_ms || 0);
+  const pcmBytes = Number(espLab.pcm_capture_bytes || 0);
+  const pcmState = espLab.pcm_capture_active
+    ? "Dört kanallı tanı kaydı sürüyor."
+    : espLab.pcm_capture_armed
+      ? "Dört kanallı tanı tamponu hazır; TTS başlangıcı bekleniyor."
+      : espLab.pcm_capture_ready
+        ? `Tanı WAV hazır: ${(pcmDuration / 1000).toFixed(1)} sn, ${(pcmBytes / 1024).toFixed(0)} KB. İndirince ESP tamponu serbest bırakılır.`
+        : "Henüz dört kanallı tanı WAV'ı yok.";
+  text("barge-lab-pcm-status", pcmState);
   const testActive = Boolean(active);
   ["barge-lab-start-alice", "barge-lab-start-user", "barge-lab-tts-play"].forEach((id) => {
     const button = $(id);
@@ -2119,7 +2178,7 @@ function downloadBargeLab(format) {
   window.setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
-function clearBargeLabData() {
+async function clearBargeLabData() {
   stopBargeLabSession("clear");
   clearBargeLabCueTimers();
   bargeLabData = { sessions: [], samples: [] };
@@ -2130,6 +2189,15 @@ function clearBargeLabData() {
     box.className = "barge-lab-best muted";
     box.textContent = "Hesaplama için en az bir Alice-only ve bir kullanıcı oturumu gerekiyor.";
   }
+  try {
+    await api("/api/command", {
+      method: "POST",
+      body: JSON.stringify({ command: "barge_lab_capture_clear", payload: {} }),
+    });
+  } catch (_) {
+    // Etiketli yerel veri temizliği, ESP çevrimdışı olsa da tamamlanır.
+  }
+  await loadStatus();
   renderBargeLab();
 }
 
@@ -2144,9 +2212,10 @@ function initBargeLab() {
   $("barge-lab-session-stop").onclick = () => stopBargeLabSession("manual");
   $("barge-lab-optimize").onclick = () => guard("Profil hesaplanamadı", optimizeBargeLab);
   $("barge-lab-apply-best").onclick = () => guard("En iyi profil uygulanamadı", applyBestBargeLab);
+  $("barge-lab-download-pcm").onclick = () => guard("Tanı WAV indirilemedi", downloadBargeLabPcm);
   $("barge-lab-download-json").onclick = () => downloadBargeLab("json");
   $("barge-lab-download-csv").onclick = () => downloadBargeLab("csv");
-  $("barge-lab-clear").onclick = clearBargeLabData;
+  $("barge-lab-clear").onclick = () => guard("Laboratuvar verisi temizlenemedi", clearBargeLabData);
   renderBargeLab();
 }
 

@@ -229,7 +229,8 @@ test_speaker, test_mic, capture_mic, listen_start, listen_stop,
 follow_up_on, follow_up_off, touch_reactions_on, touch_reactions_off,
 lift_reactions_on, lift_reactions_off, motor_forward, motor_backward,
 motor_left, motor_right, motor_stop, wake_on, wake_off, barge_in_on, barge_in_off, amp_mute_on,
-amp_mute_off, radar_calibrate_empty, radar_clear_empty, reconnect, reboot
+amp_mute_off, barge_lab_capture_arm, barge_lab_capture_clear,
+radar_calibrate_empty, radar_clear_empty, reconnect, reboot
 ```
 
 Server commands:
@@ -245,6 +246,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
 - Panel logs are kept in the backend memory buffer, not persisted to a log file; an add-on restart/update or explicit Clear resets the visible buffer.
+- `0.1.203` records the latest six seconds of an explicit labeled trial into a bounded four-channel 16 kHz/16-bit WAV: Mic-0, Mic-1, the delayed render reference fed to AFE, and the AEC clean output. The capture is never allocated during normal use; after a successful panel download its ESP PSRAM buffer is released.
 - `0.1.198` adds a timed green user-speech window to labeled barge-in trials. Detections before or after that window are treated as unsafe false candidates, short or undersampled trials are excluded, and the versioned local dataset discards ambiguous legacy user labels.
 - `0.1.199` records every 32 ms AFE decision frame in 5 Hz WebSocket batches. The lab rejects frame gaps and user windows recorded before AEC is decision-ready, while its optimizer evaluates true consecutive frames instead of interpolating between sparse snapshots.
 - `0.1.200` accepts a user window from its measured decision-ready time coverage rather than a hard-coded frame count. The Apply Best action stays locked until both labels have at least five valid sessions, the candidate has no false cuts, and user recall reaches 80%.

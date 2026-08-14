@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from app.core.auth import require_request_auth
 
@@ -35,3 +35,19 @@ async def esp_command(payload: dict[str, Any], request: Request, _: None = Depen
     command = str(payload.get("command") or "")
     return await request.app.state.esp_client.send_command(command, payload.get("payload") or {})
 
+
+@router.get("/barge-lab-capture.wav")
+async def esp_barge_lab_capture(request: Request, _: None = Depends(require_request_auth)) -> Response:
+    try:
+        capture = await request.app.state.esp_client.fetch_barge_lab_capture()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return Response(
+        content=capture["data"],
+        media_type="audio/wav",
+        headers={
+            "Content-Disposition": "attachment; filename=alice_barge_4ch_16k.wav",
+            "Cache-Control": "no-store",
+            "X-Alice-Wav-Channels": "mic0,mic1,ref,clean",
+        },
+    )

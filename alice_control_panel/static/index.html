@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.202" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.202" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.203" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.203" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-          <div class="sidebar-logo"><img src="/logo.png?v=0.1.202" alt="Alice" /></div>
+          <div class="sidebar-logo"><img src="/logo.png?v=0.1.203" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -26,7 +26,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.202" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.203" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -411,7 +411,7 @@
               </details>
 
               <section class="barge-lab-results">
-                <header><div><h3>Etiketli veri ve hesaplayıcı</h3><p id="barge-lab-summary" class="muted">Henüz test yok.</p></div><div class="row"><button id="barge-lab-optimize" type="button">En iyi profili hesapla</button><button id="barge-lab-apply-best" type="button" disabled>En iyiyi uygula</button><button id="barge-lab-download-json" type="button">JSON</button><button id="barge-lab-download-csv" type="button">CSV</button><button id="barge-lab-clear" type="button">Veriyi temizle</button></div></header>
+                <header><div><h3>Etiketli veri ve hesaplayıcı</h3><p id="barge-lab-summary" class="muted">Henüz test yok.</p><p id="barge-lab-pcm-status" class="muted">Henüz dört kanallı tanı WAV'ı yok.</p></div><div class="row"><button id="barge-lab-optimize" type="button">En iyi profili hesapla</button><button id="barge-lab-apply-best" type="button" disabled>En iyiyi uygula</button><button id="barge-lab-download-pcm" type="button" disabled>Tanı WAV (4 kanal)</button><button id="barge-lab-download-json" type="button">JSON</button><button id="barge-lab-download-csv" type="button">CSV</button><button id="barge-lab-clear" type="button">Veriyi temizle</button></div></header>
                 <div id="barge-lab-best" class="barge-lab-best muted">Hesaplama için en az bir Alice-only ve bir kullanıcı oturumu gerekiyor.</div>
                 <div class="barge-lab-table-wrap"><table><thead><tr><th>Oturum</th><th>Etiket</th><th>Ses</th><th>Örnek</th><th>Mevcut profil</th><th>TTS/AEC akışı</th></tr></thead><tbody id="barge-lab-session-rows"></tbody></table></div>
               </section>
@@ -689,6 +689,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.202"></script>
+  <script src="/app.js?v=0.1.203"></script>
   </body>
 </html>
