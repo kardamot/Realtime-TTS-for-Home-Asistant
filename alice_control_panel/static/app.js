@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.199";
+const UI_VERSION = "0.1.200";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -18,8 +18,10 @@ const BARGE_LAB_STORAGE_KEY = "alice_barge_lab_dataset_v3";
 const BARGE_LAB_MAX_SAMPLES = 24000;
 const BARGE_LAB_MIN_TEST_TEXT_LENGTH = 90;
 const BARGE_LAB_MIN_SESSION_SAMPLES = 60;
-const BARGE_LAB_MIN_WINDOW_SAMPLES = 45;
-const BARGE_LAB_MIN_READY_WINDOW_SAMPLES = 30;
+const BARGE_LAB_MIN_WINDOW_SAMPLES = 12;
+const BARGE_LAB_MIN_READY_WINDOW_SAMPLES = 12;
+const BARGE_LAB_MIN_WINDOW_COVERAGE_MS = 2000;
+const BARGE_LAB_MIN_PROFILE_SESSIONS = 5;
 const BARGE_LAB_USER_CUE_DELAY_MS = 700;
 const BARGE_LAB_USER_WINDOW_MS = 3000;
 const BARGE_LAB_WIRE_FIELDS = [
@@ -1632,9 +1634,15 @@ function bargeLabSessionGecerliMi(session) {
     if (Number(samples[i].seq || 0) !== Number(samples[i - 1].seq || 0) + 1) return false;
   }
   if (session.label === "alice_only") return true;
+  const readyWindowSamples = samples.filter((sample) => sample.in_speech_window && sample.decision_ready);
+  const coverageMs = readyWindowSamples.length > 1
+    ? Number(readyWindowSamples[readyWindowSamples.length - 1].received_at || 0) -
+      Number(readyWindowSamples[0].received_at || 0)
+    : 0;
   return Boolean(session.speech_window_start_at) &&
     Number(session.window_sample_count || 0) >= BARGE_LAB_MIN_WINDOW_SAMPLES &&
-    Number(session.ready_window_sample_count || 0) >= BARGE_LAB_MIN_READY_WINDOW_SAMPLES;
+    Number(session.ready_window_sample_count || 0) >= BARGE_LAB_MIN_READY_WINDOW_SAMPLES &&
+    coverageMs >= BARGE_LAB_MIN_WINDOW_COVERAGE_MS;
 }
 
 function stopBargeLabSession(reason = "manual") {
@@ -1872,7 +1880,7 @@ function renderBargeLab() {
     }).join("") || '<tr><td colspan="5" class="muted">Henüz oturum yok.</td></tr>';
   }
   const applyBest = $("barge-lab-apply-best");
-  if (applyBest) applyBest.disabled = !bargeLabBest;
+  if (applyBest) applyBest.disabled = !bargeLabBest?.ready_to_apply;
   const testActive = Boolean(active);
   ["barge-lab-start-alice", "barge-lab-start-user", "barge-lab-tts-play"].forEach((id) => {
     const button = $(id);
@@ -1999,13 +2007,20 @@ async function optimizeBargeLab() {
   bargeLabBest = best;
   const totalUser = best.metrics.true_positives + best.metrics.misses;
   const recall = totalUser ? Math.round((best.metrics.true_positives * 100) / totalUser) : 0;
-  box.className = `barge-lab-best ${best.metrics.false_positives ? "warn" : "good"}`;
-  box.textContent = `Öneri: ${best.metrics.false_positives} yanlış/pencere dışı kesme, ${best.metrics.true_positives}/${totalUser} kullanıcı tespiti (%${recall}), ortalama gecikme ${best.metrics.average_latency_ms == null ? "-" : Math.round(best.metrics.average_latency_ms) + "ms"}. Eşikler: clean ${best.profile.min_clean}, floor Q8 ${best.profile.floor_factor_q8}, corr ${best.profile.low_corr_q15}, clip ${best.profile.max_clip_permille}, kare ${best.profile.consecutive_frames}.`;
+  best.ready_to_apply = aliceCount >= BARGE_LAB_MIN_PROFILE_SESSIONS &&
+    userCount >= BARGE_LAB_MIN_PROFILE_SESSIONS &&
+    best.metrics.false_positives === 0 && recall >= 80;
+  const readiness = best.ready_to_apply
+    ? "Gölge doğrulamasına uygulanabilir."
+    : `Henüz uygulanamaz: en az ${BARGE_LAB_MIN_PROFILE_SESSIONS}+${BARGE_LAB_MIN_PROFILE_SESSIONS} geçerli oturum, 0 yanlış kesme ve en az %80 tespit gerekir.`;
+  box.className = `barge-lab-best ${best.ready_to_apply ? "good" : "warn"}`;
+  box.textContent = `Aday: ${best.metrics.false_positives} yanlış/pencere dışı kesme, ${best.metrics.true_positives}/${totalUser} kullanıcı tespiti (%${recall}), ortalama gecikme ${best.metrics.average_latency_ms == null ? "-" : Math.round(best.metrics.average_latency_ms) + "ms"}. ${readiness} Eşikler: clean ${best.profile.min_clean}, floor Q8 ${best.profile.floor_factor_q8}, corr ${best.profile.low_corr_q15}, clip ${best.profile.max_clip_permille}, kare ${best.profile.consecutive_frames}.`;
   renderBargeLab();
 }
 
 async function applyBestBargeLab() {
   if (!bargeLabBest) throw new Error("Önce hesaplayıcıyı çalıştır.");
+  if (!bargeLabBest.ready_to_apply) throw new Error("Aday profil henüz güvenli uygulama ölçütlerini karşılamıyor.");
   await applyBargeLabProfile({ ...bargeLabBest.profile, mode: "shadow" }, true);
   notice("En iyi profil güvenlik için gölge modunda uygulandı. Uzun testten sonra modu Canlı Kesme yapabilirsin.");
 }
