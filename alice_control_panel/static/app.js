@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.197";
+const UI_VERSION = "0.1.198";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -14,8 +14,13 @@ const commandLabels = {
   radar_clear_empty: "radar clear calib",
 };
 const RADAR_CALIBRATION_KEY = "alice_radar_tech_calibration_v3";
-const BARGE_LAB_STORAGE_KEY = "alice_barge_lab_dataset_v1";
+const BARGE_LAB_STORAGE_KEY = "alice_barge_lab_dataset_v2";
 const BARGE_LAB_MAX_SAMPLES = 6000;
+const BARGE_LAB_MIN_TEST_TEXT_LENGTH = 90;
+const BARGE_LAB_MIN_SESSION_SAMPLES = 10;
+const BARGE_LAB_MIN_WINDOW_SAMPLES = 3;
+const BARGE_LAB_USER_CUE_DELAY_MS = 700;
+const BARGE_LAB_USER_WINDOW_MS = 3000;
 let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
@@ -46,6 +51,8 @@ let bargeLabActiveSessionId = "";
 let bargeLabLatestSample = null;
 let bargeLabBest = null;
 let bargeLabSessionTimer = null;
+let bargeLabCueStartTimer = null;
+let bargeLabCueEndTimer = null;
 let speakerVolumeEditing = false;
 const SPEAKER_VOLUME_STORAGE_KEY = "alice_speaker_volume_percent";
 const SPEAKER_VOLUME_BEFORE_MUTE_KEY = "alice_speaker_volume_before_mute";
@@ -1544,20 +1551,65 @@ async function applyBargeLabProfile(profile = bargeLabProfile(), forceShadow = f
   notice(next.mode === "live" ? "Canlı kesme profili ESP'ye uygulandı." : "Gölge profil ESP'ye uygulandı; TTS kesilmeyecek.");
 }
 
+function clearBargeLabCueTimers() {
+  if (bargeLabCueStartTimer) window.clearTimeout(bargeLabCueStartTimer);
+  if (bargeLabCueEndTimer) window.clearTimeout(bargeLabCueEndTimer);
+  bargeLabCueStartTimer = null;
+  bargeLabCueEndTimer = null;
+}
+
+function scheduleBargeLabUserCue(session) {
+  if (!session || session.label !== "user_interrupt" || session.speech_window_start_at) return;
+  clearBargeLabCueTimers();
+  const now = Date.now();
+  session.speech_window_start_at = now + BARGE_LAB_USER_CUE_DELAY_MS;
+  session.speech_window_end_at = session.speech_window_start_at + BARGE_LAB_USER_WINDOW_MS;
+  session.window_sample_count = 0;
+  saveBargeLabData();
+  renderBargeLab();
+  bargeLabCueStartTimer = window.setTimeout(() => {
+    if (bargeLabActiveSessionId !== session.id) return;
+    session.cue_shown_at = Date.now();
+    saveBargeLabData();
+    renderBargeLab();
+    notice("ŞİMDİ KONUŞ: Alice konuşurken normal sesinle bir cümle söyle.");
+  }, BARGE_LAB_USER_CUE_DELAY_MS);
+  bargeLabCueEndTimer = window.setTimeout(() => {
+    if (bargeLabActiveSessionId !== session.id) return;
+    renderBargeLab();
+  }, BARGE_LAB_USER_CUE_DELAY_MS + BARGE_LAB_USER_WINDOW_MS);
+}
+
+function bargeLabSessionGecerliMi(session) {
+  if (!session || !session.ended_at || Number(session.sample_count || 0) < BARGE_LAB_MIN_SESSION_SAMPLES) return false;
+  if (session.label === "alice_only") return true;
+  return Boolean(session.speech_window_start_at) &&
+    Number(session.window_sample_count || 0) >= BARGE_LAB_MIN_WINDOW_SAMPLES;
+}
+
 function stopBargeLabSession(reason = "manual") {
   if (!bargeLabActiveSessionId) return;
   const session = bargeLabData.sessions.find((item) => item.id === bargeLabActiveSessionId);
   if (session) {
     session.ended_at = Date.now();
     session.end_reason = reason;
+    session.valid = bargeLabSessionGecerliMi(session);
+    if (!session.valid) {
+      session.invalid_reason = Number(session.sample_count || 0) < BARGE_LAB_MIN_SESSION_SAMPLES
+        ? "yetersiz örnek"
+        : "kullanıcı konuşma penceresi eksik";
+    }
   }
   bargeLabActiveSessionId = "";
   if (bargeLabSessionTimer) window.clearTimeout(bargeLabSessionTimer);
   bargeLabSessionTimer = null;
+  clearBargeLabCueTimers();
   saveBargeLabData();
   renderBargeLab();
   if (reason === "tts_finished") {
-    notice(`Test otomatik tamamlandı; ${session?.sample_count || 0} ölçüm kaydedildi.`);
+    notice(session?.valid
+      ? `Test tamamlandı; ${session.sample_count || 0} güvenilir ölçüm kaydedildi.`
+      : `Test geçersiz: ${session?.invalid_reason || "yeterli veri oluşmadı"}. Daha uzun bir cümleyle tekrarla.`);
   } else if (reason === "manual") {
     notice("Aktif test iptal edildi; o ana kadarki ölçümler saklandı.");
   }
@@ -1570,27 +1622,40 @@ async function startBargeLabSession(label) {
   const volume = Number(latestStatus.esp?.hardware?.speaker_volume_percent ?? 0);
   bargeLabData.sessions.push({
     id, label, started_at: Date.now(), ended_at: null, speaker_volume_percent: volume,
-    sample_count: 0, would_cut: false, profile: bargeLabProfile(),
+    sample_count: 0, window_sample_count: 0, would_cut: false,
+    pre_window_would_cut: false, window_would_cut: false, post_window_would_cut: false,
+    speech_window_start_at: null, speech_window_end_at: null, valid: false,
+    profile: bargeLabProfile(),
   });
   bargeLabActiveSessionId = id;
   bargeLabBest = null;
   saveBargeLabData();
   renderBargeLab();
   bargeLabSessionTimer = window.setTimeout(() => stopBargeLabSession("auto_45s"), 45000);
-  notice(label === "alice_only" ? "Alice-only testi başladı; sessiz kal." : "Söz kesme testi başladı; Alice konuşurken normal sesinle araya gir.");
+  notice(label === "alice_only"
+    ? "Alice-only testi başladı; tamamen sessiz kal."
+    : "Söz kesme testi başladı; henüz konuşma, yeşil ŞİMDİ KONUŞ işaretini bekle.");
 }
 
-async function playBargeLabTts() {
+function bargeLabTtsMetniOku(etiketliTest = false) {
   const input = $("barge-lab-tts-text");
   const value = String(input?.value || "").trim();
   if (!value) throw new Error("Test cümlesi boş.");
+  if (etiketliTest && value.length < BARGE_LAB_MIN_TEST_TEXT_LENGTH) {
+    throw new Error(`Etiketli test cümlesi çok kısa (${value.length}/${BARGE_LAB_MIN_TEST_TEXT_LENGTH} karakter).`);
+  }
+  return value;
+}
+
+async function playBargeLabTts(value = bargeLabTtsMetniOku(false)) {
   await api("/api/pipeline/tts/text", { method: "POST", body: JSON.stringify({ text: value }) });
 }
 
 async function runBargeLabTrial(label) {
+  const value = bargeLabTtsMetniOku(true);
   await startBargeLabSession(label);
   try {
-    await playBargeLabTts();
+    await playBargeLabTts(value);
     stopBargeLabSession("tts_finished");
   } catch (error) {
     stopBargeLabSession("tts_failed");
@@ -1604,10 +1669,34 @@ function handleBargeLabSample(payload) {
   if (bargeLabActiveSessionId) {
     const session = bargeLabData.sessions.find((item) => item.id === bargeLabActiveSessionId);
     if (session) {
-      const sample = { ...payload, session_id: session.id, label: session.label, received_at: Date.now() };
+      const receivedAt = Date.now();
+      if (session.label === "user_interrupt" && !session.speech_window_start_at &&
+          Number(payload.tts_elapsed_ms || 0) >= 1200) {
+        scheduleBargeLabUserCue(session);
+      }
+      const inSpeechWindow = session.label === "user_interrupt" &&
+        receivedAt >= Number(session.speech_window_start_at || 0) &&
+        receivedAt <= Number(session.speech_window_end_at || 0);
+      const sample = {
+        ...payload,
+        session_id: session.id,
+        label: session.label,
+        received_at: receivedAt,
+        in_speech_window: inSpeechWindow,
+      };
       bargeLabData.samples.push(sample);
       session.sample_count = Number(session.sample_count || 0) + 1;
       session.would_cut = Boolean(session.would_cut || payload.would_cut);
+      if (inSpeechWindow) session.window_sample_count = Number(session.window_sample_count || 0) + 1;
+      if (session.label === "user_interrupt" && payload.would_cut) {
+        if (receivedAt < Number(session.speech_window_start_at || Number.MAX_SAFE_INTEGER)) {
+          session.pre_window_would_cut = true;
+        } else if (inSpeechWindow) {
+          session.window_would_cut = true;
+        } else {
+          session.post_window_would_cut = true;
+        }
+      }
       session.speaker_volume_percent = Number(payload.speaker_volume_percent ?? session.speaker_volume_percent ?? 0);
       if (bargeLabData.samples.length % 8 === 0 || payload.would_cut) saveBargeLabData();
     }
@@ -1634,19 +1723,63 @@ function renderBargeLab() {
   const mode = String(espLab.mode || bargeLabProfile().mode || "shadow");
   setPill("barge-lab-mode-pill", mode.toUpperCase(), mode === "live" ? "warn" : mode === "shadow" ? "good" : "info");
   const active = bargeLabData.sessions.find((item) => item.id === bargeLabActiveSessionId);
-  text("barge-lab-session-state", active ? `${active.label === "alice_only" ? "Yalnız Alice" : "Ben konuşuyorum"} kaydı aktif` : "Etiketli test bekleniyor");
+  const now = Date.now();
+  let sessionState = "Etiketli test bekleniyor";
+  let cueText = "Test bekleniyor";
+  let cueClass = "barge-lab-speech-cue";
+  if (active?.label === "alice_only") {
+    sessionState = "Yalnız Alice kaydı aktif; sessiz kal";
+    cueText = "Kullanıcı konuşma testi aktif değil";
+  } else if (active?.label === "user_interrupt") {
+    if (!active.speech_window_start_at) {
+      sessionState = "AEC uyumu ve ilk ölçüm bekleniyor";
+      cueText = "Henüz konuşma";
+      cueClass += " ready";
+    } else if (now < Number(active.speech_window_start_at)) {
+      sessionState = "Kullanıcı konuşma penceresi hazırlanıyor";
+      cueText = "HAZIR OL…";
+      cueClass += " ready";
+    } else if (now <= Number(active.speech_window_end_at)) {
+      sessionState = "Kullanıcı konuşma penceresi aktif";
+      cueText = "ŞİMDİ KONUŞ";
+      cueClass += " speak";
+    } else {
+      sessionState = "Kullanıcı konuşma penceresi tamamlandı";
+      cueText = "Konuşmayı bitir";
+    }
+  }
+  text("barge-lab-session-state", sessionState);
+  const cue = $("barge-lab-speech-cue");
+  if (cue) {
+    cue.textContent = cueText;
+    cue.className = cueClass;
+  }
   text("barge-lab-transport", bargeLabLatestSample ? `son örnek #${bargeLabLatestSample.seq || 0} / %${bargeLabLatestSample.speaker_volume_percent ?? 0}` : "ESP telemetrisi bekleniyor");
-  const alice = bargeLabData.sessions.filter((item) => item.label === "alice_only");
-  const user = bargeLabData.sessions.filter((item) => item.label === "user_interrupt");
+  const completed = bargeLabData.sessions.filter((item) => item.ended_at);
+  const alice = completed.filter((item) => item.label === "alice_only" && bargeLabSessionGecerliMi(item));
+  const user = completed.filter((item) => item.label === "user_interrupt" && bargeLabSessionGecerliMi(item));
+  const invalid = completed.length - alice.length - user.length;
   const falseCuts = alice.filter((item) => item.would_cut).length;
-  const detected = user.filter((item) => item.would_cut).length;
-  text("barge-lab-summary", `${alice.length} Alice-only (${falseCuts} yanlış aday), ${user.length} kullanıcı (${detected} tespit), ${bargeLabData.samples.length} örnek.`);
+  const detected = user.filter((item) => item.window_would_cut && !item.pre_window_would_cut).length;
+  const suspicious = user.filter((item) => item.pre_window_would_cut || item.post_window_would_cut).length;
+  text("barge-lab-summary", `${alice.length} geçerli Alice-only (${falseCuts} yanlış aday), ${user.length} zamanlı kullanıcı (${detected} güvenilir tespit, ${suspicious} pencere dışı aday), ${invalid} geçersiz, ${bargeLabData.samples.length} örnek.`);
   const rows = $("barge-lab-session-rows");
   if (rows) {
     rows.innerHTML = bargeLabData.sessions.slice(-20).reverse().map((session) => {
-      const result = session.label === "alice_only"
-        ? session.would_cut ? "YANLIŞ KESERDİ" : "temiz"
-        : session.would_cut ? "tespit" : "kaçırdı";
+      let result = "kayıt sürüyor";
+      if (session.ended_at && !bargeLabSessionGecerliMi(session)) {
+        result = `GEÇERSİZ: ${session.invalid_reason || "yetersiz veri"}`;
+      } else if (session.ended_at && session.label === "alice_only") {
+        result = session.would_cut ? "YANLIŞ KESERDİ" : "temiz";
+      } else if (session.ended_at && session.pre_window_would_cut) {
+        result = "ŞÜPHELİ: konuşma öncesi aday";
+      } else if (session.ended_at && session.window_would_cut) {
+        result = "tespit";
+      } else if (session.ended_at && session.post_window_would_cut) {
+        result = "ŞÜPHELİ: pencere sonrası aday";
+      } else if (session.ended_at) {
+        result = "kaçırdı";
+      }
       return `<tr><td>${new Date(session.started_at).toLocaleTimeString()}</td><td>${session.label === "alice_only" ? "Alice" : "Kullanıcı"}</td><td>%${session.speaker_volume_percent ?? 0}</td><td>${session.sample_count || 0}</td><td>${result}</td></tr>`;
     }).join("") || '<tr><td colspan="5" class="muted">Henüz oturum yok.</td></tr>';
   }
@@ -1663,8 +1796,8 @@ function renderBargeLab() {
 
 function simulateBargeSession(session, samples, profile) {
   let floor = 0;
-  let consecutive = 0;
-  let firstDetectionAt = null;
+  let candidateSince = null;
+  const requiredCandidateMs = Math.max(1, Number(profile.consecutive_frames || 1)) * 32;
   for (const sample of samples) {
     const vad = Boolean(sample.vad);
     const adapted = Number(sample.tts_elapsed_ms || 0) >= Number(profile.adaptation_ms || 0);
@@ -1683,13 +1816,29 @@ function simulateBargeSession(session, samples, profile) {
       clean >= (safeFloor * Number(profile.weak_ref_floor_factor_q8 || 256) / 256) + Number(profile.floor_margin || 0) &&
       Number(sample.raw || 0) >= Number(profile.weak_ref_min_input || 0) &&
       Number(sample.clip_permille || 0) <= Number(profile.max_clip_permille || 0);
-    consecutive = lowCorr || weakRef ? consecutive + 1 : 0;
-    if (consecutive >= Number(profile.consecutive_frames || 1)) {
-      firstDetectionAt = Number(sample.received_at || session.started_at) - Number(session.started_at || 0);
-      break;
+    const candidate = lowCorr || weakRef;
+    const sampleAt = Number(sample.received_at || session.started_at || 0);
+    if (candidate) {
+      if (candidateSince === null) candidateSince = sampleAt;
+    } else {
+      candidateSince = null;
+    }
+    const candidateMs = candidateSince === null ? 0 : Math.max(32, sampleAt - candidateSince + 32);
+    if (candidateMs >= requiredCandidateMs) {
+      if (session.label === "alice_only") {
+        return { detected: true, false_positive: true, latency_ms: null };
+      }
+      const windowStart = Number(session.speech_window_start_at || 0);
+      const windowEnd = Number(session.speech_window_end_at || 0);
+      const inWindow = windowStart > 0 && sampleAt >= windowStart && sampleAt <= windowEnd;
+      return {
+        detected: inWindow,
+        false_positive: !inWindow,
+        latency_ms: inWindow ? Math.max(0, sampleAt - windowStart) : null,
+      };
     }
   }
-  return { detected: firstDetectionAt !== null, latency_ms: firstDetectionAt };
+  return { detected: false, false_positive: false, latency_ms: null };
 }
 
 function evaluateBargeProfile(profile) {
@@ -1698,10 +1847,11 @@ function evaluateBargeProfile(profile) {
   let truePositives = 0;
   const latencies = [];
   for (const session of bargeLabData.sessions) {
+    if (!bargeLabSessionGecerliMi(session)) continue;
     const samples = bargeLabData.samples.filter((sample) => sample.session_id === session.id).sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0));
     if (!samples.length) continue;
     const result = simulateBargeSession(session, samples, profile);
-    if (session.label === "alice_only" && result.detected) falsePositives += 1;
+    if (result.false_positive) falsePositives += 1;
     if (session.label === "user_interrupt") {
       if (result.detected) {
         truePositives += 1;
@@ -1723,8 +1873,8 @@ function candidateValues(values) {
 
 function optimizeBargeLab() {
   stopBargeLabSession("optimize");
-  const aliceCount = bargeLabData.sessions.filter((item) => item.label === "alice_only" && item.sample_count).length;
-  const userCount = bargeLabData.sessions.filter((item) => item.label === "user_interrupt" && item.sample_count).length;
+  const aliceCount = bargeLabData.sessions.filter((item) => item.label === "alice_only" && bargeLabSessionGecerliMi(item)).length;
+  const userCount = bargeLabData.sessions.filter((item) => item.label === "user_interrupt" && bargeLabSessionGecerliMi(item)).length;
   if (!aliceCount || !userCount) throw new Error("Önce en az bir Alice-only ve bir kullanıcı oturumu kaydet.");
   const base = bargeLabProfile();
   let best = null;
@@ -1743,7 +1893,7 @@ function optimizeBargeLab() {
   const totalUser = best.metrics.true_positives + best.metrics.misses;
   const recall = totalUser ? Math.round((best.metrics.true_positives * 100) / totalUser) : 0;
   box.className = `barge-lab-best ${best.metrics.false_positives ? "warn" : "good"}`;
-  box.textContent = `Öneri: ${best.metrics.false_positives}/${aliceCount} yanlış kesme, ${best.metrics.true_positives}/${totalUser} kullanıcı tespiti (%${recall}), ortalama gecikme ${best.metrics.average_latency_ms == null ? "-" : Math.round(best.metrics.average_latency_ms) + "ms"}. Eşikler: clean ${best.profile.min_clean}, floor Q8 ${best.profile.floor_factor_q8}, corr ${best.profile.low_corr_q15}, clip ${best.profile.max_clip_permille}, kare ${best.profile.consecutive_frames}.`;
+  box.textContent = `Öneri: ${best.metrics.false_positives} yanlış/pencere dışı kesme, ${best.metrics.true_positives}/${totalUser} kullanıcı tespiti (%${recall}), ortalama gecikme ${best.metrics.average_latency_ms == null ? "-" : Math.round(best.metrics.average_latency_ms) + "ms"}. Eşikler: clean ${best.profile.min_clean}, floor Q8 ${best.profile.floor_factor_q8}, corr ${best.profile.low_corr_q15}, clip ${best.profile.max_clip_permille}, kare ${best.profile.consecutive_frames}.`;
   renderBargeLab();
 }
 
@@ -1759,7 +1909,7 @@ function downloadBargeLab(format) {
   let type;
   let name;
   if (format === "csv") {
-    const fields = ["session_id","label","received_at","seq","tts_elapsed_ms","speaker_volume_percent","vad","synchronized","delay_calibrated","raw","clean","ref","corr_q15","floor","clip_permille","candidate_frames","would_cut","live_cut"];
+    const fields = ["session_id","label","received_at","in_speech_window","seq","tts_elapsed_ms","speaker_volume_percent","vad","synchronized","delay_calibrated","raw","clean","ref","corr_q15","floor","clip_permille","candidate_frames","would_cut","live_cut"];
     body = [fields.join(","), ...bargeLabData.samples.map((sample) => fields.map((key) => JSON.stringify(sample[key] ?? "")).join(","))].join("\n");
     type = "text/csv;charset=utf-8";
     name = "alice_barge_lab.csv";
@@ -1780,6 +1930,7 @@ function downloadBargeLab(format) {
 
 function clearBargeLabData() {
   stopBargeLabSession("clear");
+  clearBargeLabCueTimers();
   bargeLabData = { sessions: [], samples: [] };
   bargeLabBest = null;
   saveBargeLabData();

@@ -45,6 +45,15 @@
 .barge-lab-test-card p { color: var(--muted); font-size: .9rem; min-height: 42px; }
 .barge-lab-test-card.alice-only { border-color: rgba(255, 180, 80, .35); }
 .barge-lab-test-card.user-speech { border-color: rgba(70, 210, 155, .35); }
+.barge-lab-speech-cue {
+  display: block; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px;
+  background: rgba(8, 14, 24, .42); color: var(--muted); text-align: center;
+}
+.barge-lab-speech-cue.ready { border-color: rgba(255, 189, 84, .55); color: var(--amber); }
+.barge-lab-speech-cue.speak {
+  border-color: rgba(48, 209, 88, .8); background: rgba(48, 209, 88, .16);
+  color: #b9ffca; box-shadow: 0 0 0 2px rgba(48, 209, 88, .12); font-size: 1.05rem;
+}
 .barge-lab-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .barge-lab-metrics > div {
   display: grid; gap: 3px; padding: 10px 12px; border-radius: 9px;

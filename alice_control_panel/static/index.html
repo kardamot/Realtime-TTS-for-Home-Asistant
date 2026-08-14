@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.197" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.197" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.198" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.198" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-          <div class="sidebar-logo"><img src="/logo.png?v=0.1.197" alt="Alice" /></div>
+          <div class="sidebar-logo"><img src="/logo.png?v=0.1.198" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -26,7 +26,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.197" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.198" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -363,12 +363,14 @@
                 </section>
                 <section class="barge-lab-test-card user-speech">
                   <h3>2. Ben söz kesiyorum</h3>
-                  <p>Düğmeye bas. Alice otomatik konuşurken normal sesinle bir cümle söyle.</p>
+                  <p>Düğmeye bas ve yeşil “ŞİMDİ KONUŞ” işaretini bekle. İşaret çıkınca normal sesinle bir cümle söyle.</p>
                   <button id="barge-lab-start-user" type="button">Söz kesme testini çalıştır</button>
+                  <strong id="barge-lab-speech-cue" class="barge-lab-speech-cue">Test bekleniyor</strong>
                 </section>
                 <section class="barge-lab-test-card">
                   <h3>Deneme cümlesi</h3>
-                  <input id="barge-lab-tts-text" value="Bugün sana uzun ve sakin bir deneme cümlesi anlatıyorum; bu sırada ses yolunu dikkatle ölçüyoruz." />
+                  <input id="barge-lab-tts-text" value="Bugün sana uzun ve sakin bir deneme cümlesi anlatıyorum; bu sırada ses yolunu dikkatle ölçüyor ve farklı kelimelerle konuşmayı sürdürüyorum." />
+                  <small class="muted">Etiketli testlerde güvenilir ölçüm için en az 90 karakter gerekir.</small>
                   <div class="row"><button id="barge-lab-tts-play" type="button">Cümleyi önizle (kayıt yok)</button><button id="barge-lab-session-stop" type="button" disabled>Aktif testi iptal et</button></div>
                 </section>
               </div>
@@ -683,6 +685,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.197"></script>
+  <script src="/app.js?v=0.1.198"></script>
   </body>
 </html>

@@ -25,7 +25,7 @@ This add-on does not use Home Assistant ingress. It exposes its own port and ser
 - OpenAI PCM TTS stream and Cartesia continuation relay moved into the new structure.
 - Google AI Studio Gemini TTS and Google Cloud Text-to-Speech provider paths are available from the TTS config panel.
 - No Node build or heavy ML dependency is required during add-on installation.
-- Version `0.1.197` makes the barge-in lab a collapsed, one-click workflow: each labeled trial starts its TTS automatically and stops recording when playback finishes. Firmware-side lab telemetry is throttled and delayed past TTS startup, stale WebSocket sessions are closed after their first send failure, and AFE fetch no longer outranks playback on their shared core.
+- Version `0.1.198` makes user-interruption labels trustworthy: a timed green speech cue separates Alice echo from the user's ground-truth window, short or undersampled trials are rejected, and the optimizer penalizes detections outside that window. The local lab dataset uses a new schema so ambiguous older trials are not reused.
 - Version `0.1.196` adds the safe barge-in laboratory: ESP-SR measurements stream to the panel in shadow mode without muting or interrupting TTS, Alice-only and user-interruption trials are labeled locally, and the panel can rank/apply runtime threshold profiles without reflashing. Physical mute probing is disabled.
 - Version `0.1.192` replaces packet-local linear mic resampling with a stateful polyphase FIR path and records per-turn RMS/peak/clipping diagnostics.
 - Version `0.1.191` makes the conversation-interrupt switch authoritative for OpenAI Realtime and synchronizes it to compatible ESP firmware.
