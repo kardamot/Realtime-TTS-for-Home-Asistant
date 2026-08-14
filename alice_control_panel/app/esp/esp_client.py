@@ -650,8 +650,8 @@ class EspClient:
             if handler is not None:
                 await handler(dict(payload))
             return
-        if msg_type == "barge_sample":
-            await self._ws_hub.publish("esp_event", {"type": "barge_sample", "payload": payload})
+        if msg_type in {"barge_sample", "barge_samples"}:
+            await self._ws_hub.publish("esp_event", {"type": msg_type, "payload": payload})
             return
         if msg_type == "mic_start":
             await self._handle_mic_start(doc, payload)

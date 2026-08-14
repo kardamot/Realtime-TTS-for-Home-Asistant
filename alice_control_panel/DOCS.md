@@ -246,6 +246,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
 - Panel logs are kept in the backend memory buffer, not persisted to a log file; an add-on restart/update or explicit Clear resets the visible buffer.
 - `0.1.198` adds a timed green user-speech window to labeled barge-in trials. Detections before or after that window are treated as unsafe false candidates, short or undersampled trials are excluded, and the versioned local dataset discards ambiguous legacy user labels.
+- `0.1.199` records every 32 ms AFE decision frame in 5 Hz WebSocket batches. The lab rejects frame gaps and user windows recorded before AEC is decision-ready, while its optimizer evaluates true consecutive frames instead of interpolating between sparse snapshots.
 - `0.1.196` adds a barge-in calibration lab. Shadow mode streams synchronized AEC/VAD features without stopping TTS, labeled Alice-only/user trials feed a false-positive-first profile search, selected thresholds apply at runtime, and the physical mute probe stays disabled.
 - `0.1.192` replaces packet-local linear mic resampling with a stateful polyphase FIR path and records per-turn RMS/peak/clipping diagnostics.
 - `0.1.191` makes the conversation-interrupt switch authoritative for OpenAI Realtime and synchronizes it to compatible ESP firmware.
