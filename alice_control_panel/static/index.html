@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alice Control Panel</title>
-  <link rel="icon" type="image/png" href="/logo.png?v=0.1.196" />
-  <link rel="stylesheet" href="/styles.css?v=0.1.196" />
+  <link rel="icon" type="image/png" href="/logo.png?v=0.1.197" />
+  <link rel="stylesheet" href="/styles.css?v=0.1.197" />
   </head>
   <body>
     <main class="shell">
       <aside class="sidebar">
-          <div class="sidebar-logo"><img src="/logo.png?v=0.1.196" alt="Alice" /></div>
+          <div class="sidebar-logo"><img src="/logo.png?v=0.1.197" alt="Alice" /></div>
         <nav>
           <a href="#status">Status</a>
           <a href="#logs">Logs</a>
@@ -26,7 +26,7 @@
       <section class="workspace">
         <header class="topbar">
           <div class="title-group">
-          <div class="title-logo"><img src="/logo.png?v=0.1.196" alt="Alice" /></div>
+          <div class="title-logo"><img src="/logo.png?v=0.1.197" alt="Alice" /></div>
             <div>
               <h1>Alice Control Panel</h1>
               <p id="summary">Backend status bekleniyor</p>
@@ -331,15 +331,16 @@
             </div>
           </section>
 
-          <section id="barge-lab" class="panel span-12 barge-lab-panel collapsible-panel" data-collapsible-panel>
+          <section id="barge-lab" class="panel span-12 barge-lab-panel collapsible-panel is-collapsed" data-collapsible-panel>
             <header>
-              <div>
+              <div class="panel-title-stack">
                 <h2>Söz Kesme Laboratuvarı</h2>
-                <p class="muted">Gölge modunda Alice susturulmadan ölçüm toplanır. Fiziksel mute probu bu laboratuvarda daima kapalıdır.</p>
+                <span class="panel-subtle">Alice-only ve kullanıcı söz kesme testleri</span>
               </div>
-              <button class="collapse-toggle" type="button" data-collapse-toggle aria-expanded="true">Daralt</button>
+              <button class="panel-collapse-toggle" type="button" data-panel-toggle aria-expanded="false" title="Expand panel">+</button>
             </header>
-            <div class="collapsible-content barge-lab-content">
+            <div class="panel-body barge-lab-content">
+              <p class="barge-lab-guide"><strong>Tek düğme yeterli:</strong> Seçtiğin test ölçümü ve Alice'in konuşmasını birlikte başlatır; konuşma bitince kayıt otomatik kapanır. Alice-only testinde sessiz kal, kullanıcı testinde Alice konuşurken normal sesinle araya gir.</p>
               <div class="barge-lab-toolbar">
                 <label><span>Çalışma modu</span><select data-path="barge_lab.mode" id="barge-lab-mode"><option value="off">Kapalı / Alice wakeword</option><option value="shadow">Gölge test (kesmez)</option><option value="live">Canlı kesme</option></select></label>
                 <button id="barge-lab-apply" type="button">Ayarları ESP'ye uygula</button>
@@ -357,18 +358,18 @@
               <div class="barge-lab-test-grid">
                 <section class="barge-lab-test-card alice-only">
                   <h3>1. Yalnız Alice konuşuyor</h3>
-                  <p>Odada konuşma. Alice'in kendi sesi yanlış kesme üretirse kayda geçer.</p>
-                  <button id="barge-lab-start-alice" type="button">Alice-only kaydını başlat</button>
+                  <p>Düğmeye bas ve sessiz kal. Alice otomatik konuşur; kendi sesi yanlış aday üretirse kayda geçer.</p>
+                  <button id="barge-lab-start-alice" type="button">Alice-only testi çalıştır</button>
                 </section>
                 <section class="barge-lab-test-card user-speech">
                   <h3>2. Ben söz kesiyorum</h3>
-                  <p>Butona bas, Alice konuşurken normal sesinle bir cümle söyle.</p>
-                  <button id="barge-lab-start-user" type="button">Kullanıcı kaydını başlat</button>
+                  <p>Düğmeye bas. Alice otomatik konuşurken normal sesinle bir cümle söyle.</p>
+                  <button id="barge-lab-start-user" type="button">Söz kesme testini çalıştır</button>
                 </section>
                 <section class="barge-lab-test-card">
-                  <h3>Test konuşması</h3>
+                  <h3>Deneme cümlesi</h3>
                   <input id="barge-lab-tts-text" value="Bugün sana uzun ve sakin bir deneme cümlesi anlatıyorum; bu sırada ses yolunu dikkatle ölçüyoruz." />
-                  <div class="row"><button id="barge-lab-tts-play" type="button">Alice konuşsun</button><button id="barge-lab-session-stop" type="button">Kaydı bitir</button></div>
+                  <div class="row"><button id="barge-lab-tts-play" type="button">Cümleyi önizle (kayıt yok)</button><button id="barge-lab-session-stop" type="button" disabled>Aktif testi iptal et</button></div>
                 </section>
               </div>
 
@@ -682,6 +683,6 @@
         </section>
       </section>
     </main>
-  <script src="/app.js?v=0.1.196"></script>
+  <script src="/app.js?v=0.1.197"></script>
   </body>
 </html>

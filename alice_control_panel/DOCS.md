@@ -245,6 +245,7 @@ cancel_response, safe_mode_on, safe_mode_off
 - Faster-whisper is wired for one-shot ESP mic captures; OpenAI Realtime now has a first integrated `/voice/ws` bridge path for live-duplex migration.
 - The React/Vite frontend source is kept in the repository, but the add-on image serves the bundled `static/` panel to avoid HA install-time npm builds.
 - Panel logs are kept in the backend memory buffer, not persisted to a log file; an add-on restart/update or explicit Clear resets the visible buffer.
+- `0.1.197` collapses the barge-in lab by default and turns each labeled test into one click: measurement and TTS start together, then the session closes automatically at playback completion. ESP telemetry is reduced to 5 Hz after a 1.2 s startup guard, dead WebSocket sessions are closed on first send failure, and AFE fetch shares playback priority instead of preempting it.
 - `0.1.196` adds a barge-in calibration lab. Shadow mode streams synchronized AEC/VAD features without stopping TTS, labeled Alice-only/user trials feed a false-positive-first profile search, selected thresholds apply at runtime, and the physical mute probe stays disabled.
 - `0.1.192` replaces packet-local linear mic resampling with a stateful polyphase FIR path and records per-turn RMS/peak/clipping diagnostics.
 - `0.1.191` makes the conversation-interrupt switch authoritative for OpenAI Realtime and synchronizes it to compatible ESP firmware.

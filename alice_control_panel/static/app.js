@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.196";
+const UI_VERSION = "0.1.197";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -1556,6 +1556,11 @@ function stopBargeLabSession(reason = "manual") {
   bargeLabSessionTimer = null;
   saveBargeLabData();
   renderBargeLab();
+  if (reason === "tts_finished") {
+    notice(`Test otomatik tamamlandı; ${session?.sample_count || 0} ölçüm kaydedildi.`);
+  } else if (reason === "manual") {
+    notice("Aktif test iptal edildi; o ana kadarki ölçümler saklandı.");
+  }
 }
 
 async function startBargeLabSession(label) {
@@ -1571,8 +1576,8 @@ async function startBargeLabSession(label) {
   bargeLabBest = null;
   saveBargeLabData();
   renderBargeLab();
-  bargeLabSessionTimer = window.setTimeout(() => stopBargeLabSession("auto_30s"), 30000);
-  notice(label === "alice_only" ? "Alice-only kaydı başladı. Konuşma; test cümlesini oynat." : "Kullanıcı kaydı başladı. Alice konuşurken normal sesinle araya gir.");
+  bargeLabSessionTimer = window.setTimeout(() => stopBargeLabSession("auto_45s"), 45000);
+  notice(label === "alice_only" ? "Alice-only testi başladı; sessiz kal." : "Söz kesme testi başladı; Alice konuşurken normal sesinle araya gir.");
 }
 
 async function playBargeLabTts() {
@@ -1580,6 +1585,17 @@ async function playBargeLabTts() {
   const value = String(input?.value || "").trim();
   if (!value) throw new Error("Test cümlesi boş.");
   await api("/api/pipeline/tts/text", { method: "POST", body: JSON.stringify({ text: value }) });
+}
+
+async function runBargeLabTrial(label) {
+  await startBargeLabSession(label);
+  try {
+    await playBargeLabTts();
+    stopBargeLabSession("tts_finished");
+  } catch (error) {
+    stopBargeLabSession("tts_failed");
+    throw error;
+  }
 }
 
 function handleBargeLabSample(payload) {
@@ -1636,6 +1652,13 @@ function renderBargeLab() {
   }
   const applyBest = $("barge-lab-apply-best");
   if (applyBest) applyBest.disabled = !bargeLabBest;
+  const testActive = Boolean(active);
+  ["barge-lab-start-alice", "barge-lab-start-user", "barge-lab-tts-play"].forEach((id) => {
+    const button = $(id);
+    if (button) button.disabled = testActive;
+  });
+  const stopButton = $("barge-lab-session-stop");
+  if (stopButton) stopButton.disabled = !testActive;
 }
 
 function simulateBargeSession(session, samples, profile) {
@@ -1773,8 +1796,8 @@ function initBargeLab() {
   $("barge-lab-preset-stable").onclick = () => setBargeLabPreset("stable");
   $("barge-lab-preset-sensitive").onclick = () => setBargeLabPreset("sensitive");
   $("barge-lab-preset-conservative").onclick = () => setBargeLabPreset("conservative");
-  $("barge-lab-start-alice").onclick = () => guard("Alice-only testi başlatılamadı", () => startBargeLabSession("alice_only"));
-  $("barge-lab-start-user").onclick = () => guard("Kullanıcı testi başlatılamadı", () => startBargeLabSession("user_interrupt"));
+  $("barge-lab-start-alice").onclick = () => guard("Alice-only testi başlatılamadı", () => runBargeLabTrial("alice_only"));
+  $("barge-lab-start-user").onclick = () => guard("Kullanıcı testi başlatılamadı", () => runBargeLabTrial("user_interrupt"));
   $("barge-lab-tts-play").onclick = () => guard("Test TTS başlatılamadı", playBargeLabTts);
   $("barge-lab-session-stop").onclick = () => stopBargeLabSession("manual");
   $("barge-lab-optimize").onclick = () => guard("Profil hesaplanamadı", optimizeBargeLab);
@@ -3605,6 +3628,10 @@ function connectEvents() {
     if (doc.type === "esp_event" && doc.payload?.type === "barge_sample") {
       handleBargeLabSample(doc.payload.payload || {});
       return;
+    }
+    if (doc.type === "esp_event" && doc.payload?.type === "tts_timing" &&
+        doc.payload?.payload?.event === "speaker_audio_finished" && bargeLabActiveSessionId) {
+      window.setTimeout(() => stopBargeLabSession("tts_finished"), 250);
     }
     if (doc.type === "esp_status" || doc.type === "pipeline_status" || doc.type === "config_updated" || doc.type === "esp_event") {
       scheduleStatusRefresh();
