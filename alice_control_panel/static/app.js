@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.195";
+const UI_VERSION = "0.1.196";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -14,6 +14,8 @@ const commandLabels = {
   radar_clear_empty: "radar clear calib",
 };
 const RADAR_CALIBRATION_KEY = "alice_radar_tech_calibration_v3";
+const BARGE_LAB_STORAGE_KEY = "alice_barge_lab_dataset_v1";
+const BARGE_LAB_MAX_SAMPLES = 6000;
 let token = localStorage.getItem("alice_panel_token") || "";
 let currentConfig = {};
 let currentPrompt = {};
@@ -39,6 +41,11 @@ let statusTimer = null;
 let statusRefreshTimer = null;
 let micDebugRefreshTimers = [];
 let micDebug = {};
+let bargeLabData = readBargeLabData();
+let bargeLabActiveSessionId = "";
+let bargeLabLatestSample = null;
+let bargeLabBest = null;
+let bargeLabSessionTimer = null;
 let speakerVolumeEditing = false;
 const SPEAKER_VOLUME_STORAGE_KEY = "alice_speaker_volume_percent";
 const SPEAKER_VOLUME_BEFORE_MUTE_KEY = "alice_speaker_volume_before_mute";
@@ -1447,6 +1454,337 @@ function initDailyCommandButtons() {
   }
 }
 
+function readBargeLabData() {
+  try {
+    const value = JSON.parse(localStorage.getItem(BARGE_LAB_STORAGE_KEY) || "{}");
+    return {
+      sessions: Array.isArray(value.sessions) ? value.sessions.slice(-120) : [],
+      samples: Array.isArray(value.samples) ? value.samples.slice(-BARGE_LAB_MAX_SAMPLES) : [],
+    };
+  } catch {
+    return { sessions: [], samples: [] };
+  }
+}
+
+function saveBargeLabData() {
+  bargeLabData.samples = bargeLabData.samples.slice(-BARGE_LAB_MAX_SAMPLES);
+  bargeLabData.sessions = bargeLabData.sessions.slice(-120);
+  localStorage.setItem(BARGE_LAB_STORAGE_KEY, JSON.stringify(bargeLabData));
+}
+
+function bargeLabProfile() {
+  const profile = getDeep(currentConfig, "barge_lab") || {};
+  return {
+    mode: String(profile.mode || "shadow"),
+    adaptation_ms: Number(profile.adaptation_ms ?? 900),
+    min_clean: Number(profile.min_clean ?? 220),
+    min_ref: Number(profile.min_ref ?? 100),
+    echo_corr_q15: Number(profile.echo_corr_q15 ?? 18022),
+    floor_factor_q8: Number(profile.floor_factor_q8 ?? 448),
+    prominent_floor_factor_q8: Number(profile.prominent_floor_factor_q8 ?? 448),
+    low_corr_q15: Number(profile.low_corr_q15 ?? 18022),
+    max_clip_permille: Number(profile.max_clip_permille ?? 100),
+    consecutive_frames: Number(profile.consecutive_frames ?? 4),
+    floor_margin: Number(profile.floor_margin ?? 80),
+    weak_ref_enabled: Boolean(profile.weak_ref_enabled),
+    weak_ref_max: Number(profile.weak_ref_max ?? 120),
+    weak_ref_min_input: Number(profile.weak_ref_min_input ?? 1200),
+    weak_ref_floor_factor_q8: Number(profile.weak_ref_floor_factor_q8 ?? 1024),
+  };
+}
+
+const BARGE_LAB_PRESETS = {
+  stable: {
+    adaptation_ms: 900, min_clean: 220, min_ref: 100, echo_corr_q15: 18022,
+    floor_factor_q8: 448, prominent_floor_factor_q8: 448, low_corr_q15: 18022,
+    max_clip_permille: 100, consecutive_frames: 4, floor_margin: 80,
+    weak_ref_enabled: false, weak_ref_max: 120, weak_ref_min_input: 1200,
+    weak_ref_floor_factor_q8: 1024,
+  },
+  sensitive: {
+    adaptation_ms: 700, min_clean: 160, min_ref: 80, echo_corr_q15: 20000,
+    floor_factor_q8: 384, prominent_floor_factor_q8: 384, low_corr_q15: 20000,
+    max_clip_permille: 180, consecutive_frames: 3, floor_margin: 50,
+    weak_ref_enabled: false, weak_ref_max: 120, weak_ref_min_input: 1000,
+    weak_ref_floor_factor_q8: 896,
+  },
+  conservative: {
+    adaptation_ms: 1100, min_clean: 320, min_ref: 120, echo_corr_q15: 16000,
+    floor_factor_q8: 576, prominent_floor_factor_q8: 576, low_corr_q15: 15000,
+    max_clip_permille: 80, consecutive_frames: 6, floor_margin: 120,
+    weak_ref_enabled: false, weak_ref_max: 100, weak_ref_min_input: 1500,
+    weak_ref_floor_factor_q8: 1152,
+  },
+};
+
+function setBargeLabPreset(name) {
+  const preset = BARGE_LAB_PRESETS[name];
+  if (!preset) return;
+  const mode = bargeLabProfile().mode;
+  setDeep(currentConfig, "barge_lab", { ...preset, mode });
+  configDirty = true;
+  fillConfig();
+  renderBargeLab();
+  notice("Başlangıç profili forma yüklendi; ESP'ye uygulamak için uygulama düğmesine bas.");
+}
+
+async function applyBargeLabProfile(profile = bargeLabProfile(), forceShadow = false) {
+  const next = { ...profile, mode: forceShadow ? "shadow" : String(profile.mode || "shadow") };
+  setDeep(currentConfig, "barge_lab", next);
+  setDeep(currentConfig, "pipeline.barge_in_enabled", true);
+  const result = await api("/api/config", {
+    method: "POST",
+    body: JSON.stringify({ barge_lab: next, pipeline: { barge_in_enabled: true } }),
+  });
+  if (result?.config?.barge_lab) setDeep(currentConfig, "barge_lab", result.config.barge_lab);
+  configDirty = false;
+  fillConfig();
+  renderBargeLab();
+  if (!result?.esp_sync?.ok) throw new Error("Ayar kaydedildi fakat ESP'ye gönderilemedi.");
+  notice(next.mode === "live" ? "Canlı kesme profili ESP'ye uygulandı." : "Gölge profil ESP'ye uygulandı; TTS kesilmeyecek.");
+}
+
+function stopBargeLabSession(reason = "manual") {
+  if (!bargeLabActiveSessionId) return;
+  const session = bargeLabData.sessions.find((item) => item.id === bargeLabActiveSessionId);
+  if (session) {
+    session.ended_at = Date.now();
+    session.end_reason = reason;
+  }
+  bargeLabActiveSessionId = "";
+  if (bargeLabSessionTimer) window.clearTimeout(bargeLabSessionTimer);
+  bargeLabSessionTimer = null;
+  saveBargeLabData();
+  renderBargeLab();
+}
+
+async function startBargeLabSession(label) {
+  stopBargeLabSession("next_session");
+  await applyBargeLabProfile(bargeLabProfile(), true);
+  const id = `lab-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const volume = Number(latestStatus.esp?.hardware?.speaker_volume_percent ?? 0);
+  bargeLabData.sessions.push({
+    id, label, started_at: Date.now(), ended_at: null, speaker_volume_percent: volume,
+    sample_count: 0, would_cut: false, profile: bargeLabProfile(),
+  });
+  bargeLabActiveSessionId = id;
+  bargeLabBest = null;
+  saveBargeLabData();
+  renderBargeLab();
+  bargeLabSessionTimer = window.setTimeout(() => stopBargeLabSession("auto_30s"), 30000);
+  notice(label === "alice_only" ? "Alice-only kaydı başladı. Konuşma; test cümlesini oynat." : "Kullanıcı kaydı başladı. Alice konuşurken normal sesinle araya gir.");
+}
+
+async function playBargeLabTts() {
+  const input = $("barge-lab-tts-text");
+  const value = String(input?.value || "").trim();
+  if (!value) throw new Error("Test cümlesi boş.");
+  await api("/api/pipeline/tts/text", { method: "POST", body: JSON.stringify({ text: value }) });
+}
+
+function handleBargeLabSample(payload) {
+  if (!payload || typeof payload !== "object") return;
+  bargeLabLatestSample = payload;
+  if (bargeLabActiveSessionId) {
+    const session = bargeLabData.sessions.find((item) => item.id === bargeLabActiveSessionId);
+    if (session) {
+      const sample = { ...payload, session_id: session.id, label: session.label, received_at: Date.now() };
+      bargeLabData.samples.push(sample);
+      session.sample_count = Number(session.sample_count || 0) + 1;
+      session.would_cut = Boolean(session.would_cut || payload.would_cut);
+      session.speaker_volume_percent = Number(payload.speaker_volume_percent ?? session.speaker_volume_percent ?? 0);
+      if (bargeLabData.samples.length % 8 === 0 || payload.would_cut) saveBargeLabData();
+    }
+  }
+  renderBargeLabMetrics(payload);
+  renderBargeLab();
+}
+
+function renderBargeLabMetrics(sample = bargeLabLatestSample) {
+  if (!sample) return;
+  text("barge-metric-vad", sample.vad ? "KONUŞMA" : "sessiz");
+  text("barge-metric-clean", `${sample.clean ?? 0} / ${sample.prominent_needed ?? sample.needed ?? 0}`);
+  text("barge-metric-floor", String(sample.floor ?? 0));
+  text("barge-metric-input", `${sample.raw ?? 0} / ${sample.ref ?? 0}`);
+  text("barge-metric-corr", `${sample.corr_q15 ?? 0} (${((Number(sample.corr_q15 || 0) / 32767) * 100).toFixed(0)}%)`);
+  text("barge-metric-candidate", `${sample.candidate_frames ?? 0}${sample.frame_candidate ? " +" : ""}`);
+  text("barge-metric-volume", `%${sample.speaker_volume_percent ?? 0} / ${sample.delay_ms ?? 0}ms`);
+  text("barge-metric-decision", sample.live_cut ? "KESİLDİ" : sample.would_cut ? "KESERDİ" : sample.frame_candidate ? "aday" : "bekle");
+}
+
+function renderBargeLab() {
+  if (!$("barge-lab")) return;
+  const espLab = latestStatus.esp?.barge_lab || {};
+  const mode = String(espLab.mode || bargeLabProfile().mode || "shadow");
+  setPill("barge-lab-mode-pill", mode.toUpperCase(), mode === "live" ? "warn" : mode === "shadow" ? "good" : "info");
+  const active = bargeLabData.sessions.find((item) => item.id === bargeLabActiveSessionId);
+  text("barge-lab-session-state", active ? `${active.label === "alice_only" ? "Yalnız Alice" : "Ben konuşuyorum"} kaydı aktif` : "Etiketli test bekleniyor");
+  text("barge-lab-transport", bargeLabLatestSample ? `son örnek #${bargeLabLatestSample.seq || 0} / %${bargeLabLatestSample.speaker_volume_percent ?? 0}` : "ESP telemetrisi bekleniyor");
+  const alice = bargeLabData.sessions.filter((item) => item.label === "alice_only");
+  const user = bargeLabData.sessions.filter((item) => item.label === "user_interrupt");
+  const falseCuts = alice.filter((item) => item.would_cut).length;
+  const detected = user.filter((item) => item.would_cut).length;
+  text("barge-lab-summary", `${alice.length} Alice-only (${falseCuts} yanlış aday), ${user.length} kullanıcı (${detected} tespit), ${bargeLabData.samples.length} örnek.`);
+  const rows = $("barge-lab-session-rows");
+  if (rows) {
+    rows.innerHTML = bargeLabData.sessions.slice(-20).reverse().map((session) => {
+      const result = session.label === "alice_only"
+        ? session.would_cut ? "YANLIŞ KESERDİ" : "temiz"
+        : session.would_cut ? "tespit" : "kaçırdı";
+      return `<tr><td>${new Date(session.started_at).toLocaleTimeString()}</td><td>${session.label === "alice_only" ? "Alice" : "Kullanıcı"}</td><td>%${session.speaker_volume_percent ?? 0}</td><td>${session.sample_count || 0}</td><td>${result}</td></tr>`;
+    }).join("") || '<tr><td colspan="5" class="muted">Henüz oturum yok.</td></tr>';
+  }
+  const applyBest = $("barge-lab-apply-best");
+  if (applyBest) applyBest.disabled = !bargeLabBest;
+}
+
+function simulateBargeSession(session, samples, profile) {
+  let floor = 0;
+  let consecutive = 0;
+  let firstDetectionAt = null;
+  for (const sample of samples) {
+    const vad = Boolean(sample.vad);
+    const adapted = Number(sample.tts_elapsed_ms || 0) >= Number(profile.adaptation_ms || 0);
+    const echoLike = Number(sample.ref || 0) >= Number(profile.min_ref || 0) &&
+      Number(sample.corr_q15 || 0) >= Number(profile.echo_corr_q15 || 0);
+    const clean = Number(sample.clean || 0);
+    if (!vad || echoLike || !adapted) floor = floor ? ((floor * 15) + clean) / 16 : clean;
+    const safeFloor = Math.max(1, floor);
+    const needed = Math.max(Number(profile.min_clean || 0), (safeFloor * Number(profile.floor_factor_q8 || 256) / 256) + Number(profile.floor_margin || 0));
+    const prominent = (safeFloor * Number(profile.prominent_floor_factor_q8 || 256) / 256) + Number(profile.floor_margin || 0);
+    const base = Boolean(sample.synchronized) && Boolean(sample.delay_calibrated) && adapted && vad && clean >= needed;
+    const lowCorr = base && clean >= prominent && Number(sample.clip_permille || 0) <= Number(profile.max_clip_permille || 0) &&
+      Number(sample.corr_q15 || 0) <= Number(profile.low_corr_q15 || 0) && !echoLike;
+    const weakRef = Boolean(profile.weak_ref_enabled) && Boolean(sample.synchronized) && Boolean(sample.delay_calibrated) && adapted && vad &&
+      Number(sample.ref || 0) <= Number(profile.weak_ref_max || 0) &&
+      clean >= (safeFloor * Number(profile.weak_ref_floor_factor_q8 || 256) / 256) + Number(profile.floor_margin || 0) &&
+      Number(sample.raw || 0) >= Number(profile.weak_ref_min_input || 0) &&
+      Number(sample.clip_permille || 0) <= Number(profile.max_clip_permille || 0);
+    consecutive = lowCorr || weakRef ? consecutive + 1 : 0;
+    if (consecutive >= Number(profile.consecutive_frames || 1)) {
+      firstDetectionAt = Number(sample.received_at || session.started_at) - Number(session.started_at || 0);
+      break;
+    }
+  }
+  return { detected: firstDetectionAt !== null, latency_ms: firstDetectionAt };
+}
+
+function evaluateBargeProfile(profile) {
+  let falsePositives = 0;
+  let misses = 0;
+  let truePositives = 0;
+  const latencies = [];
+  for (const session of bargeLabData.sessions) {
+    const samples = bargeLabData.samples.filter((sample) => sample.session_id === session.id).sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0));
+    if (!samples.length) continue;
+    const result = simulateBargeSession(session, samples, profile);
+    if (session.label === "alice_only" && result.detected) falsePositives += 1;
+    if (session.label === "user_interrupt") {
+      if (result.detected) {
+        truePositives += 1;
+        latencies.push(Math.max(0, result.latency_ms || 0));
+      } else misses += 1;
+    }
+  }
+  const averageLatency = latencies.length ? latencies.reduce((a, b) => a + b, 0) / latencies.length : null;
+  return {
+    false_positives: falsePositives, misses, true_positives: truePositives,
+    average_latency_ms: averageLatency,
+    cost: (falsePositives * 100000) + (misses * 1000) + (averageLatency ?? 30000),
+  };
+}
+
+function candidateValues(values) {
+  return Array.from(new Set(values.map(Number).filter(Number.isFinite))).sort((a, b) => a - b);
+}
+
+function optimizeBargeLab() {
+  stopBargeLabSession("optimize");
+  const aliceCount = bargeLabData.sessions.filter((item) => item.label === "alice_only" && item.sample_count).length;
+  const userCount = bargeLabData.sessions.filter((item) => item.label === "user_interrupt" && item.sample_count).length;
+  if (!aliceCount || !userCount) throw new Error("Önce en az bir Alice-only ve bir kullanıcı oturumu kaydet.");
+  const base = bargeLabProfile();
+  let best = null;
+  const minCleanValues = candidateValues([120, 220, 400, 700, base.min_clean]);
+  const corrValues = candidateValues([4096, 8192, 12288, 15000, 18022, 21000, base.low_corr_q15]);
+  const floorValues = candidateValues([384, 448, 512, 640, 768, 1024, base.floor_factor_q8]);
+  const clipValues = candidateValues([50, 100, 180, 250, 500, base.max_clip_permille]);
+  const frameValues = candidateValues([2, 3, 4, 5, 6, 8, base.consecutive_frames]);
+  for (const minClean of minCleanValues) for (const corr of corrValues) for (const floorFactor of floorValues) for (const clip of clipValues) for (const frames of frameValues) {
+    const profile = { ...base, mode: "shadow", min_clean: minClean, low_corr_q15: corr, floor_factor_q8: floorFactor, prominent_floor_factor_q8: floorFactor, max_clip_permille: clip, consecutive_frames: frames, weak_ref_enabled: false };
+    const metrics = evaluateBargeProfile(profile);
+    if (!best || metrics.cost < best.metrics.cost) best = { profile, metrics };
+  }
+  bargeLabBest = best;
+  const box = $("barge-lab-best");
+  const totalUser = best.metrics.true_positives + best.metrics.misses;
+  const recall = totalUser ? Math.round((best.metrics.true_positives * 100) / totalUser) : 0;
+  box.className = `barge-lab-best ${best.metrics.false_positives ? "warn" : "good"}`;
+  box.textContent = `Öneri: ${best.metrics.false_positives}/${aliceCount} yanlış kesme, ${best.metrics.true_positives}/${totalUser} kullanıcı tespiti (%${recall}), ortalama gecikme ${best.metrics.average_latency_ms == null ? "-" : Math.round(best.metrics.average_latency_ms) + "ms"}. Eşikler: clean ${best.profile.min_clean}, floor Q8 ${best.profile.floor_factor_q8}, corr ${best.profile.low_corr_q15}, clip ${best.profile.max_clip_permille}, kare ${best.profile.consecutive_frames}.`;
+  renderBargeLab();
+}
+
+async function applyBestBargeLab() {
+  if (!bargeLabBest) throw new Error("Önce hesaplayıcıyı çalıştır.");
+  await applyBargeLabProfile({ ...bargeLabBest.profile, mode: "shadow" }, true);
+  notice("En iyi profil güvenlik için gölge modunda uygulandı. Uzun testten sonra modu Canlı Kesme yapabilirsin.");
+}
+
+function downloadBargeLab(format) {
+  const payload = { exported_at: new Date().toISOString(), profile: bargeLabProfile(), best: bargeLabBest, ...bargeLabData };
+  let body;
+  let type;
+  let name;
+  if (format === "csv") {
+    const fields = ["session_id","label","received_at","seq","tts_elapsed_ms","speaker_volume_percent","vad","synchronized","delay_calibrated","raw","clean","ref","corr_q15","floor","clip_permille","candidate_frames","would_cut","live_cut"];
+    body = [fields.join(","), ...bargeLabData.samples.map((sample) => fields.map((key) => JSON.stringify(sample[key] ?? "")).join(","))].join("\n");
+    type = "text/csv;charset=utf-8";
+    name = "alice_barge_lab.csv";
+  } else {
+    body = JSON.stringify(payload, null, 2);
+    type = "application/json";
+    name = "alice_barge_lab.json";
+  }
+  const url = URL.createObjectURL(new Blob([body], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+function clearBargeLabData() {
+  stopBargeLabSession("clear");
+  bargeLabData = { sessions: [], samples: [] };
+  bargeLabBest = null;
+  saveBargeLabData();
+  const box = $("barge-lab-best");
+  if (box) {
+    box.className = "barge-lab-best muted";
+    box.textContent = "Hesaplama için en az bir Alice-only ve bir kullanıcı oturumu gerekiyor.";
+  }
+  renderBargeLab();
+}
+
+function initBargeLab() {
+  $("barge-lab-apply").onclick = () => guard("Lab ayarı uygulanamadı", () => applyBargeLabProfile());
+  $("barge-lab-preset-stable").onclick = () => setBargeLabPreset("stable");
+  $("barge-lab-preset-sensitive").onclick = () => setBargeLabPreset("sensitive");
+  $("barge-lab-preset-conservative").onclick = () => setBargeLabPreset("conservative");
+  $("barge-lab-start-alice").onclick = () => guard("Alice-only testi başlatılamadı", () => startBargeLabSession("alice_only"));
+  $("barge-lab-start-user").onclick = () => guard("Kullanıcı testi başlatılamadı", () => startBargeLabSession("user_interrupt"));
+  $("barge-lab-tts-play").onclick = () => guard("Test TTS başlatılamadı", playBargeLabTts);
+  $("barge-lab-session-stop").onclick = () => stopBargeLabSession("manual");
+  $("barge-lab-optimize").onclick = () => guard("Profil hesaplanamadı", optimizeBargeLab);
+  $("barge-lab-apply-best").onclick = () => guard("En iyi profil uygulanamadı", applyBestBargeLab);
+  $("barge-lab-download-json").onclick = () => downloadBargeLab("json");
+  $("barge-lab-download-csv").onclick = () => downloadBargeLab("csv");
+  $("barge-lab-clear").onclick = clearBargeLabData;
+  renderBargeLab();
+}
+
 async function boot() {
   document.documentElement.dataset.aliceUiVersion = UI_VERSION;
   initAutoScrollContainers();
@@ -1458,6 +1796,7 @@ async function boot() {
   initDriveControls();
   renderButtons();
   initDailyCommandButtons();
+  initBargeLab();
   initProviderSwitches();
   $("refresh-btn").onclick = () => guard("Refresh failed", loadStatus);
   $("unlock-btn").onclick = () => guard("Unlock failed", unlock);
@@ -1633,6 +1972,7 @@ async function loadStatus() {
   renderMicDebug(pipe.mic_debug || {});
   renderTurnTiming(realtime.latency || {}, pipe.timeline || []);
   if (!configDirty) fillConfig();
+  renderBargeLab();
 }
 
 function formatAecStatus(hardware) {
@@ -3260,6 +3600,10 @@ function connectEvents() {
     }
     if (doc.type === "esp_event" && doc.payload?.type === "radar_targets") {
       renderRadar(doc.payload.payload || {});
+      return;
+    }
+    if (doc.type === "esp_event" && doc.payload?.type === "barge_sample") {
+      handleBargeLabSample(doc.payload.payload || {});
       return;
     }
     if (doc.type === "esp_status" || doc.type === "pipeline_status" || doc.type === "config_updated" || doc.type === "esp_event") {

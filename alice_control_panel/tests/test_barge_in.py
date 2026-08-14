@@ -53,8 +53,24 @@ class BargeInEspSyncTests(unittest.IsolatedAsyncioTestCase):
         result = await sync_barge_in_to_esp(esp_client, log_bus, {"pipeline": {"barge_in_enabled": False}})
 
         self.assertTrue(result["ok"])
-        self.assertEqual(esp_client.patches, [{"barge_in_enabled": False}])
+        self.assertEqual(esp_client.patches, [{"barge_in_enabled": False, "barge_lab": {}}])
         self.assertEqual(log_bus.entries[0][0], "INFO")
+
+    async def test_lab_profile_is_sent_with_runtime_switch(self) -> None:
+        esp_client = _FakeEspClient()
+        log_bus = _FakeLogBus()
+        profile = {"mode": "shadow", "min_clean": 220, "consecutive_frames": 4}
+
+        await sync_barge_in_to_esp(
+            esp_client,
+            log_bus,
+            {"pipeline": {"barge_in_enabled": True}, "barge_lab": profile},
+        )
+
+        self.assertEqual(
+            esp_client.patches,
+            [{"barge_in_enabled": True, "barge_lab": profile}],
+        )
 
     async def test_sync_failure_does_not_fail_config_save(self) -> None:
         esp_client = _FakeEspClient(error=RuntimeError("offline"))

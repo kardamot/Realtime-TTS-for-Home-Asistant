@@ -246,6 +246,9 @@ class EspClient:
         self._last_reset_reason_logged = ""
         self._temperature_alert_level = "ok"
         self._last_diag_log_at = 0.0
+        self._last_runtime_config_signature = ""
+        self._last_runtime_config_attempt_at = 0.0
+        self._last_esp_uptime_sec: float | None = None
 
     def set_mic_stream_handler(
         self,
@@ -384,11 +387,17 @@ class EspClient:
         session = self._session or aiohttp.ClientSession()
         self._session = session
         try:
+            previous_uptime = self._last_esp_uptime_sec
             async with session.get(f"{base_url}/api/status", timeout=timeout_sec) as resp:
                 doc = await resp.json(content_type=None)
                 if resp.status >= 400:
                     raise RuntimeError(f"ESP status HTTP {resp.status}: {doc}")
             self._status = self._normalize_status(doc, base_url)
+            current_uptime = self._float_or_none(self._status.get("uptime_sec"))
+            if previous_uptime is not None and current_uptime is not None and current_uptime + 5 < previous_uptime:
+                self._last_runtime_config_signature = ""
+            self._last_esp_uptime_sec = current_uptime
+            await self._sync_runtime_config_if_needed(config)
             if self._poll_failure_streak:
                 await self._log_bus.emit(
                     "INFO",
@@ -492,6 +501,27 @@ class EspClient:
         async with session.post(f"{base_url}/api/config", json=patch, timeout=4) as resp:
             doc = await resp.json(content_type=None)
         return {"ok": resp.status < 400, "status": resp.status, "response": doc}
+
+    async def _sync_runtime_config_if_needed(self, config: dict[str, Any]) -> None:
+        pipeline = config.get("pipeline") if isinstance(config.get("pipeline"), dict) else {}
+        barge_lab = config.get("barge_lab") if isinstance(config.get("barge_lab"), dict) else {}
+        patch = {
+            "barge_in_enabled": bool(pipeline.get("barge_in_enabled", True)),
+            "barge_lab": barge_lab,
+        }
+        signature = json.dumps(patch, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        if signature == self._last_runtime_config_signature:
+            return
+        now = time.time()
+        if now - self._last_runtime_config_attempt_at < 10:
+            return
+        self._last_runtime_config_attempt_at = now
+        try:
+            result = await self.update_config(patch)
+        except Exception:
+            return
+        if result.get("ok"):
+            self._last_runtime_config_signature = signature
 
     async def _poll_loop(self) -> None:
         while not self._stop.is_set():
@@ -619,6 +649,9 @@ class EspClient:
             handler = self._tts_timing_handler
             if handler is not None:
                 await handler(dict(payload))
+            return
+        if msg_type == "barge_sample":
+            await self._ws_hub.publish("esp_event", {"type": "barge_sample", "payload": payload})
             return
         if msg_type == "mic_start":
             await self._handle_mic_start(doc, payload)

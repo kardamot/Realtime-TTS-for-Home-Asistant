@@ -27,15 +27,16 @@ def realtime_turn_detection(realtime: dict[str, Any], barge_in_enabled: bool = T
 
 async def sync_barge_in_to_esp(esp_client: Any, log_bus: Any, config: dict[str, Any]) -> dict[str, Any]:
     pipeline = config.get("pipeline") if isinstance(config.get("pipeline"), dict) else {}
+    barge_lab = config.get("barge_lab") if isinstance(config.get("barge_lab"), dict) else {}
     enabled = bool(pipeline.get("barge_in_enabled", True))
     try:
-        result = await esp_client.update_config({"barge_in_enabled": enabled})
+        result = await esp_client.update_config({"barge_in_enabled": enabled, "barge_lab": barge_lab})
     except Exception as exc:
         result = {"ok": False, "message": str(exc)}
     await log_bus.emit(
         "INFO" if result.get("ok") else "WARN",
         "ESP",
         "Barge-in setting synchronized to ESP" if result.get("ok") else "Barge-in setting could not be synchronized to ESP",
-        {"barge_in_enabled": enabled, "result": result},
+        {"barge_in_enabled": enabled, "barge_lab_mode": barge_lab.get("mode"), "result": result},
     )
     return result
