@@ -3,7 +3,7 @@ const espCommands = [
   "soft_sleep_on", "night_sleep_on", "sleep_mode_off", "barge_in_on", "barge_in_off",
   "motors_on", "motors_off", "amp_mute_on", "amp_mute_off", "radar_calibrate_empty", "radar_clear_empty", "reconnect", "reboot"
 ];
-const UI_VERSION = "0.1.200";
+const UI_VERSION = "0.1.201";
 const serverCommands = [
   "restart_stt", "restart_tts", "reload_prompt",
   "start_voice_session", "stop_voice_session", "cancel_response",
@@ -24,6 +24,7 @@ const BARGE_LAB_MIN_WINDOW_COVERAGE_MS = 2000;
 const BARGE_LAB_MIN_PROFILE_SESSIONS = 5;
 const BARGE_LAB_USER_CUE_DELAY_MS = 700;
 const BARGE_LAB_USER_WINDOW_MS = 3000;
+const BARGE_LAB_USER_REACTION_GUARD_MS = 300;
 const BARGE_LAB_WIRE_FIELDS = [
   "seq", "esp_millis", "tts_elapsed_ms", "raw", "clean", "ref", "corr_q15", "floor", "needed",
   "prominent_needed", "clip_permille", "delay_ms", "candidate_frames", "speaker_volume_percent", "vad",
@@ -1624,6 +1625,31 @@ function scheduleBargeLabUserCue(session) {
   }, BARGE_LAB_USER_CUE_DELAY_MS + BARGE_LAB_USER_WINDOW_MS);
 }
 
+function bargeLabDegerlendirmeBaslangici(session) {
+  return Number(session?.speech_window_start_at || 0) + BARGE_LAB_USER_REACTION_GUARD_MS;
+}
+
+function bargeLabKonusmaPenceresindeMi(session, sampleAt) {
+  const start = bargeLabDegerlendirmeBaslangici(session);
+  const end = Number(session?.speech_window_end_at || 0);
+  return start > BARGE_LAB_USER_REACTION_GUARD_MS && sampleAt >= start && sampleAt <= end;
+}
+
+function bargeLabSessionKarari(session) {
+  const samples = bargeLabData.samples.filter((sample) => sample.session_id === session.id && sample.would_cut);
+  if (session.label === "alice_only") {
+    return { would_cut: samples.length > 0, pre: false, window: false, post: false };
+  }
+  const start = bargeLabDegerlendirmeBaslangici(session);
+  const end = Number(session.speech_window_end_at || 0);
+  return {
+    would_cut: samples.length > 0,
+    pre: samples.some((sample) => Number(sample.received_at || 0) < start),
+    window: samples.some((sample) => bargeLabKonusmaPenceresindeMi(session, Number(sample.received_at || 0))),
+    post: samples.some((sample) => Number(sample.received_at || 0) > end),
+  };
+}
+
 function bargeLabSessionGecerliMi(session) {
   if (!session || !session.ended_at || Number(session.sample_count || 0) < BARGE_LAB_MIN_SESSION_SAMPLES) return false;
   if (!session.frame_telemetry || Number(session.dropped_frame_count || 0) > 0) return false;
@@ -1634,7 +1660,9 @@ function bargeLabSessionGecerliMi(session) {
     if (Number(samples[i].seq || 0) !== Number(samples[i - 1].seq || 0) + 1) return false;
   }
   if (session.label === "alice_only") return true;
-  const readyWindowSamples = samples.filter((sample) => sample.in_speech_window && sample.decision_ready);
+  const readyWindowSamples = samples.filter((sample) =>
+    sample.decision_ready && bargeLabKonusmaPenceresindeMi(session, Number(sample.received_at || 0))
+  );
   const coverageMs = readyWindowSamples.length > 1
     ? Number(readyWindowSamples[readyWindowSamples.length - 1].received_at || 0) -
       Number(readyWindowSamples[0].received_at || 0)
@@ -1740,8 +1768,7 @@ function handleBargeLabSample(payload, receivedAt = Date.now(), deferRender = fa
         scheduleBargeLabUserCue(session);
       }
       const inSpeechWindow = session.label === "user_interrupt" &&
-        receivedAt >= Number(session.speech_window_start_at || 0) &&
-        receivedAt <= Number(session.speech_window_end_at || 0);
+        bargeLabKonusmaPenceresindeMi(session, receivedAt);
       const sample = {
         ...payload,
         session_id: session.id,
@@ -1759,7 +1786,7 @@ function handleBargeLabSample(payload, receivedAt = Date.now(), deferRender = fa
         }
       }
       if (session.label === "user_interrupt" && payload.would_cut) {
-        if (receivedAt < Number(session.speech_window_start_at || Number.MAX_SAFE_INTEGER)) {
+        if (receivedAt < bargeLabDegerlendirmeBaslangici(session)) {
           session.pre_window_would_cut = true;
         } else if (inSpeechWindow) {
           session.window_would_cut = true;
@@ -1856,22 +1883,29 @@ function renderBargeLab() {
   const user = completed.filter((item) => item.label === "user_interrupt" && bargeLabSessionGecerliMi(item));
   const invalid = completed.length - alice.length - user.length;
   const falseCuts = alice.filter((item) => item.would_cut).length;
-  const detected = user.filter((item) => item.window_would_cut && !item.pre_window_would_cut).length;
-  const suspicious = user.filter((item) => item.pre_window_would_cut || item.post_window_would_cut).length;
+  const detected = user.filter((item) => {
+    const decision = bargeLabSessionKarari(item);
+    return decision.window && !decision.pre;
+  }).length;
+  const suspicious = user.filter((item) => {
+    const decision = bargeLabSessionKarari(item);
+    return decision.pre || decision.post;
+  }).length;
   text("barge-lab-summary", `${alice.length} geçerli Alice-only (${falseCuts} yanlış aday), ${user.length} zamanlı kullanıcı (${detected} güvenilir tespit, ${suspicious} pencere dışı aday), ${invalid} geçersiz, ${bargeLabData.samples.length} örnek.`);
   const rows = $("barge-lab-session-rows");
   if (rows) {
     rows.innerHTML = bargeLabData.sessions.slice(-20).reverse().map((session) => {
       let result = "kayıt sürüyor";
+      const decision = bargeLabSessionKarari(session);
       if (session.ended_at && !bargeLabSessionGecerliMi(session)) {
         result = `GEÇERSİZ: ${session.invalid_reason || "yetersiz veri"}`;
       } else if (session.ended_at && session.label === "alice_only") {
-        result = session.would_cut ? "YANLIŞ KESERDİ" : "temiz";
-      } else if (session.ended_at && session.pre_window_would_cut) {
+        result = decision.would_cut ? "YANLIŞ KESERDİ" : "temiz";
+      } else if (session.ended_at && decision.pre) {
         result = "ŞÜPHELİ: konuşma öncesi aday";
-      } else if (session.ended_at && session.window_would_cut) {
+      } else if (session.ended_at && decision.window) {
         result = "tespit";
-      } else if (session.ended_at && session.post_window_would_cut) {
+      } else if (session.ended_at && decision.post) {
         result = "ŞÜPHELİ: pencere sonrası aday";
       } else if (session.ended_at) {
         result = "kaçırdı";
@@ -1926,7 +1960,7 @@ function simulateBargeSession(session, samples, profile) {
       if (session.label === "alice_only") {
         return { detected: true, false_positive: true, latency_ms: null };
       }
-      const windowStart = Number(session.speech_window_start_at || 0);
+      const windowStart = bargeLabDegerlendirmeBaslangici(session);
       const windowEnd = Number(session.speech_window_end_at || 0);
       const inWindow = windowStart > 0 && sampleAt >= windowStart && sampleAt <= windowEnd;
       return {
